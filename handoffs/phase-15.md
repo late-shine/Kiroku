@@ -4,7 +4,7 @@ Date: 2026-10-04
 ## Summary
 Removed every dependency on Lovable's build wrapper so the project builds with plain Vite and deploys to Vercel from a normal git repo.
 No feature, UI, backup or storage change. **Built in a sandbox with no network: `npm install`, `tsc`, `lint`, `build` and `dev` were NOT run by me.**
-Everything below still has to pass on the user's machine before the first commit.
+Everything below still had to pass on the user's machine before the first commit. **Update (2026-10-04, same day): the user ran the checks, they passed, the code was pushed to the private repo `late-shine/Kiroku` (tag `v-phase-15`), and the Vercel deploy is live. See "Post-build addendum".**
 
 ## Files changed
 - `vite.config.ts`: replaced the `@lovable.dev/vite-tanstack-config` wrapper with the verifier's reference config (Tailwind, tsconfig-paths, TanStack Start with `server: { entry: "server" }` and import protection, Nitro `preset: "vercel"`, React). Dev server stays on `::` / port 8080. No `process.env.VERCEL` guard.
@@ -37,3 +37,11 @@ None intended. If `npm run dev` or the app looks or behaves differently in any w
 
 ## What I did NOT touch
 `src/server.ts`, `src/start.ts`, `src/lib/error-capture.ts`, `src/lib/error-page.ts`, `README.md`, `public/audio/`, every other dependency, `vite-tsconfig-paths` (left in on purpose).
+
+## Post-build addendum (2026-10-04): TanStack security upgrade
+Vercel refused the first deploy: `@tanstack/react-start@1.168.32` is in the range affected by CVE-2026-102989 (critical reflected XSS in server-function responses, disclosed 2026-09-30; fixed in `@tanstack/react-start` 1.168.60 and `@tanstack/start-server-core` 1.169.39). The override env var was deliberately **not** used: Kiroku has a server function (the Gemini relay) and the browser holds the user's lessons and Gemini key in localStorage.
+- Fix: `npm install @tanstack/react-start@latest @tanstack/react-router@latest @tanstack/router-plugin@latest`. This replaced the three exact pins in `package.json` and regenerated `package-lock.json`. Result: `react-start` 1.168.60, a single `start-server-core` 1.169.39, `npm audit` 0 vulnerabilities.
+- One code change forced by the new types: `ErrorComponent` in `src/routes/__root.tsx` now takes `ErrorComponentProps` (`error` is `unknown`, not `Error`). Same screen, same behavior.
+- Verified by the user: `tsc`, build, dev click-through, a real Gemini import locally (fallback chain worked: two models busy, third succeeded), push, and a successful Vercel deploy.
+- Still worth confirming on the live Vercel URL: restore a backup, re-enter the Gemini key, run one real Gemini import (Hobby allows 300 s; worst-case chain about 225 s).
+- Lesson for later phases: Vercel blocks known-vulnerable TanStack Start versions at build time, so a future deploy can fail on a new advisory. The fix is the same: bump the three `@tanstack/*` packages together.

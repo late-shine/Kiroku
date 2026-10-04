@@ -95,6 +95,8 @@ key or setting in the export that the BYOK rule forbids.
   other phase. `src/server.ts` and `src/start.ts` are generic now (the old "Lovable inspects them" restriction no longer applies).
   Deploy path: push to GitHub, Vercel (connected to the repo) builds with `npm run build`. The Gemini relay runs as a Vercel Function;
   its worst-case model chain is about 225 s and Vercel Hobby allows 300 s.
+  **Keep `@tanstack/react-start`, `@tanstack/react-router` and `@tanstack/router-plugin` on the same fresh release**: Vercel refuses to build versions with a
+  known security advisory (Phase 15 hit this with CVE-2026-102989; fixed at react-start 1.168.60 / start-server-core 1.169.39). Upgrade the three together, then re-run `tsc` and `npm run build`.
 - **Git (from Phase 15).** The project is a git repo from Phase 15's first commit, pushed to the user's private GitHub
   repo `late-shine/Kiroku`; before that there was no history. Still copy a file before a risky edit if you are working
   from a zip. The user still relays files between AI sessions manually (builder and verifier sessions have no shared

@@ -66,7 +66,8 @@ export function buildBackup(
 // days the app already saved (e.g. the original hand-written sample days, 11 of the 13 of which
 // have fewer than 3) must still restore, or a user's own older backups would be rejected.
 // Built from the existing schema pieces, so every other rule stays in one place.
-const restoredLessonSchema = dayLessonSchema.extend({
+// (Exported in Phase 9b: cloud sync reads lessons back with the same lenient shape check.)
+export const restoredLessonSchema = dayLessonSchema.extend({
   grammar: grammarPointSchema.extend({ examples: z.array(grammarExampleSchema) }),
 });
 

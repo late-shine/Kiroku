@@ -5,21 +5,28 @@ import { useEffect, useState } from "react";
 import { User } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AccountPanel } from "./AccountPanel";
-import { useAccount } from "./useAccount";
+import { useAccountSync } from "./AccountSyncContext";
 
 export function HeaderAccount() {
-  const account = useAccount({ handleRedirect: true });
+  const shared = useAccountSync();
+  const { account, sync } = shared;
   const [open, setOpen] = useState(false);
 
-  // A failed sign-in (or a failed redirect sign-in) must be visible: open the popover to show it.
+  // A failed sign-in (or a failed redirect sign-in) must be visible: open the popover to show it. Phase 9b: so must
+  // the outcome of a sync, because clicking inside a sync dialog closes the popover (it counts as an outside click).
   useEffect(() => {
     if (account.error) setOpen(true);
   }, [account.error]);
+  useEffect(() => {
+    if (sync.notice) setOpen(true);
+  }, [sync.notice]);
 
   if (!account.configured) return null;
 
   const signedInAs =
-    account.auth.status === "in" ? (account.auth.account.email ?? account.auth.account.displayName) : null;
+    account.auth.status === "in"
+      ? (account.auth.account.email ?? account.auth.account.displayName)
+      : null;
   const label = signedInAs ? `Account (signed in as ${signedInAs})` : "Account";
   const initial = signedInAs ? signedInAs.charAt(0).toUpperCase() : "";
 
@@ -47,7 +54,7 @@ export function HeaderAccount() {
         className="w-72 border-border bg-glass-strong p-4 text-foreground backdrop-blur-xl"
       >
         <span className="font-display text-xs italic text-primary">account</span>
-        <AccountPanel account={account} />
+        <AccountPanel {...shared} />
       </PopoverContent>
     </Popover>
   );

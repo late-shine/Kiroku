@@ -28,6 +28,7 @@ import { badgeText, countMastered, dueWords, localDay, masteryState, parseStored
 import { VocabList } from "@/components/lesson/VocabList";
 import { AccountCard } from "@/components/account/AccountCard";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
+import { AccountSyncProvider } from "@/components/account/AccountSyncProvider";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -129,6 +130,8 @@ function JapaneseDesk() {
   };
   const resetAll = () => { setLessons([]); setProgress(emptyProgress); setDay(1); };
   return (
+    // Phase 9b: one shared account + sync state for the header button and the Progress card. `onApplied` keeps `day` on a real day after a sync replaced the lessons.
+    <AccountSyncProvider lessons={lessons} progress={progress} setLessons={setLessons} setProgress={setProgress} onApplied={(applied) => setDay((d) => (applied.some((l) => l.dayNumber === d) ? d : (applied[0]?.dayNumber ?? 1)))}>
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       {backgrounds.map((bg, index) => <img key={bg.name} src={bg.url} alt="" className={`scene-drift fixed inset-0 size-full object-cover transition-opacity duration-1000 ${index === progress.backgroundIndex % backgrounds.length ? "opacity-100" : "opacity-0"}`} />)}
       <div className="fixed inset-0 bg-background transition-opacity" style={{ opacity: sceneDarkness }} />
@@ -155,6 +158,7 @@ function JapaneseDesk() {
       <MusicPanel expanded={soundOpen} onToggleExpanded={() => setSoundOpen((v) => !v)} />
       {aiOpen && <LessonStudio lessons={lessons} progress={progress} showTip={tips.isVisible("studio")} onDismissTip={() => tips.dismiss("studio")} onClose={() => setAiOpen(false)} onImport={(newLesson) => { setLessons((old) => [...old.filter((l) => l.dayNumber !== newLesson.dayNumber), newLesson].sort((a,b) => a.dayNumber-b.dayNumber)); setDay(newLesson.dayNumber); setAiOpen(false); }} />}
     </div>
+    </AccountSyncProvider>
   );
 }
 

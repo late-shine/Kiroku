@@ -58,7 +58,9 @@ There are three modes:
 - **Learn only** — just the lesson, no block. Good for follow-up questions before you save anything.
 - **Save only** — turns a lesson you already learned into Kiroku's format. You paste the lesson text in first, because a fresh AI chat can't remember it, and the prompt tells the AI to stop and ask rather than invent one.
 
-No account and no key are needed for any of this. Manual copy and paste is the permanent default.
+No account or API key is required for any of this. Manual copy and paste is the permanent default.
+
+**Optional accounts and sync.** Kiroku is local-first, but you can optionally sign in with Google and sync across devices when Firebase is configured. The first sync offers **Merge**, **Use my account's data** or **Use this device's data**; after that, automatic sync runs on app start, when the tab regains focus, when the connection returns and after local changes. **Sync now** and **Choose how to sync…** remain available. Sync includes lessons, completed days, stars and weak-word state, review memory, quiz counters, and selected display preferences. The Gemini key, music, active quiz state and voice choice stay on the device. Restoring a backup adds to the account; it does not delete account-only days.
 
 **Optional Gemini help.** If you add your own Gemini API key, two buttons appear: *Fix with Gemini* repairs a reply that failed the check, and *Save with Gemini* does the Save-only step for you from pasted lesson text. Free-tier models are often busy, so Kiroku tries a chain of five in turn (45 seconds each) and shows you the trail. The result still goes through the same preview before anything is saved.
 
@@ -98,13 +100,14 @@ Besides the welcome panel, there are small dismissible tip cards on the Quiz, Pr
 
 ## Your data and your key
 
-- **No accounts and no database.** Lessons and progress live in your browser's `localStorage`. Clear your browser data and they're gone, so export a backup now and then.
+- **Local-first by default.** Without Firebase configuration, lessons and progress live in your browser's `localStorage`. Clear your browser data and they're gone, so export a backup now and then.
+- **Optional Firebase sync.** A signed-in account can sync lessons, progress and selected display preferences between devices. The Firebase web configuration is public by design; access is protected by `firebase/database.rules.json`, which must be published in the Firebase console.
 - **Your Gemini key (optional) stays in your browser.** The app's one server function relays each request to Google and is built not to store or log the key. The key is never part of a backup, and it's never in the code.
 
 ## Known limits
 
-- Everything is per browser until accounts exist (see the Roadmap).
-- Voices depend on what your browser and OS provide, and typing readings needs a Japanese keyboard (or switch the Question style to "Choose the word").
+- Without a configured, signed-in account, everything is per browser. Sync is not a live realtime feed: another device's changes arrive on app start, tab focus, reconnect, or the next local change.
+- Voices depend on what your browser and OS provide, and the selected voice is intentionally per device. Typing readings needs a Japanese keyboard (or switch the Question style to "Choose the word").
 - Free-tier Gemini models get busy and have daily limits; the fallback chain helps but can't promise an answer.
 
 ---
@@ -118,7 +121,7 @@ Besides the welcome panel, there are small dismissible tip cards on the Quiz, Pr
 | Validation | Zod |
 | Icons | lucide-react |
 | Server | Nitro (Vercel preset); one server function relays the optional Gemini calls |
-| Storage | Browser localStorage (no accounts, no server database) |
+| Storage | Browser localStorage by default; optional Firebase Realtime Database sync |
 | AI | Any chat AI by copy and paste; optional Google Gemini, bring-your-own-key |
 | Hosting | Vercel, deployed from GitHub |
 | Package manager | npm |
@@ -180,22 +183,48 @@ npm install
 npm run dev        # http://localhost:8080
 ```
 
-There's no `.env` file and nothing to configure. The only key is the optional Gemini key you paste into the app. Other scripts: `npm run build`, `npm run preview`, `npm run lint`, `npm run format`.
+The app works without a `.env` file and stays local-only when Firebase is not configured. To enable optional Google accounts and cross-device sync locally, copy `.env.example` to `.env` and fill in these six public Firebase web-config values:
+
+```dotenv
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_DATABASE_URL=
+```
+
+In Firebase, enable Google sign-in, create or enable Realtime Database, and publish the repository's `firebase/database.rules.json` under Realtime Database → Rules. Add `localhost` and the deployed site domain to Authentication → Settings → Authorized domains. Restart the dev server after changing `.env`. The Account UI stays hidden when the Firebase configuration is missing. The Gemini key remains optional and is entered in the app.
+
+Other scripts: `npm run build`, `npm run preview`, `npm run lint`, `npm run format`.
 
 ### Checks
 
+The checks available in a clean clone are:
+
 ```bash
 npx tsc --noEmit -p tsconfig.json
-npx tsx --tsconfig tsconfig.json handoffs/phase-13-backup-check.ts
+npm run build
+npm run lint
 ```
 
-`handoffs/` holds seven no-browser check scripts (tips, backup, quiz rounds, review memory, calm intake, the review words in the prompt, and the harder question types). Each prints "All checks passed." or exits with an error. Two more simulate the quiz UI in jsdom; their header says how to install the temporary packages they need.
+`PLAN.md`, `context.md`, and the phase-specific `handoffs/` verifier scripts are working files kept outside this repository, so they are not present in a normal clone. The latest sync verification was run in that separate testing copy with:
+
+```bash
+npx tsx --tsconfig tsconfig.json handoffs/phase-9b-sync-check.ts
+npx tsx --tsconfig tsconfig.json handoffs/phase-9c-sync-check.ts
+npx vitest run --config handoffs/phase-9c-vitest.config.ts
+```
+
+The last command drives the sync UI in jsdom and needs temporary packages; the script header has the exact `npm install --no-save --no-package-lock` command. The 9c UI check includes the earlier 9b cases, while the two plain `tsx` checks cover the pure sync rules and Firebase rules shape.
 
 `npm run lint` mostly reports Prettier formatting findings, because the dense files were never auto-formatted and I don't run `--fix` in the middle of feature work. It rewrites whole files.
 
 ## Deploy
 
-Push to GitHub and connect the repo to Vercel. `npm run build` uses Nitro's `vercel` preset, which writes the whole Vercel output itself, so there's no `vercel.json` and no environment variables to set. The Gemini relay runs as a Vercel Function; its worst case, five models in a row, is about 225 seconds, and Vercel's Hobby plan allows 300.
+Push to GitHub and connect the repo to Vercel. `npm run build` uses Nitro's `vercel` preset, which writes the whole Vercel output itself, so there's no `vercel.json`. The Gemini relay runs as a Vercel Function; its worst case, five models in a row, is about 225 seconds, and Vercel's Hobby plan allows 300.
+
+For accounts and sync, add the same six `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's Environment Variables (Production, and Preview if wanted) before redeploying; Vite bakes them into the client build. Add the production domain to Firebase Authentication's authorized domains and publish the current `firebase/database.rules.json` in Realtime Database → Rules. Random Vercel preview URLs are not automatically authorized for Google sign-in.
 
 Vercel refuses to build versions of TanStack Start that have a known security advisory. Phase 15 hit exactly that. The fix is to upgrade `@tanstack/react-start`, `@tanstack/react-router` and `@tanstack/router-plugin` together, then re-run the checks.
 
@@ -216,7 +245,7 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 - [ ] Quiz more than vocab — kanji, grammar points and phrases
 - [ ] Atmosphere: slow automatic theme cycling, maybe a few gentle particles
 - [ ] A friendlier guided tour for the Lesson Studio (Next / Skip all)
-- [ ] Accounts: Google sign-in and cross-device sync
+- [x] Accounts: Google sign-in and automatic cross-device sync
 - [ ] A bridge between Kiroku and Astra-chan, so each can suggest the other
 
 ---
@@ -231,3 +260,5 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 ## Built By
 
 **Shahriya** — CST Diploma student, Bangladesh. Building this while actually using it, one day of Japanese at a time.
+
+

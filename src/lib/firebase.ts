@@ -1,5 +1,6 @@
-// Phase 9a: Firebase foundation — Google sign-in, CLIENT ONLY. Phase 9b adds the Realtime Database calls
-// (`readCloud`, `writeCloud`, `deleteCloud`) at the bottom; they only run when the person presses a sync button.
+// Phase 9a: Firebase foundation — Google sign-in, CLIENT ONLY. Phase 9b added the Realtime Database calls
+// (`readCloud`, `readCloudStamp`, `writeCloud`, `deleteCloud`) at the bottom. 9c runs them automatically (app start, tab
+// focus, a short while after a local change), but still one request at a time and with no realtime listeners.
 //
 // Kiroku renders on the server (TanStack Start), so nothing here may touch the Firebase SDK at
 // import time. The SDK is loaded with dynamic `import()` inside functions that only run in the
@@ -219,6 +220,15 @@ export async function readCloud(uid: string): Promise<unknown> {
   return snap.exists() ? (snap.val() as unknown) : null;
 }
 
+/** Just the `meta/updatedAt` stamp (a few bytes): lets a sync notice that another device wrote since it read. */
+export async function readCloudStamp(uid: string): Promise<string | null> {
+  requireOnline();
+  const { db, mod } = await loadDb();
+  const snap = await withTimeout(mod.get(mod.ref(db, `users/${uid}/meta/updatedAt`)), 20000);
+  const value: unknown = snap.exists() ? snap.val() : null;
+  return typeof value === "string" ? value : null;
+}
+
 /** Replaces everything stored for this person with `tree`. The caller reads first, so a failed read stops a write. */
 export async function writeCloud(uid: string, tree: Record<string, unknown>): Promise<void> {
   requireOnline();
@@ -231,6 +241,12 @@ export async function deleteCloud(uid: string): Promise<void> {
   requireOnline();
   const { db, mod } = await loadDb();
   await withTimeout(mod.remove(mod.ref(db, `users/${uid}`)), 30000);
+}
+
+/** True when a sync failed only because there is no connection (the status line says "Offline", not "error"). */
+export function isOfflineError(error: unknown): boolean {
+  const text = (error instanceof Error ? error.message : "").toLowerCase();
+  return errorCode(error) === "kiroku/offline" || text.includes("client is offline");
 }
 
 /** Short, plain messages for the Account panel. The raw error is logged by the caller. */

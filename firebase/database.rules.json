@@ -63,6 +63,30 @@
           }
         },
 
+        "prefs": {
+          "backgroundIndex": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "bgZoomSpeed": {
+            ".validate": "newData.isString() && (newData.val() === 'slow' || newData.val() === 'medium' || newData.val() === 'still')"
+          },
+          "showFurigana": {
+            ".validate": "newData.isBoolean()"
+          },
+          "tips": {
+            "$tip": {
+              ".validate": "$tip.matches(/^[a-z0-9-]{1,40}$/) && newData.val() === true"
+            }
+          },
+          "$other": { ".validate": false }
+        },
+
+        "deleted": {
+          "$day": {
+            ".validate": "$day.matches(/^d[0-9]{1,5}$/) && newData.isString() && newData.val().length <= 40"
+          }
+        },
+
         "meta": {
           "schema": {
             ".validate": "newData.isNumber()"

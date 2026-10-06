@@ -27,8 +27,23 @@ export function HeaderAccount() {
     account.auth.status === "in"
       ? (account.auth.account.email ?? account.auth.account.displayName)
       : null;
-  const label = signedInAs ? `Account (signed in as ${signedInAs})` : "Account";
   const initial = signedInAs ? signedInAs.charAt(0).toUpperCase() : "";
+  // Phase 9c: a small dot for the sync state (nothing when sync is off or not set up).
+  const dotFor: Record<string, string> = {
+    idle: "bg-success",
+    syncing: "bg-primary animate-pulse",
+    offline: "bg-muted-foreground",
+    error: "bg-destructive",
+  };
+  const dot = signedInAs ? (dotFor[sync.status] ?? "") : "";
+  const statusWord: Record<string, string> = {
+    idle: "synced",
+    syncing: "syncing",
+    offline: "offline, will sync later",
+    error: "sync problem",
+  };
+  const word = dot ? `, ${statusWord[sync.status] ?? ""}` : "";
+  const label = signedInAs ? `Account (signed in as ${signedInAs}${word})` : "Account";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -36,7 +51,7 @@ export function HeaderAccount() {
         <button
           aria-label={label}
           title={label}
-          className={`rounded-md border p-2 hover:bg-accent hover:text-primary ${
+          className={`relative rounded-md border p-2 hover:bg-accent hover:text-primary ${
             signedInAs ? "border-primary/40 text-primary" : "border-border text-muted-foreground"
           }`}
         >
@@ -46,6 +61,12 @@ export function HeaderAccount() {
             </span>
           ) : (
             <User className="size-3.5" />
+          )}
+          {dot && (
+            <span
+              aria-hidden="true"
+              className={`absolute -right-0.5 -top-0.5 size-2 rounded-full ring-1 ring-background ${dot}`}
+            />
           )}
         </button>
       </PopoverTrigger>

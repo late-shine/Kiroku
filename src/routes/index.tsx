@@ -29,6 +29,7 @@ import { VocabList } from "@/components/lesson/VocabList";
 import { AccountCard } from "@/components/account/AccountCard";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
 import { AccountSyncProvider } from "@/components/account/AccountSyncProvider";
+import { useAccountSync } from "@/components/account/AccountSyncContext";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -131,7 +132,7 @@ function JapaneseDesk() {
   const resetAll = () => { setLessons([]); setProgress(emptyProgress); setDay(1); };
   return (
     // Phase 9b: one shared account + sync state for the header button and the Progress card. `onApplied` keeps `day` on a real day after a sync replaced the lessons.
-    <AccountSyncProvider lessons={lessons} progress={progress} setLessons={setLessons} setProgress={setProgress} onApplied={(applied) => setDay((d) => (applied.some((l) => l.dayNumber === d) ? d : (applied[0]?.dayNumber ?? 1)))}>
+    <AccountSyncProvider lessons={lessons} progress={progress} setLessons={setLessons} setProgress={setProgress} onApplied={(applied) => setDay((d) => (applied.some((l) => l.dayNumber === d) ? d : (applied[0]?.dayNumber ?? 1)))} onClearDevice={resetAll}>
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       {backgrounds.map((bg, index) => <img key={bg.name} src={bg.url} alt="" className={`scene-drift fixed inset-0 size-full object-cover transition-opacity duration-1000 ${index === progress.backgroundIndex % backgrounds.length ? "opacity-100" : "opacity-0"}`} />)}
       <div className="fixed inset-0 bg-background transition-opacity" style={{ opacity: sceneDarkness }} />
@@ -214,6 +215,7 @@ function LessonWorkspace({ lesson, lessons, progress, completion, lessonTab, set
 // The curriculum list owns its own select-mode/checkbox state — it's a pure UI concern local to
 // this list. Deletion itself (state mutation) lives in JapaneseDesk and comes in via onDeleteDays.
 function CurriculumList({ lessons, currentDay, completedDays, selectDay, onDeleteDays }: { lessons:DayLesson[]; currentDay:number; completedDays:number[]; selectDay:(v:number)=>void; onDeleteDays:(dayNumbers:number[])=>void }) {
+  const { sync } = useAccountSync(); // Phase 9c: a day deleted here must also leave the account, and stay gone on other devices
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [confirmDays, setConfirmDays] = useState<number[] | null>(null);
@@ -245,7 +247,7 @@ function CurriculumList({ lessons, currentDay, completedDays, selectDay, onDelet
       title={confirmDays.length === 1 ? `Delete Day ${confirmDays[0]}?` : `Delete ${confirmDays.length} days?`}
       body="This can't be undone."
       confirmLabel="Delete"
-      onConfirm={() => { onDeleteDays(confirmDays); setConfirmDays(null); exitSelect(); }}
+      onConfirm={() => { onDeleteDays(confirmDays); sync.noteDeleted(confirmDays); setConfirmDays(null); exitSelect(); }}
       onCancel={() => setConfirmDays(null)}
     />}
   </>;
@@ -297,6 +299,7 @@ function ProgressView({lessons,progress,setProgress,setLessons,onResetAll,onRest
 function BackupControls({ lessons, progress, setLessons, setProgress, onRestored }: { lessons: DayLesson[]; progress: UserProgressState; setLessons: React.Dispatch<React.SetStateAction<DayLesson[]>>; setProgress: React.Dispatch<React.SetStateAction<UserProgressState>>; onRestored: (firstDay: number) => void }) {
   const [notice, setNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [pending, setPending] = useState<ParsedBackup | null>(null);
+  const { sync } = useAccountSync();
   const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
 
   const exportData = () => {
@@ -329,7 +332,7 @@ function BackupControls({ lessons, progress, setLessons, setProgress, onRestored
     {notice && <p role={notice.kind === "error" ? "alert" : "status"} className={`mt-3 text-xs ${notice.kind === "error" ? "text-destructive" : "text-success"}`}>{notice.text}</p>}
     {pending && <ConfirmDialog
       title="Replace your data with this backup?"
-      body={`${lessons.length === 0 ? `Restore the backup's ${days(pending.lessons.length)}?` : `Replace your ${days(lessons.length)} with the backup's ${days(pending.lessons.length)}?`}${madeOn} Your current lessons and progress will be overwritten — export first if you want to keep them.`}
+      body={`${lessons.length === 0 ? `Restore the backup's ${days(pending.lessons.length)}?` : `Replace your ${days(lessons.length)} with the backup's ${days(pending.lessons.length)}?`}${madeOn} Your current lessons and progress will be overwritten — export first if you want to keep them.${sync.linked ? " You're signed in with sync, so the restored days will be ADDED to your account on the next sync; nothing in your account is deleted, and days your account has that this backup doesn't will come back to this device." : ""}`}
       confirmLabel="Replace"
       onConfirm={() => {
         setLessons(pending.lessons);
@@ -350,15 +353,20 @@ function BackupControls({ lessons, progress, setLessons, setProgress, onRestored
 function ResetControl({ onReset }: { onReset: () => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  // Phase 9c: signed in and synced → a second question about the account's copy (default: leave it alone).
+  const { sync } = useAccountSync();
+  const [alsoCloud, setAlsoCloud] = useState(false);
+  const askCloud = sync.linked && sync.canDeleteCloud;
   if (!open) {
     return <button onClick={() => setOpen(true)} className="flex items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"><RotateCcw className="size-3" />Reset all progress</button>;
   }
   const canConfirm = text.trim().toLowerCase() === "reset";
   return <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
     <p className="text-xs text-muted-foreground">This deletes every lesson and all progress — back it up first if you're not sure. Type <span className="font-semibold text-foreground">reset</span> to confirm.</p>
+    {askCloud && <label className="flex cursor-pointer items-start gap-2 text-xs"><input type="checkbox" className="mt-0.5 accent-primary" checked={alsoCloud} onChange={(e) => setAlsoCloud(e.target.checked)} /><span>Also delete the copy in my account<span className="block text-muted-foreground">{alsoCloud ? "Your account's copy is erased too. Your other devices keep theirs and may upload it again." : "Left off: your account keeps its copy, and automatic sync is switched off on this device so it doesn't bring everything straight back. Sync now brings it back whenever you want."}</span></span></label>}
     <div className="flex gap-2">
       <input value={text} onChange={(e) => setText(e.target.value)} placeholder="reset" className="min-w-0 flex-1 rounded-md border border-border bg-glass px-2 py-1.5 text-xs outline-none focus:border-destructive" />
-      <button disabled={!canConfirm} onClick={() => { onReset(); setOpen(false); setText(""); }} className="shrink-0 rounded-md bg-destructive px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-40">Confirm</button>
+      <button disabled={!canConfirm} onClick={() => { onReset(); if (askCloud) { if (alsoCloud) void sync.deleteCloudData(); else sync.setAuto(false); } setOpen(false); setText(""); setAlsoCloud(false); }} className="shrink-0 rounded-md bg-destructive px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-40">Confirm</button>
       <button onClick={() => { setOpen(false); setText(""); }} className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs">Cancel</button>
     </div>
   </div>;

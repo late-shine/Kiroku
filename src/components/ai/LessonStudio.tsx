@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Copy, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   JLPT_LEVELS,
   MODE_HINTS,
@@ -19,7 +28,11 @@ import {
 } from "@/lib/prompt-builder";
 import { detectDayNumber, parseLessonFromText, stripDayPrefix } from "@/lib/lesson-schema";
 import { readGeminiRefusal, type GeminiAttempt } from "@/lib/gemini-fallback";
-import { GEMINI_ATTEMPT_TIMEOUT_MS, GEMINI_MODEL_CHAIN, rotateChainAfter } from "@/lib/gemini-models";
+import {
+  GEMINI_ATTEMPT_TIMEOUT_MS,
+  GEMINI_MODEL_CHAIN,
+  rotateChainAfter,
+} from "@/lib/gemini-models";
 import { relayGemini } from "@/lib/gemini-relay";
 import { TipCard } from "@/components/tips/TipCard";
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS, migrateLegacyStorage } from "@/lib/storage";
@@ -71,9 +84,12 @@ function loadStored(): StoredOptions {
       tone: parsed.tone in TONE_LABELS ? parsed.tone : DEFAULTS.tone,
       style: parsed.style in STYLE_LABELS ? parsed.style : DEFAULTS.style,
       level: JLPT_LEVELS.includes(parsed.level) ? parsed.level : DEFAULTS.level,
-      vocabCount: (VOCAB_COUNTS as readonly number[]).includes(parsed.vocabCount) ? parsed.vocabCount : DEFAULTS.vocabCount,
+      vocabCount: (VOCAB_COUNTS as readonly number[]).includes(parsed.vocabCount)
+        ? parsed.vocabCount
+        : DEFAULTS.vocabCount,
       romaji: typeof parsed.romaji === "boolean" ? parsed.romaji : DEFAULTS.romaji,
-      customFocus: typeof parsed.customFocus === "string" ? parsed.customFocus : DEFAULTS.customFocus,
+      customFocus:
+        typeof parsed.customFocus === "string" ? parsed.customFocus : DEFAULTS.customFocus,
       // Older saved options predate mode (Phase 3b) — falls back to the default for anyone upgrading.
       mode: parsed.mode in MODE_LABELS ? parsed.mode : DEFAULTS.mode,
     };
@@ -110,7 +126,9 @@ function OptionGrid<T extends string | number>({
           key={opt}
           onClick={() => onChange(opt)}
           className={`rounded-md border px-3 py-2 text-left text-xs font-semibold transition-colors ${
-            value === opt ? "border-primary/50 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"
+            value === opt
+              ? "border-primary/50 bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
           }`}
         >
           {labels[opt]}
@@ -152,7 +170,9 @@ export function LessonStudio({
 
   const [copied, setCopied] = useState(false);
   const [pasted, setPasted] = useState("");
-  const [importResult, setImportResult] = useState<ReturnType<typeof parseLessonFromText> | null>(null);
+  const [importResult, setImportResult] = useState<ReturnType<typeof parseLessonFromText> | null>(
+    null,
+  );
 
   // Phase 3c — optional Gemini helpers. Everything here is additive: the manual flow never needs it.
   const [geminiKey, setGeminiKey] = useState(loadGeminiKey);
@@ -175,8 +195,33 @@ export function LessonStudio({
   }, [tone, style, level, vocabCount, romaji, customFocus, mode]);
 
   const prompt = useMemo(
-    () => buildLessonPrompt({ day, tone, style, level, vocabCount, romaji, customFocus, lessons, progress, mode, existingLessonText }),
-    [day, tone, style, level, vocabCount, romaji, customFocus, lessons, progress, mode, existingLessonText],
+    () =>
+      buildLessonPrompt({
+        day,
+        tone,
+        style,
+        level,
+        vocabCount,
+        romaji,
+        customFocus,
+        lessons,
+        progress,
+        mode,
+        existingLessonText,
+      }),
+    [
+      day,
+      tone,
+      style,
+      level,
+      vocabCount,
+      romaji,
+      customFocus,
+      lessons,
+      progress,
+      mode,
+      existingLessonText,
+    ],
   );
 
   // Phase 14c: how many due-for-review words this prompt carries (Save only never includes them).
@@ -226,7 +271,9 @@ export function LessonStudio({
     setGeminiError(null);
     setGeminiTrail([]);
     try {
-      const res = await relayGemini({ data: { apiKey: geminiKey, prompt: geminiPrompt, startAfter } });
+      const res = await relayGemini({
+        data: { apiKey: geminiKey, prompt: geminiPrompt, startAfter },
+      });
       if (runId !== geminiRunId.current) return null; // cancelled while waiting
       setGeminiTrail(res.attempts);
       if (!res.ok) {
@@ -236,7 +283,9 @@ export function LessonStudio({
       return res.text;
     } catch {
       if (runId !== geminiRunId.current) return null;
-      setGeminiError("Couldn't reach Kiroku's Gemini relay. Check your connection and try again — manual copy/paste still works.");
+      setGeminiError(
+        "Couldn't reach Kiroku's Gemini relay. Check your connection and try again — manual copy/paste still works.",
+      );
       return null;
     } finally {
       if (runId === geminiRunId.current) setGeminiBusy(false);
@@ -272,14 +321,20 @@ export function LessonStudio({
   const fixWithGemini = async (startAfter = "") => {
     if (!importResult || importResult.success || !pasted.trim()) return;
     setLastGeminiAction("fix");
-    const text = await runGemini(buildRepairPrompt(repairDay, vocabCount, pasted, importResult.errors), startAfter);
+    const text = await runGemini(
+      buildRepairPrompt(repairDay, vocabCount, pasted, importResult.errors),
+      startAfter,
+    );
     if (text !== null) applyGeminiText(text);
   };
 
   const saveWithGemini = async (startAfter = "") => {
     if (!existingLessonText.trim()) return;
     setLastGeminiAction("save");
-    const text = await runGemini(buildSaveOnlyPrompt(day, vocabCount, existingLessonText), startAfter);
+    const text = await runGemini(
+      buildSaveOnlyPrompt(day, vocabCount, existingLessonText),
+      startAfter,
+    );
     if (text !== null && applyGeminiText(text)) setStep("import");
   };
 
@@ -294,20 +349,25 @@ export function LessonStudio({
     lastAttempt.outcome !== "ok" &&
     (lastAttempt.status !== null || lastAttempt.outcome === "timed-out") &&
     !(lastAttempt.status !== null && [400, 401, 403].includes(lastAttempt.status));
-  const nextModel = lastAttempt ? rotateChainAfter(GEMINI_MODEL_CHAIN, lastAttempt.model)[0] : undefined;
+  const nextModel = lastAttempt
+    ? rotateChainAfter(GEMINI_MODEL_CHAIN, lastAttempt.model)[0]
+    : undefined;
   const tryAnotherModel = () => {
     if (!lastAttempt) return;
     if (lastGeminiAction === "fix") void fixWithGemini(lastAttempt.model);
     else if (lastGeminiAction === "save") void saveWithGemini(lastAttempt.model);
   };
   const retry: GeminiRetry | null =
-    canTryAnother && nextModel ? { label: `Try ${nextModel}`, busy: geminiBusy, onClick: tryAnotherModel } : null;
+    canTryAnother && nextModel
+      ? { label: `Try ${nextModel}`, busy: geminiBusy, onClick: tryAnotherModel }
+      : null;
 
   const confirmImport = () => {
     if (!importResult?.success || !importResult.lesson) return;
     const lesson = importResult.lesson;
     const alreadyExists = lessons.some((l) => l.dayNumber === lesson.dayNumber);
-    if (alreadyExists && !window.confirm(`Day ${lesson.dayNumber} already exists — replace it?`)) return;
+    if (alreadyExists && !window.confirm(`Day ${lesson.dayNumber} already exists — replace it?`))
+      return;
     onImport(lesson);
   };
 
@@ -317,28 +377,43 @@ export function LessonStudio({
     { id: "import", label: "3. Import" },
   ];
 
-  const dayHint = day === 1 ? "Foundations lesson — no assumed knowledge" : day > highestDay ? "New lesson" : "Existing lesson — rebuilding its prompt";
+  const dayHint =
+    day === 1
+      ? "Foundations lesson — no assumed knowledge"
+      : day > highestDay
+        ? "New lesson"
+        : "Existing lesson — rebuilding its prompt";
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-background/65 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-glass-strong shadow-2xl backdrop-blur-2xl">
-        <div className="flex items-center justify-between border-b border-border p-5">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-4 backdrop-blur-md">
+      <div className="glass-panel-strong flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border/50 p-5">
           <div>
-            <span className="font-display text-xs italic text-primary">AI lesson studio</span>
-            <h2 className="mt-1 font-display text-xl">Build Day {day}</h2>
+            <span className="font-display text-xs font-semibold tracking-wider text-primary">
+              AI LESSON STUDIO
+            </span>
+            <h2 className="mt-1 font-display text-xl font-medium text-foreground">
+              Build Day {day}
+            </h2>
           </div>
-          <button onClick={onClose} aria-label="Close">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
             <X className="size-4" />
           </button>
         </div>
 
-        <div className="flex gap-2 border-b border-border px-5 pt-3">
+        <div className="flex gap-2 border-b border-border/50 px-5 pt-2.5">
           {steps.map((s) => (
             <button
               key={s.id}
               onClick={() => setStep(s.id)}
-              className={`rounded-t-md px-3 py-2 text-xs font-semibold transition-colors ${
-                step === s.id ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+              className={`px-3 py-2 text-xs transition-colors ${
+                step === s.id
+                  ? "border-b-2 border-primary text-primary font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {s.label}
@@ -351,13 +426,25 @@ export function LessonStudio({
             <div className="space-y-5">
               {showTip && <TipCard id="studio" onDismiss={onDismissTip} />}
               <div>
-                <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Target day</label>
+                <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Target day
+                </label>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setDay((d) => Math.max(1, d - 1))} aria-label="Previous day" className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary">
+                  <button
+                    onClick={() => setDay((d) => Math.max(1, d - 1))}
+                    aria-label="Previous day"
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary"
+                  >
                     <ChevronLeft className="size-4" />
                   </button>
-                  <span className="w-20 rounded-md border border-border bg-glass px-3 py-1.5 text-center text-sm font-semibold">Day {day}</span>
-                  <button onClick={() => setDay((d) => Math.min(highestDay + 1, d + 1))} aria-label="Next day" className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary">
+                  <span className="w-20 rounded-md border border-border bg-glass px-3 py-1.5 text-center text-sm font-semibold">
+                    Day {day}
+                  </span>
+                  <button
+                    onClick={() => setDay((d) => Math.min(highestDay + 1, d + 1))}
+                    aria-label="Next day"
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary"
+                  >
                     <ChevronRight className="size-4" />
                   </button>
                   <span className="text-xs text-muted-foreground">{dayHint}</span>
@@ -365,23 +452,35 @@ export function LessonStudio({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Save mode</label>
-                <OptionGrid cols={3} value={mode} options={Object.keys(MODE_LABELS) as PromptMode[]} labels={MODE_LABELS} onChange={setMode} />
+                <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Save mode
+                </label>
+                <OptionGrid
+                  cols={3}
+                  value={mode}
+                  options={Object.keys(MODE_LABELS) as PromptMode[]}
+                  labels={MODE_LABELS}
+                  onChange={setMode}
+                />
                 <div className="mt-2 space-y-1 rounded-md border border-border bg-glass px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                   <p>
-                    <span className="font-semibold text-foreground">Learn + Save</span> (recommended) — {MODE_HINTS["learn-save"]}
+                    <span className="font-semibold text-foreground">Learn + Save</span>{" "}
+                    (recommended) — {MODE_HINTS["learn-save"]}
                   </p>
                   <p>
-                    <span className="font-semibold text-foreground">Learn only</span> — {MODE_HINTS["learn-only"]}
+                    <span className="font-semibold text-foreground">Learn only</span> —{" "}
+                    {MODE_HINTS["learn-only"]}
                   </p>
                   <p>
-                    <span className="font-semibold text-foreground">Save only</span> — {MODE_HINTS["save-only"]}
+                    <span className="font-semibold text-foreground">Save only</span> —{" "}
+                    {MODE_HINTS["save-only"]}
                   </p>
                 </div>
                 {reviewInPrompt > 0 && (
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                    {reviewInPrompt} word{reviewInPrompt === 1 ? "" : "s"} due for review will be added to this prompt,
-                    so your AI uses {reviewInPrompt === 1 ? "it" : "them"} again in new sentences.
+                    {reviewInPrompt} word{reviewInPrompt === 1 ? "" : "s"} due for review will be
+                    added to this prompt, so your AI uses {reviewInPrompt === 1 ? "it" : "them"}{" "}
+                    again in new sentences.
                   </p>
                 )}
               </div>
@@ -389,7 +488,9 @@ export function LessonStudio({
               {mode === "save-only" ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Existing lesson text (optional)</label>
+                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Existing lesson text (optional)
+                    </label>
                     <textarea
                       value={existingLessonText}
                       onChange={(e) => setExistingLessonText(e.target.value)}
@@ -398,18 +499,27 @@ export function LessonStudio({
                       className="w-full resize-none rounded-md border border-border bg-glass p-3 font-mono text-xs outline-none focus:border-primary"
                     />
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      Leave this blank only if you're pasting the prompt into the <em>same</em> chat that already taught you — it already
-                      has the lesson in its own history. Fill it in if you're using a different or fresh AI chat (including the "Open"
-                      links below, which always start empty), so nothing gets lost — or invented — in between.
+                      Leave this blank only if you're pasting the prompt into the <em>same</em> chat
+                      that already taught you — it already has the lesson in its own history. Fill
+                      it in if you're using a different or fresh AI chat (including the "Open" links
+                      below, which always start empty), so nothing gets lost — or invented — in
+                      between.
                     </p>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Vocab count</label>
+                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Vocab count
+                    </label>
                     <OptionGrid
                       cols={3}
                       value={vocabCount}
                       options={VOCAB_COUNTS}
-                      labels={Object.fromEntries(VOCAB_COUNTS.map((v) => [v, String(v)])) as Record<VocabCount, string>}
+                      labels={
+                        Object.fromEntries(VOCAB_COUNTS.map((v) => [v, String(v)])) as Record<
+                          VocabCount,
+                          string
+                        >
+                      }
                       onChange={setVocabCount}
                     />
                   </div>
@@ -417,33 +527,61 @@ export function LessonStudio({
               ) : (
                 <>
                   <div>
-                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">AI sensei tone</label>
-                    <OptionGrid value={tone} options={Object.keys(TONE_LABELS) as Tone[]} labels={TONE_LABELS} onChange={setTone} />
+                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                      AI sensei tone
+                    </label>
+                    <OptionGrid
+                      value={tone}
+                      options={Object.keys(TONE_LABELS) as Tone[]}
+                      labels={TONE_LABELS}
+                      onChange={setTone}
+                    />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Lesson style</label>
-                    <OptionGrid value={style} options={Object.keys(STYLE_LABELS) as LessonStyle[]} labels={STYLE_LABELS} onChange={setStyle} />
+                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Lesson style
+                    </label>
+                    <OptionGrid
+                      value={style}
+                      options={Object.keys(STYLE_LABELS) as LessonStyle[]}
+                      labels={STYLE_LABELS}
+                      onChange={setStyle}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-5">
                     <div>
-                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">JLPT level</label>
+                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                        JLPT level
+                      </label>
                       <OptionGrid
                         cols={3}
                         value={level}
                         options={JLPT_LEVELS}
-                        labels={Object.fromEntries(JLPT_LEVELS.map((l) => [l, l])) as Record<JlptLevel, string>}
+                        labels={
+                          Object.fromEntries(JLPT_LEVELS.map((l) => [l, l])) as Record<
+                            JlptLevel,
+                            string
+                          >
+                        }
                         onChange={setLevel}
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Vocab count</label>
+                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Vocab count
+                      </label>
                       <OptionGrid
                         cols={3}
                         value={vocabCount}
                         options={VOCAB_COUNTS}
-                        labels={Object.fromEntries(VOCAB_COUNTS.map((v) => [v, String(v)])) as Record<VocabCount, string>}
+                        labels={
+                          Object.fromEntries(VOCAB_COUNTS.map((v) => [v, String(v)])) as Record<
+                            VocabCount,
+                            string
+                          >
+                        }
                         onChange={setVocabCount}
                       />
                     </div>
@@ -457,12 +595,16 @@ export function LessonStudio({
                       aria-label="Toggle romaji"
                       className={`h-5 w-9 rounded-full transition-colors ${romaji ? "bg-primary" : "bg-border"}`}
                     >
-                      <span className={`block size-4 rounded-full bg-background transition-transform ${romaji ? "translate-x-4" : "translate-x-0.5"}`} />
+                      <span
+                        className={`block size-4 rounded-full bg-background transition-transform ${romaji ? "translate-x-4" : "translate-x-0.5"}`}
+                      />
                     </button>
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">Custom focus (optional)</label>
+                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Custom focus (optional)
+                    </label>
                     <input
                       value={customFocus}
                       onChange={(e) => setCustomFocus(e.target.value)}
@@ -473,7 +615,10 @@ export function LessonStudio({
                 </>
               )}
 
-              <button onClick={() => setStep("copy")} className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground">
+              <button
+                onClick={() => setStep("copy")}
+                className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+              >
                 Continue to prompt →
               </button>
             </div>
@@ -481,15 +626,28 @@ export function LessonStudio({
 
           {step === "copy" && (
             <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">This preview updates live as you change options in step 1.</p>
-              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">{prompt}</pre>
+              <p className="text-xs text-muted-foreground">
+                This preview updates live as you change options in step 1.
+              </p>
+              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">
+                {prompt}
+              </pre>
               <div className="flex flex-wrap gap-2">
-                <button onClick={copyPrompt} className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">
+                <button
+                  onClick={copyPrompt}
+                  className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+                >
                   {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                   {copied ? "Copied!" : "Copy prompt"}
                 </button>
                 {AI_LINKS.map((link) => (
-                  <a key={link.label} href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-primary">
+                  <a
+                    key={link.label}
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-primary"
+                  >
                     Open {link.label} ↗
                   </a>
                 ))}
@@ -497,28 +655,45 @@ export function LessonStudio({
 
               {mode === "save-only" && (
                 <div className="space-y-2 rounded-md border border-border bg-glass p-3">
-                  <p className="text-xs font-semibold text-foreground">Or let Gemini do the conversion (optional)</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Sends the lesson text you pasted in step 1 straight to Gemini and jumps to the preview — no copy/paste round trip.
+                  <p className="text-xs font-semibold text-foreground">
+                    Or let Gemini do the conversion (optional)
                   </p>
-                  <GeminiKeyPanel hasKey={Boolean(geminiKey)} onSave={saveGeminiKey} onRemove={removeGeminiKey} />
+                  <p className="text-[11px] text-muted-foreground">
+                    Sends the lesson text you pasted in step 1 straight to Gemini and jumps to the
+                    preview — no copy/paste round trip.
+                  </p>
+                  <GeminiKeyPanel
+                    hasKey={Boolean(geminiKey)}
+                    onSave={saveGeminiKey}
+                    onRemove={removeGeminiKey}
+                  />
                   <button
                     onClick={() => void saveWithGemini()}
                     disabled={geminiBusy || !geminiKey || !existingLessonText.trim()}
                     className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
                   >
-                    {geminiBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                    {geminiBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
                     {geminiBusy ? "Asking Gemini…" : "Save with Gemini"}
                   </button>
                   {geminiBusy && <GeminiWaiting onCancel={cancelGemini} />}
                   {!existingLessonText.trim() && (
-                    <p className="text-[11px] text-muted-foreground">Paste the lesson text in step 1 first — Gemini has no other way to know what you learned.</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Paste the lesson text in step 1 first — Gemini has no other way to know what
+                      you learned.
+                    </p>
                   )}
                   <GeminiStatus error={geminiError} trail={geminiTrail} retry={retry} />
                 </div>
               )}
 
-              <button onClick={() => setStep("import")} className="w-full rounded-md border border-border py-2.5 text-sm font-semibold text-foreground hover:border-primary hover:text-primary">
+              <button
+                onClick={() => setStep("import")}
+                className="w-full rounded-md border border-border py-2.5 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+              >
                 Continue to import →
               </button>
             </div>
@@ -526,7 +701,9 @@ export function LessonStudio({
 
           {step === "import" && (
             <div className="space-y-3">
-              <label className="block text-xs text-muted-foreground">Paste the AI's full reply below (the JSON code block can be anywhere in it).</label>
+              <label className="block text-xs text-muted-foreground">
+                Paste the AI's full reply below (the JSON code block can be anywhere in it).
+              </label>
               <textarea
                 value={pasted}
                 onChange={(e) => {
@@ -559,18 +736,32 @@ export function LessonStudio({
 
               {importResult && !importResult.success && (
                 <div className="space-y-2 rounded-md border border-border bg-glass p-3">
-                  <p className="text-xs font-semibold text-foreground">Stuck? Let Gemini try to fix it (optional)</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Sends the text above and the errors to Gemini, using Day {repairDay}{detectDayNumber(pasted) ? " (the day found in your pasted text)" : " (from step 1)"} and {vocabCount} vocab words from step 1. You still preview the result
-                    before anything is saved.
+                  <p className="text-xs font-semibold text-foreground">
+                    Stuck? Let Gemini try to fix it (optional)
                   </p>
-                  <GeminiKeyPanel hasKey={Boolean(geminiKey)} onSave={saveGeminiKey} onRemove={removeGeminiKey} />
+                  <p className="text-[11px] text-muted-foreground">
+                    Sends the text above and the errors to Gemini, using Day {repairDay}
+                    {detectDayNumber(pasted)
+                      ? " (the day found in your pasted text)"
+                      : " (from step 1)"}{" "}
+                    and {vocabCount} vocab words from step 1. You still preview the result before
+                    anything is saved.
+                  </p>
+                  <GeminiKeyPanel
+                    hasKey={Boolean(geminiKey)}
+                    onSave={saveGeminiKey}
+                    onRemove={removeGeminiKey}
+                  />
                   <button
                     onClick={() => void fixWithGemini()}
                     disabled={geminiBusy || !geminiKey}
                     className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
                   >
-                    {geminiBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                    {geminiBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
                     {geminiBusy ? "Asking Gemini…" : "Fix with Gemini"}
                   </button>
                   {geminiBusy && <GeminiWaiting onCancel={cancelGemini} />}
@@ -582,7 +773,9 @@ export function LessonStudio({
               {importResult?.success && importResult.lesson && (
                 <ImportPreviewCard
                   lesson={importResult.lesson}
-                  alreadyExists={lessons.some((l) => l.dayNumber === importResult.lesson!.dayNumber)}
+                  alreadyExists={lessons.some(
+                    (l) => l.dayNumber === importResult.lesson!.dayNumber,
+                  )}
                   fromGemini={fromGemini}
                   onConfirm={confirmImport}
                 />
@@ -618,10 +811,14 @@ function ImportPreviewCard({
       <p className="text-muted-foreground">{lesson.vocab.length} vocab words</p>
       {fromGemini && (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Built by Gemini — skim it against the original before saving. The box above now holds Gemini's version.
+          Built by Gemini — skim it against the original before saving. The box above now holds
+          Gemini's version.
         </p>
       )}
-      <button onClick={onConfirm} className="mt-3 w-full rounded-md bg-primary py-2 text-xs font-semibold text-primary-foreground">
+      <button
+        onClick={onConfirm}
+        className="mt-3 w-full rounded-md bg-primary py-2 text-xs font-semibold text-primary-foreground"
+      >
         {alreadyExists ? `Replace Day ${lesson.dayNumber}` : `Save Day ${lesson.dayNumber}`}
       </button>
     </div>
@@ -640,8 +837,14 @@ const OUTCOME_LABELS: Record<GeminiAttempt["outcome"], string> = {
 function GeminiWaiting({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-      <span>Waiting on Gemini — each model gets up to {Math.round(GEMINI_ATTEMPT_TIMEOUT_MS / 1000)}s before we move to the next.</span>
-      <button onClick={onCancel} className="flex shrink-0 items-center gap-1 font-semibold underline hover:text-destructive">
+      <span>
+        Waiting on Gemini — each model gets up to {Math.round(GEMINI_ATTEMPT_TIMEOUT_MS / 1000)}s
+        before we move to the next.
+      </span>
+      <button
+        onClick={onCancel}
+        className="flex shrink-0 items-center gap-1 font-semibold underline hover:text-destructive"
+      >
         <X className="size-3" />
         Cancel
       </button>
@@ -656,12 +859,22 @@ interface GeminiRetry {
 }
 
 /** Shows a Gemini error and/or the "tried X, then Y" trail when the fallback chain fell through. */
-function GeminiStatus({ error, trail, retry }: { error: string | null; trail: GeminiAttempt[]; retry: GeminiRetry | null }) {
+function GeminiStatus({
+  error,
+  trail,
+  retry,
+}: {
+  error: string | null;
+  trail: GeminiAttempt[];
+  retry: GeminiRetry | null;
+}) {
   if (!error && trail.length === 0) return null;
   return (
     <div className="space-y-1.5">
       {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">{error}</div>
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
+          {error}
+        </div>
       )}
       {trail.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
@@ -674,7 +887,11 @@ function GeminiStatus({ error, trail, retry }: { error: string | null; trail: Ge
           disabled={retry.busy}
           className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
         >
-          {retry.busy ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+          {retry.busy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3.5" />
+          )}
           {retry.busy ? "Asking Gemini…" : `Having trouble? ${retry.label}`}
         </button>
       )}
@@ -683,14 +900,25 @@ function GeminiStatus({ error, trail, retry }: { error: string | null; trail: Ge
 }
 
 /** Bring-your-own-key field. The key stays in this browser's localStorage; Kiroku's server only relays it per request. */
-function GeminiKeyPanel({ hasKey, onSave, onRemove }: { hasKey: boolean; onSave: (key: string) => void; onRemove: () => void }) {
+function GeminiKeyPanel({
+  hasKey,
+  onSave,
+  onRemove,
+}: {
+  hasKey: boolean;
+  onSave: (key: string) => void;
+  onRemove: () => void;
+}) {
   const [draft, setDraft] = useState("");
 
   if (hasKey) {
     return (
       <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
         <span>Gemini key saved in this browser.</span>
-        <button onClick={onRemove} className="font-semibold text-muted-foreground underline hover:text-destructive">
+        <button
+          onClick={onRemove}
+          className="font-semibold text-muted-foreground underline hover:text-destructive"
+        >
           Remove key
         </button>
       </div>
@@ -721,8 +949,8 @@ function GeminiKeyPanel({ hasKey, onSave, onRemove }: { hasKey: boolean; onSave:
         </button>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Stored only in this browser and sent to Google through Kiroku's relay with each request — never kept on a server. Everything works
-        without it.
+        Stored only in this browser and sent to Google through Kiroku's relay with each request —
+        never kept on a server. Everything works without it.
       </p>
     </div>
   );

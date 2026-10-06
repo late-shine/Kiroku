@@ -18,7 +18,7 @@ export function HelpCard({
 }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-background/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-4 backdrop-blur-md"
       onClick={onClose}
     >
       <div
@@ -26,7 +26,7 @@ export function HelpCard({
         aria-modal="true"
         aria-labelledby="help-card-title"
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-glass-strong p-5 shadow-2xl backdrop-blur-xl"
+        className="glass-panel-strong max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
           <h2 id="help-card-title" className="font-display text-lg">

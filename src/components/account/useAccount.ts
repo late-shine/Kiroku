@@ -11,7 +11,8 @@ import {
   type Account,
 } from "@/lib/firebase";
 
-export type AuthState = { status: "loading" } | { status: "out" } | { status: "in"; account: Account };
+export type AuthState =
+  { status: "loading" } | { status: "out" } | { status: "in"; account: Account };
 
 export type AccountController = {
   configured: boolean;
@@ -23,9 +24,13 @@ export type AccountController = {
 };
 
 /** `handleRedirect`: also pick up the result (or failure) of a redirect sign-in. Use it once, in the always-mounted header. */
-export function useAccount({ handleRedirect = false }: { handleRedirect?: boolean } = {}): AccountController {
+export function useAccount({
+  handleRedirect = false,
+}: { handleRedirect?: boolean } = {}): AccountController {
   const configured = isFirebaseConfigured();
-  const [auth, setAuth] = useState<AuthState>({ status: "loading" });
+  const [auth, setAuth] = useState<AuthState>(
+    configured ? { status: "loading" } : { status: "out" },
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

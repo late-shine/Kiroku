@@ -30,34 +30,44 @@ export function Vocab({
   };
 
   return (
-    <div>
+    <div className="space-y-3">
       {lesson.vocab.length > 0 && (
-        <div className="mb-2 flex items-center gap-2 text-xs">
+        <div className="flex items-center justify-between text-xs">
           {notInReview.length > 0 ? (
             <button
               onClick={() => add(notInReview)}
-              className="rounded-md border border-border bg-glass px-3 py-1.5 font-semibold transition-colors hover:bg-accent"
+              className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-medium text-primary transition-all hover:bg-primary/20"
             >
               Add this day's words to review ({notInReview.length})
             </button>
           ) : (
-            <span className="text-muted-foreground">All of this day's words are in review.</span>
+            <span className="text-muted-foreground/80">All words in review</span>
           )}
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {lesson.vocab.length} words
+          </span>
         </div>
       )}
-      <div className="max-h-[360px] space-y-1 overflow-y-auto">
+      <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
         {lesson.vocab.map((word) => {
           const rec = memoryFor(memory, word);
           const mastery = masteryState(word, progress.masteredVocabIds, memory);
           return (
             <div
               key={word.id}
-              className="flex items-center justify-between border-b border-border py-2"
+              className="flex items-center justify-between rounded-xl border border-border/40 bg-glass/30 px-3.5 py-2.5 transition-all hover:border-border/70 hover:bg-glass/60"
             >
-              <button onClick={() => speak(word.japanese)} className="text-left">
-                <span className="font-display text-base">{word.japanese}</span>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {showReading ? `${word.reading} · ` : ""}
+              <button
+                onClick={() => speak(word.japanese)}
+                className="group flex min-w-0 flex-1 flex-col items-start text-left"
+              >
+                <span className="font-display text-base font-medium tracking-wide text-foreground transition-colors group-hover:text-primary">
+                  {word.japanese}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {showReading && (
+                    <span className="font-mono text-primary/80 mr-1.5">{word.reading} ·</span>
+                  )}
                   {word.meaning}
                 </span>
               </button>
@@ -91,10 +101,16 @@ export function Vocab({
                     }))
                   }
                   title={mastery === "earned" ? "Mastered through review" : undefined}
-                  className={mastery !== "none" ? "text-primary" : "text-muted-foreground"}
+                  className={`transition-transform active:scale-90 ${
+                    mastery !== "none"
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   <Star
-                    className={`size-4 ${progress.masteredVocabIds.includes(word.id) ? "fill-current" : ""}`}
+                    className={`size-4 ${
+                      progress.masteredVocabIds.includes(word.id) ? "fill-current" : ""
+                    }`}
                   />
                 </button>
               </div>

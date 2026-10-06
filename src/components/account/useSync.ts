@@ -235,13 +235,15 @@ export function useSync({
   }, []);
 
   // Signing out (or switching account) clears anything on screen that belonged to the old session.
+  const prevUid = useRef(uid);
   useEffect(() => {
-    if (uid === null) {
+    if (prevUid.current !== null && uid === null) {
       setNotice(null);
       setActivity(null);
       setDialog(null);
       setLastError(null);
     }
+    prevUid.current = uid;
   }, [uid]);
 
   // The "Synced · 2 min ago" text needs a nudge now and then.

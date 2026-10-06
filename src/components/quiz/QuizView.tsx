@@ -78,19 +78,18 @@ const freshSession = (key: string, questions: RoundQuestion[], retry = false): S
 });
 
 function Pane({ children }: { children: ReactNode }) {
-  // Same markup as GlassPane in routes/index.tsx (which isn't exported); WelcomePanel does the same.
-  return (
-    <section className="pane-in rounded-lg border border-border bg-glass p-5 shadow-2xl backdrop-blur-xl md:p-6">
-      {children}
-    </section>
-  );
+  return <section className="glass-panel pane-in rounded-xl p-5 md:p-7">{children}</section>;
 }
 
-const segmentWrap = "flex items-center gap-1 rounded-md border border-border bg-glass p-1";
+const segmentWrap = "flex items-center gap-1 rounded-full border border-border/50 bg-glass/50 p-1";
 const segmentClass = (on: boolean) =>
-  `rounded px-3 py-1.5 text-[11px] font-semibold transition-colors ${on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`;
+  `rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+    on
+      ? "bg-primary text-primary-foreground shadow-sm"
+      : "text-muted-foreground hover:text-foreground"
+  }`;
 const selectClass =
-  "rounded-md border border-border bg-glass px-2 py-1 text-xs outline-none focus:border-primary";
+  "rounded-lg border border-border/60 bg-glass/60 px-2.5 py-1 text-xs outline-none focus:border-primary";
 
 export function QuizView({
   lessons,
@@ -446,30 +445,30 @@ export function QuizView({
                   onNext={next}
                 />
               ) : (
-                <div className="mt-10 grid gap-2 sm:grid-cols-2">
+                <div className="mt-8 grid gap-3 sm:grid-cols-2">
                   {question.options.map((o) => {
                     const isAnswer = o === correctAnswer(question);
                     const isWrongPick = locked && o === picked && !isAnswer;
                     const state = !locked
-                      ? "bg-glass hover:bg-accent"
+                      ? "border-border/50 bg-glass/40 hover:border-primary/50 hover:bg-glass/70 shadow-sm"
                       : isAnswer
-                        ? "border-success bg-success/15"
+                        ? "border-success/60 bg-success/15 shadow-sm ring-1 ring-success/30"
                         : isWrongPick
-                          ? "border-destructive bg-destructive/15"
-                          : "bg-glass opacity-60";
+                          ? "border-destructive/60 bg-destructive/15 ring-1 ring-destructive/30"
+                          : "border-border/30 bg-glass/20 opacity-50";
                     return (
                       <button
                         key={o}
                         onClick={() => pick(o)}
                         disabled={locked}
-                        className={`flex items-center justify-between gap-2 rounded-md border p-4 text-left text-sm transition-colors disabled:cursor-default ${state}`}
+                        className={`flex items-center justify-between gap-3 rounded-xl border p-4 text-left text-sm transition-all disabled:cursor-default ${state}`}
                       >
                         {question.kind === "choose" ? (
-                          <span lang="ja" className="font-display text-xl">
+                          <span lang="ja" className="font-display text-xl tracking-wide">
                             {o}
                           </span>
                         ) : (
-                          <span>{o}</span>
+                          <span className="font-medium text-foreground">{o}</span>
                         )}
                         {locked && isAnswer && (
                           <Check

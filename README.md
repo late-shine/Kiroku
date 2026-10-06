@@ -140,12 +140,14 @@ A few of those moments, because they're the actual work:
 - **The wall of 130 cards.** The first review mode counted every untouched word as due, so restoring 13 days showed "Due today · 130." I suggested that words should join review only when you add them, which is also what keeps Kiroku from being a second Astra-chan.
 - **Tips.** I borrowed the idea from how Google and similar products introduce themselves: small hints you can dismiss. Kiroku is easy if you know the system and confusing if you don't, especially the AI-prompt step.
 - **Things only real use finds.** Delete freezing the page, a dropdown that opened as an unreadable white list, and two songs whose "normal" version was named wrong all came from using the running app, not from a clean build.
+- **A visual polish pass.** Glass panels, typography, navigation, vocabulary, quiz, welcome and music controls were refined without changing the lesson, review or sync model.
+- **A safer startup pass.** Local lessons, progress and music preferences now restore after client mount, while account cleanup waits for a real sign-out. This avoids SSR hydration mismatches, protects local data during startup and keeps Firebase optional when it is not configured.
 
-The work is split into numbered phases. Each has a written spec in `PLAN.md`, a narrow set of files, and a handoff note in `handoffs/` saying exactly what changed. One AI session builds a phase and another checks it against the spec and runs the checks. Then I test it in the running app, with screenshots, before it goes into the real project. `context.md` holds the rules every new session must read first, because a chat isn't memory but files are. Until Phase 15 there was no git, so I kept every phase as a zip plus a recovery copy.
+The work is split into numbered phases. Each has a written spec in `PLAN.md`, a narrow set of files, and a handoff note saying exactly what changed (kept outside this repo; see Checks). One AI session builds a phase and another checks it against the spec and runs the checks. Then I test it in the running app, with screenshots, before it goes into the real project. `context.md` holds the rules every new session must read first, because a chat isn't memory but files are. Until Phase 15 there was no git, so I kept every phase as a zip plus a recovery copy.
 
 ### Timeline
 
-The dates come from the handoff notes.
+The dates come from my local handoff notes.
 
 | Date | What landed |
 |---|---|
@@ -159,6 +161,8 @@ The dates come from the handoff notes.
 | Oct 2 | Quiz rounds (14a) |
 | Oct 3 | Review memory, calm intake, review words in the prompt, harder questions (14b–14d) |
 | Oct 4 | Left Lovable; moved to GitHub and Vercel (15) |
+| Oct 4–6 | Google sign-in, manual sync, then automatic cross-device sync (9a–9c) |
+| Oct 7 | Visual polish and hydration/account cleanup fixes |
 
 ### AI tools used
 
@@ -168,6 +172,7 @@ The dates come from the handoff notes.
 | **Grok** | The very first `.md` export — the idea that started all of this |
 | **Claude** | Built the first rough version; since then the main builder and verifier, in separate sessions per phase because of daily message limits |
 | **Google AI Studio + Gemini** | Rebuilt the first version with more features and structure; Gemini is also the optional API behind Fix / Save with Gemini |
+| **OpenAI Codex (GPT-5)** | Independent verifier: compared phase changes with the project context and handoffs, reviewed diffs, and ran targeted typecheck, lint and production-build checks before changes were applied |
 | **Lovable** | Two full redesigns — the second one is the current visual style. Kiroku no longer depends on it. |
 
 ---
@@ -208,15 +213,7 @@ npm run build
 npm run lint
 ```
 
-`PLAN.md`, `context.md`, and the phase-specific `handoffs/` verifier scripts are working files kept outside this repository, so they are not present in a normal clone. The latest sync verification was run in that separate testing copy with:
-
-```bash
-npx tsx --tsconfig tsconfig.json handoffs/phase-9b-sync-check.ts
-npx tsx --tsconfig tsconfig.json handoffs/phase-9c-sync-check.ts
-npx vitest run --config handoffs/phase-9c-vitest.config.ts
-```
-
-The last command drives the sync UI in jsdom and needs temporary packages; the script header has the exact `npm install --no-save --no-package-lock` command. The 9c UI check includes the earlier 9b cases, while the two plain `tsx` checks cover the pure sync rules and Firebase rules shape.
+`PLAN.md`, `context.md`, and the phase-specific `handoffs/` verifier scripts are working files kept outside this repository, so they are not present in a normal clone. The latest sync verification was run in that separate testing copy with the Phase 9b and 9c pure sync checks and the Phase 9c Vitest/jsdom UI check. The UI check needs temporary packages; its script header has the exact `npm install --no-save --no-package-lock` command. The 9c UI check includes the earlier 9b cases, while the two plain `tsx` checks cover the pure sync rules and Firebase rules shape.
 
 `npm run lint` mostly reports Prettier formatting findings, because the dense files were never auto-formatted and I don't run `--fix` in the middle of feature work. It rewrites whole files.
 
@@ -253,7 +250,7 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 ## Credits
 
 - **Fonts:** Libre Baskerville and IBM Plex Sans, via Google Fonts.
-- **Built on:** TanStack Start, React, Tailwind CSS, shadcn/ui, Radix, Zod and lucide-react.
+- **Built on:** TanStack Start, React, Tailwind CSS, shadcn/ui, Radix, Zod, lucide-react and Firebase (Auth and Realtime Database).
 - **Backgrounds:** AI-generated images, plus a couple from Pinterest that came with no artist credit. Swap in your own under `src/assets/images/`.
 - **Also by me:** [Astra-chan](https://astra-kanji-tutor.vercel.app) ([GitHub](https://github.com/late-shine/astra-chan-app)), the other Japanese-learning app. Kiroku links to it from the bottom of the Atmosphere tab.
 

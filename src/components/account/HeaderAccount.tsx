@@ -11,6 +11,11 @@ export function HeaderAccount() {
   const shared = useAccountSync();
   const { account, sync } = shared;
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // A failed sign-in (or a failed redirect sign-in) must be visible: open the popover to show it. Phase 9b: so must
   // the outcome of a sync, because clicking inside a sync dialog closes the popover (it counts as an outside click).
@@ -44,6 +49,21 @@ export function HeaderAccount() {
   };
   const word = dot ? `, ${statusWord[sync.status] ?? ""}` : "";
   const label = signedInAs ? `Account (signed in as ${signedInAs}${word})` : "Account";
+
+  // During SSR and initial hydration, render a static button that matches server HTML exactly,
+  // preventing Radix Popover from generating mismatched IDs/ARIA attributes during hydration.
+  if (!mounted) {
+    return (
+      <button
+        aria-label={label}
+        title={label}
+        type="button"
+        className="relative rounded-md border border-border p-2 text-muted-foreground hover:bg-accent hover:text-primary"
+      >
+        <User className="size-3.5" />
+      </button>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

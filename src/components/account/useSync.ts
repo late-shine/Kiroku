@@ -360,20 +360,24 @@ export function useSync({
 
     const now = linkRef.current;
     const included = new Set(ctx.pendingDeletes);
-    setLink({
-      uid: forUid,
-      lastSyncedAt: new Date().toISOString(),
-      auto: now !== null && now.uid === forUid ? now.auto : true,
-      pending:
-        now !== null && now.uid === forUid ? now.pending.filter((d) => !included.has(d)) : [],
-      seen: plan.nextSeen,
-      base: plan.nextBasePrefs,
-    });
-    startedFor.current = forUid;
-    lastKey.current = deviceKey(plan.replaceDevice ? finalSnap : result.device);
-    setLastError(null);
-    if (retryTimer.current) clearTimeout(retryTimer.current);
-    reportResult(plan, manual);
+    // Defer the AccountSyncProvider state updates to the next tick so they do not collide
+    // with the re-render of JapaneseDesk triggered by setLessons / setProgress above.
+    setTimeout(() => {
+      setLink({
+        uid: forUid,
+        lastSyncedAt: new Date().toISOString(),
+        auto: now !== null && now.uid === forUid ? now.auto : true,
+        pending:
+          now !== null && now.uid === forUid ? now.pending.filter((d) => !included.has(d)) : [],
+        seen: plan.nextSeen,
+        base: plan.nextBasePrefs,
+      });
+      startedFor.current = forUid;
+      lastKey.current = deviceKey(plan.replaceDevice ? finalSnap : result.device);
+      setLastError(null);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      reportResult(plan, manual);
+    }, 0);
     return true;
   };
 
@@ -585,10 +589,12 @@ export function useSync({
         return;
       }
       callbacks.current.onClearDevice();
-      setLink(null);
-      lastKey.current = null;
-      startedFor.current = null;
-      await callbacks.current.account.signOut();
+      setTimeout(async () => {
+        setLink(null);
+        lastKey.current = null;
+        startedFor.current = null;
+        await callbacks.current.account.signOut();
+      }, 0);
     });
   };
 

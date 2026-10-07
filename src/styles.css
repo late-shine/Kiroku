@@ -105,11 +105,14 @@ button {
 }
 
 @keyframes scene-drift {
-  from {
-    transform: scale(1.05);
+  0% {
+    transform: scale(1.055) translate(-0.35%, -0.25%);
   }
-  to {
-    transform: scale(1.13) translate(-1.5%, -1%);
+  55% {
+    transform: scale(1.09) translate(-0.9%, -0.55%);
+  }
+  100% {
+    transform: scale(1.045) translate(0, 0);
   }
 }
 @keyframes pane-in {
@@ -141,7 +144,7 @@ button {
 }
 
 @utility scene-drift {
-  animation: scene-drift 40s ease-in-out infinite alternate;
+  animation: scene-drift 24s ease-in-out infinite;
 }
 @utility pane-in {
   animation: pane-in 0.55s ease-out both;

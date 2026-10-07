@@ -140,7 +140,7 @@ A few of those moments, because they're the actual work:
 - **The wall of 130 cards.** The first review mode counted every untouched word as due, so restoring 13 days showed "Due today · 130." I suggested that words should join review only when you add them, which is also what keeps Kiroku from being a second Astra-chan.
 - **Tips.** I borrowed the idea from how Google and similar products introduce themselves: small hints you can dismiss. Kiroku is easy if you know the system and confusing if you don't, especially the AI-prompt step.
 - **Things only real use finds.** Delete freezing the page, a dropdown that opened as an unreadable white list, and two songs whose "normal" version was named wrong all came from using the running app, not from a clean build.
-- **A visual polish pass.** Glass panels, typography, navigation, vocabulary, quiz, welcome and music controls were refined without changing the lesson, review or sync model.
+- **A visual polish pass.** Glass panels, typography, navigation, vocabulary, quiz, welcome and music controls were refined without changing the lesson, review or sync model. The optional Ethereal Theme Cycle gives each scene one gentle zoom cycle before the next 24-second crossfade.
 - **A safer startup pass.** Local lessons, progress and music preferences now restore after client mount, while account cleanup waits for a real sign-out. This avoids SSR hydration mismatches, protects local data during startup and keeps Firebase optional when it is not configured.
 
 The work is split into numbered phases. Each has a written spec in `PLAN.md`, a narrow set of files, and a handoff note saying exactly what changed (kept outside this repo; see Checks). One AI session builds a phase and another checks it against the spec and runs the checks. Then I test it in the running app, with screenshots, before it goes into the real project. `context.md` holds the rules every new session must read first, because a chat isn't memory but files are. Until Phase 15 there was no git, so I kept every phase as a zip plus a recovery copy.
@@ -162,7 +162,7 @@ The dates come from my local handoff notes.
 | Oct 3 | Review memory, calm intake, review words in the prompt, harder questions (14b–14d) |
 | Oct 4 | Left Lovable; moved to GitHub and Vercel (15) |
 | Oct 4–6 | Google sign-in, manual sync, then automatic cross-device sync (9a–9c) |
-| Oct 7 | Visual polish and hydration/account cleanup fixes |
+| Oct 7 | Visual polish, synchronized ethereal theme cycle, and hydration/account cleanup fixes |
 
 ### AI tools used
 
@@ -240,7 +240,8 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 - [x] Music player, voice picker, atmosphere
 - [x] Leave Lovable; GitHub and Vercel
 - [ ] Quiz more than vocab — kanji, grammar points and phrases
-- [ ] Atmosphere: slow automatic theme cycling, maybe a few gentle particles
+- [x] Atmosphere: optional 24-second automatic theme cycling
+- [ ] Atmosphere: a few gentle particles
 - [ ] A friendlier guided tour for the Lesson Studio (Next / Skip all)
 - [x] Accounts: Google sign-in and automatic cross-device sync
 - [ ] A bridge between Kiroku and Astra-chan, so each can suggest the other

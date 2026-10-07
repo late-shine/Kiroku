@@ -81,6 +81,7 @@ const backgrounds = [
   { name: "Autumn château", url: autumn },
   { name: "Night flowers", url: flowers },
 ];
+const THEME_CYCLE_MS = 24_000;
 // One empty shape used for both the first-load default and "reset everything" (Phase 11a merged
 // the old seeded `initialProgress` into this). `loadProgress()` spreads saved values over it, so
 // existing users' stored progress still wins.
@@ -156,6 +157,38 @@ function JapaneseDesk() {
   const [helpOpen, setHelpOpen] = useState(false);
   const tips = useTips();
   const [sceneDarkness, setSceneDarkness] = useState(0.34);
+  const [cycleThemes, setCycleThemes] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("kiroku_cycle_themes_v1") === "true") {
+        setCycleThemes(true);
+      }
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+
+  const handleToggleCycleThemes = (enabled: boolean) => {
+    setCycleThemes(enabled);
+    try {
+      localStorage.setItem("kiroku_cycle_themes_v1", enabled ? "true" : "false");
+    } catch {
+      /* storage unavailable */
+    }
+  };
+
+  useEffect(() => {
+    if (!mounted || !cycleThemes) return;
+    const interval = setInterval(() => {
+      setProgress((p) => ({
+        ...p,
+        backgroundIndex: (p.backgroundIndex + 1) % backgrounds.length,
+      }));
+    }, THEME_CYCLE_MS);
+    return () => clearInterval(interval);
+  }, [mounted, cycleThemes]);
+
   const lesson = lessons.find((item) => item.dayNumber === day) ?? lessons[0] ?? null;
   const completion =
     lessons.length > 0 ? Math.round((progress.completedDays.length / lessons.length) * 100) : 0;
@@ -229,17 +262,23 @@ function JapaneseDesk() {
       setLessons={setLessons}
       setProgress={setProgress}
       onApplied={(applied) =>
-        setDay((d) => (applied.some((l) => l.dayNumber === d) ? d : (applied[0]?.dayNumber ?? 1)))
+        setTimeout(
+          () =>
+            setDay((d) =>
+              applied.some((l) => l.dayNumber === d) ? d : (applied[0]?.dayNumber ?? 1),
+            ),
+          0,
+        )
       }
       onClearDevice={resetAll}
     >
       <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
         {backgrounds.map((bg, index) => (
           <img
-            key={bg.name}
+            key={`${bg.name}-${cycleThemes ? "cycling" : "static"}`}
             src={bg.url}
             alt=""
-            className={`scene-drift fixed inset-0 size-full object-cover transition-opacity duration-1000 ${index === progress.backgroundIndex % backgrounds.length ? "opacity-100" : "opacity-0"}`}
+            className={`scene-drift fixed inset-0 size-full object-cover transition-opacity duration-[2800ms] ease-in-out ${index === progress.backgroundIndex % backgrounds.length ? "opacity-100" : "opacity-0"}`}
           />
         ))}
         <div
@@ -327,6 +366,8 @@ function JapaneseDesk() {
                   setActive={(backgroundIndex) => setProgress((p) => ({ ...p, backgroundIndex }))}
                   darkness={sceneDarkness}
                   setDarkness={setSceneDarkness}
+                  cycle={cycleThemes}
+                  onToggleCycle={handleToggleCycleThemes}
                 />
               </>
             )}
@@ -1409,12 +1450,16 @@ function AtmosphereView({
   setActive,
   darkness,
   setDarkness,
+  cycle,
+  onToggleCycle,
 }: {
   backgrounds: { name: string; url: string }[];
   active: number;
   setActive: (v: number) => void;
   darkness: number;
   setDarkness: (v: number) => void;
+  cycle: boolean;
+  onToggleCycle: (v: boolean) => void;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -1433,6 +1478,56 @@ function AtmosphereView({
         <p className="mt-1 text-sm text-muted-foreground">
           Select an ethereal backdrop to accompany your Japanese study sessions.
         </p>
+
+        {/* Ethereal Theme Cycle Toggle */}
+        <div className="mt-5 rounded-xl border border-border/60 bg-glass/60 p-4 transition-colors">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={`grid size-9 shrink-0 place-items-center rounded-lg border transition-colors ${
+                  cycle
+                    ? "border-primary/50 bg-primary/20 text-primary"
+                    : "border-border/60 bg-glass/60 text-muted-foreground"
+                }`}
+              >
+                <Sparkles className="size-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-display text-sm font-semibold text-foreground">
+                    Ethereal Theme Cycle
+                  </span>
+                  {cycle && (
+                    <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                      Cycling active
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Gently and seamlessly dissolves between scenic themes every 24 seconds, or turn
+                  off to keep a static view.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={cycle}
+              aria-label="Toggle ethereal theme cycle"
+              onClick={() => onToggleCycle(!cycle)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                cycle ? "bg-primary" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block size-5 transform rounded-full bg-background shadow-md ring-0 transition duration-200 ease-in-out ${
+                  cycle ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           {backgrounds.map((bg, i) => (
             <button
@@ -1455,7 +1550,7 @@ function AtmosphereView({
                 </span>
                 {active === i && (
                   <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary-foreground">
-                    Active
+                    {cycle ? "Current" : "Active"}
                   </span>
                 )}
               </div>

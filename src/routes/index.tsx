@@ -965,7 +965,7 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
           Pattern & Structure
         </p>
-        <div className="mt-2 rounded-lg border border-primary/25 bg-primary/10 p-3.5 font-display text-base tracking-wide text-primary shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+        <div className="mt-2 rounded-lg border border-primary/25 bg-primary/10 p-3.5 font-display text-base tracking-wide text-primary shadow-[inset_0_1px_0_0_var(--highlight)]">
           {lesson.grammar.structure}
         </div>
       </div>
@@ -1131,7 +1131,7 @@ function MomentumGraph() {
           d="M2 60 C35 58,38 32,70 40 S115 54,140 31 S185 12,210 26 S250 45,278 12"
           fill="none"
           stroke="currentColor"
-          className="graph-draw text-primary drop-shadow-[0_0_6px_rgba(230,195,120,0.3)]"
+          className="graph-draw text-primary drop-shadow-[0_0_6px_var(--glow)]"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeDasharray="500"
@@ -1544,8 +1544,8 @@ function AtmosphereView({
                 alt={bg.name}
                 className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 text-left">
-                <span className="font-display text-xs font-medium text-white tracking-wide">
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/85 via-scrim/40 to-transparent p-3 text-left">
+                <span className="font-display text-xs font-medium text-foreground tracking-wide">
                   {bg.name}
                 </span>
                 {active === i && (

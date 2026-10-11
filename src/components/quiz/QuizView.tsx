@@ -357,7 +357,7 @@ export function QuizView({
                     <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                       Missed · {missed.length}
                     </p>
-                    <ul className="mt-2 max-h-[280px] overflow-y-auto">
+                    <ul className="mt-2 max-h-[280px] overflow-y-auto overscroll-contain">
                       {missed.map((w) => (
                         <li
                           key={w.id}
@@ -488,7 +488,10 @@ export function QuizView({
                 </div>
               )}
               {locked && (
-                <div className="mt-5 flex items-center justify-between gap-3" aria-live="polite">
+                <div
+                  className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                  aria-live="polite"
+                >
                   <div>
                     <p className="text-sm">
                       {right
@@ -507,7 +510,7 @@ export function QuizView({
                   </div>
                   <button
                     onClick={next}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                    className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground sm:w-auto sm:py-2"
                   >
                     {isLast ? "Finish" : "Next"}
                   </button>

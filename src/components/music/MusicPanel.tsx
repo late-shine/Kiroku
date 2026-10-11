@@ -271,11 +271,11 @@ export function MusicPanel({
   const currentMissing = missing.has(versionKey(currentTrack.id, speedMode));
 
   return (
-    <div className="fixed bottom-5 right-5 z-40">
+    <div className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3 z-40 sm:bottom-5 sm:right-5">
       <audio ref={audioRef} preload="metadata" />
 
       {expanded && (
-        <div className="glass-panel-strong absolute bottom-full right-0 mb-3 w-[min(92vw,370px)] max-h-[min(72vh,580px)] overflow-y-auto rounded-2xl p-4 shadow-2xl">
+        <div className="glass-panel-strong absolute bottom-full right-0 mb-3 w-[min(92vw,370px)] max-h-[min(72dvh,580px)] overflow-y-auto overscroll-contain rounded-2xl p-4 shadow-2xl">
           <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
             <span className="font-display text-xs font-semibold tracking-wider text-primary">
               音楽 · LO-FI LOUNGE
@@ -487,33 +487,34 @@ export function MusicPanel({
 
       {/* Persistent collapsed pill — always visible so playback stays reachable at a glance. */}
       <div className="glass-panel-strong flex items-center gap-2 rounded-full py-1.5 pl-2 pr-2.5 shadow-2xl">
-        <span
-          className={`grid size-7 shrink-0 place-items-center rounded-full border transition-colors ${
-            isPlaying
-              ? "border-primary/50 bg-primary/20 text-primary"
-              : "border-border/60 bg-glass/60 text-muted-foreground"
-          }`}
-        >
-          {isPlaying ? (
-            <span className="flex h-3 items-end gap-[2px]">
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="equalize w-[2px] rounded-full bg-primary"
-                  style={{ height: "100%", animationDelay: `${i * 120}ms` }}
-                />
-              ))}
-            </span>
-          ) : (
-            <Music2 className="size-3.5" />
-          )}
-        </span>
         <button
           onClick={onToggleExpanded}
-          className="flex min-w-0 max-w-[140px] items-center gap-1.5 text-left"
+          className="flex min-w-0 max-w-[190px] items-center gap-2 text-left"
           aria-label={expanded ? "Collapse music player" : "Expand music player"}
         >
-          <span className="min-w-0">
+          <span
+            className={`grid size-7 shrink-0 place-items-center rounded-full border transition-colors ${
+              isPlaying
+                ? "border-primary/50 bg-primary/20 text-primary"
+                : "border-border/60 bg-glass/60 text-muted-foreground"
+            }`}
+          >
+            {isPlaying ? (
+              <span className="flex h-3 items-end gap-[2px]">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="equalize w-[2px] rounded-full bg-primary"
+                    style={{ height: "100%", animationDelay: `${i * 120}ms` }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <Music2 className="size-3.5" />
+            )}
+          </span>
+          {/* Phone: icon + play button only. The title comes back from `sm` up. */}
+          <span className="hidden min-w-0 sm:block">
             <span className="block truncate font-display text-xs font-medium text-foreground">
               {currentTrack.title}
             </span>

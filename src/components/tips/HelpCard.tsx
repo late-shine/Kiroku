@@ -6,6 +6,7 @@
  */
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 
 export function HelpCard({
   onOpenStudio,
@@ -16,6 +17,7 @@ export function HelpCard({
   onShowTipsAgain: () => void;
   onClose: () => void;
 }) {
+  useScrollLock();
   return createPortal(
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-4 backdrop-blur-md"
@@ -26,7 +28,7 @@ export function HelpCard({
         aria-modal="true"
         aria-labelledby="help-card-title"
         onClick={(e) => e.stopPropagation()}
-        className="glass-panel-strong max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-2xl p-6 shadow-2xl"
+        className="glass-panel-strong max-h-[88dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl p-6 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">
           <h2 id="help-card-title" className="font-display text-lg">

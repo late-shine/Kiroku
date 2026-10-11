@@ -67,6 +67,8 @@
 html {
   background: var(--background);
   color-scheme: dark;
+  /* Reserve the scrollbar's width even on short pages so the layout (and the scene) never jumps sideways. */
+  scrollbar-gutter: stable;
 }
 body {
   margin: 0;
@@ -150,6 +152,16 @@ body {
   }
 }
 
+/* The scene container: as tall as the LARGE viewport, so the Android URL bar hiding/showing never resizes it.
+   The build step keeps only the last of two `height` declarations, so the min-height is the fallback for
+   browsers without lvh (their `height: 100lvh` is dropped and min-height still gives a full-screen box).
+   Own compositing layer so the blurred glass above does not repaint it. */
+@utility scene-backdrop {
+  min-height: 100vh;
+  height: 100lvh;
+  transform: translateZ(0);
+  contain: paint;
+}
 @utility scene-drift {
   animation: scene-drift 24s ease-in-out infinite;
 }

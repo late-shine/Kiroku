@@ -35,6 +35,7 @@ import {
 } from "@/lib/gemini-models";
 import { relayGemini } from "@/lib/gemini-relay";
 import { TipCard } from "@/components/tips/TipCard";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS, migrateLegacyStorage } from "@/lib/storage";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
@@ -154,6 +155,7 @@ export function LessonStudio({
   onClose: () => void;
   onImport: (lesson: DayLesson) => void;
 }) {
+  useScrollLock();
   const initial = useRef(loadStored()).current;
   const highestDay = Math.max(...lessons.map((l) => l.dayNumber), 0);
 
@@ -385,8 +387,9 @@ export function LessonStudio({
         : "Existing lesson — rebuilding its prompt";
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-4 backdrop-blur-md">
-      <div className="glass-panel-strong flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl shadow-2xl">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-0 backdrop-blur-md sm:p-4">
+      {/* Below `sm` the panel fills the screen (Phase 20 turns the Studio into a page); from `sm` up it is the centred panel. */}
+      <div className="glass-panel-strong flex h-dvh w-full max-w-3xl flex-col overflow-hidden rounded-none shadow-2xl sm:h-auto sm:max-h-[88dvh] sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-border/50 p-5">
           <div>
             <span className="font-display text-xs font-semibold tracking-wider text-primary">
@@ -421,7 +424,7 @@ export function LessonStudio({
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5">
           {step === "configure" && (
             <div className="space-y-5">
               {showTip && <TipCard id="studio" onDismiss={onDismissTip} />}
@@ -629,7 +632,7 @@ export function LessonStudio({
               <p className="text-xs text-muted-foreground">
                 This preview updates live as you change options in step 1.
               </p>
-              <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">
+              <pre className="max-h-80 overflow-y-auto overscroll-contain whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">
                 {prompt}
               </pre>
               <div className="flex flex-wrap gap-2">

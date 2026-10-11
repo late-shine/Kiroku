@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { SyncMode } from "@/lib/sync";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import type { SyncController, SyncDialogState } from "./useSync";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -19,6 +20,7 @@ function Overlay({
   onClose: () => void;
   labelId: string;
 }) {
+  useScrollLock();
   return createPortal(
     <div
       className="fixed inset-0 z-[60] grid place-items-center bg-background/70 p-4 backdrop-blur-sm"
@@ -29,7 +31,7 @@ function Overlay({
         aria-modal="true"
         aria-labelledby={labelId}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-lg border border-border bg-glass-strong p-5 shadow-2xl backdrop-blur-xl"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-lg border border-border bg-glass-strong p-5 shadow-2xl backdrop-blur-xl"
       >
         {children}
       </div>

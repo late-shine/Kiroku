@@ -24,6 +24,8 @@ import {
 // disk as an archive but is deliberately imported nowhere — new visitors start empty.
 import type { DayLesson, UserProgressState } from "../types/japanese";
 import { MusicPanel } from "@/components/music/MusicPanel";
+import { SceneBackdrop } from "@/components/atmosphere/SceneBackdrop";
+import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { LessonStudio } from "@/components/ai/LessonStudio";
 import cats from "@/assets/images/cats-fog.jpg";
 import castle from "@/assets/images/neusch-mist.jpg";
@@ -273,22 +275,14 @@ function JapaneseDesk() {
       onClearDevice={resetAll}
     >
       <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
-        {backgrounds.map((bg, index) => (
-          <img
-            key={`${bg.name}-${cycleThemes ? "cycling" : "static"}`}
-            src={bg.url}
-            alt=""
-            className={`scene-drift fixed inset-0 size-full object-cover transition-opacity duration-[2800ms] ease-in-out ${index === progress.backgroundIndex % backgrounds.length ? "opacity-100" : "opacity-0"}`}
-          />
-        ))}
-        <div
-          className="fixed inset-0 bg-background transition-opacity duration-700"
-          style={{ opacity: sceneDarkness }}
+        <SceneBackdrop
+          backgrounds={backgrounds}
+          activeIndex={progress.backgroundIndex}
+          cycling={cycleThemes}
+          darkness={sceneDarkness}
         />
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,var(--background)_95%)] opacity-70" />
-        <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(90deg,var(--background)_0%,transparent_35%,transparent_65%,var(--background)_100%)] opacity-35" />
 
-        <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1520px] flex-col p-3 md:p-5">
+        <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1520px] flex-col p-3 pb-22 md:p-5 md:pb-22">
           <Header
             tab={tab}
             setTab={setTab}
@@ -888,6 +882,7 @@ function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useScrollLock();
   // Portaled to <body>: the curriculum pane has backdrop-blur + a rotate transform, and either one makes
   // a `fixed` child position relative to the pane instead of the viewport (dialog would be squashed inside it).
   return createPortal(
@@ -1205,7 +1200,7 @@ function ProgressView({
             className="w-full rounded-xl border border-border/60 bg-glass/60 py-2.5 pl-10 pr-3.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
           />
         </div>
-        <div className="mt-4 grid max-h-[520px] gap-2 overflow-y-auto sm:grid-cols-2 pr-1">
+        <div className="mt-4 grid max-h-[520px] gap-2 overflow-y-auto overscroll-contain sm:grid-cols-2 pr-1">
           {vocab.map((w) => (
             <div
               key={w.id}

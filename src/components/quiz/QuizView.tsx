@@ -371,6 +371,14 @@ export function QuizView({
                         </li>
                       ))}
                     </ul>
+                    {/* Every answer already wrote the word's review record (see pick()); a miss resets it to
+                        box 1, which is due after BOX_GAPS[0] = 1 day. phase-16c-speak-check.ts fails if that stops
+                        being true, and then this sentence has to change. */}
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {missed.length === 1
+                        ? "This word is already in your review. It comes back tomorrow."
+                        : `These ${missed.length} words are already in your review. They come back tomorrow.`}
+                    </p>
                   </div>
                 )}
               </>
@@ -505,6 +513,11 @@ export function QuizView({
                     {question.kind === "choose" && (
                       <p lang="ja" className="mt-0.5 text-xs text-muted-foreground">
                         {question.word.japanese} · {question.word.reading}
+                      </p>
+                    )}
+                    {!right && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Added to review — back tomorrow.
                       </p>
                     )}
                   </div>

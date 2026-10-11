@@ -26,6 +26,9 @@ import type { DayLesson, UserProgressState } from "../types/japanese";
 import { MusicPanel } from "@/components/music/MusicPanel";
 import { SceneBackdrop } from "@/components/atmosphere/SceneBackdrop";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
+import { SpeakButton } from "@/components/voice/SpeakButton";
+import { useSpeechSupported } from "@/hooks/use-speech-supported";
+import { speakableReading } from "@/lib/speak-text";
 import { LessonStudio } from "@/components/ai/LessonStudio";
 import cats from "@/assets/images/cats-fog.jpg";
 import castle from "@/assets/images/neusch-mist.jpg";
@@ -968,7 +971,12 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-1.5">
           Example in context
         </p>
-        <p className="font-display text-lg tracking-wide text-foreground">{ex?.japanese}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-display text-lg tracking-wide text-foreground">{ex?.japanese}</p>
+          {ex?.japanese && (
+            <SpeakButton text={ex.japanese} label={ex.japanese} className="-mb-3 -mr-2 -mt-2.5" />
+          )}
+        </div>
         {showReading && (
           <p className="mt-1 text-xs font-mono text-primary/80 tracking-wide">{ex?.reading}</p>
         )}
@@ -991,9 +999,16 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
           <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
             Natural phrase
           </p>
-          <p className="mt-1 font-display text-base tracking-wide text-foreground">
-            {lesson.naturalPhrase.phrase}
-          </p>
+          <div className="mt-1 flex items-start justify-between gap-2">
+            <p className="font-display text-base tracking-wide text-foreground">
+              {lesson.naturalPhrase.phrase}
+            </p>
+            <SpeakButton
+              text={lesson.naturalPhrase.phrase}
+              label={lesson.naturalPhrase.phrase}
+              className="-mb-3 -mr-2 -mt-3"
+            />
+          </div>
           {showReading && (
             <p className="mt-0.5 text-[11px] font-mono text-primary/80">
               {lesson.naturalPhrase.reading}
@@ -1019,7 +1034,10 @@ function Grammar({ lesson, showReading }: { lesson: DayLesson; showReading: bool
             key={i}
             className="rounded-lg border border-border/40 border-l-2 border-l-primary bg-background/20 p-3"
           >
-            <p className="font-display text-base tracking-wide text-foreground">{ex.japanese}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-display text-base tracking-wide text-foreground">{ex.japanese}</p>
+              <SpeakButton text={ex.japanese} label={ex.japanese} className="-mb-3 -mr-1.5 -mt-3" />
+            </div>
             {showReading && (
               <p className="mt-0.5 text-xs font-mono text-primary/80">{ex.reading}</p>
             )}
@@ -1031,6 +1049,7 @@ function Grammar({ lesson, showReading }: { lesson: DayLesson; showReading: bool
   );
 }
 function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolean }) {
+  const canSpeak = useSpeechSupported();
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-5 rounded-lg border border-primary/20 bg-primary/5 p-4">
@@ -1053,13 +1072,15 @@ function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolea
               {lesson.kanji.kunyomi.join(" / ") || "—"}
             </div>
           )}
-          <button
-            onClick={() => speak(lesson.kanji.character)}
-            className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-          >
-            <Volume2 className="size-3.5" />
-            Listen
-          </button>
+          {canSpeak && (
+            <button
+              onClick={() => speak(speakableReading(lesson.kanji))}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+            >
+              <Volume2 className="size-3.5" />
+              Listen
+            </button>
+          )}
         </div>
       </div>
       <div>
@@ -1078,7 +1099,10 @@ function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolea
                   <span className="ml-2 font-mono text-xs text-primary/80">{c.reading}</span>
                 )}
               </span>
-              <span className="text-xs text-muted-foreground">{c.meaning}</span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">{c.meaning}</span>
+                <SpeakButton text={c.reading || c.word} label={c.word} className="-my-2 -mr-2" />
+              </span>
             </div>
           ))}
         </div>

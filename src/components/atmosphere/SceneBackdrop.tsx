@@ -7,7 +7,7 @@
 //
 // The slow "drift" animation lives on ONE wrapper (not on each of the four images), and the darkness layer
 // and the two vignettes live inside the same container.
-import { memo } from "react";
+import { memo, type CSSProperties } from "react";
 
 type Props = {
   backgrounds: { name: string; url: string }[];
@@ -17,13 +17,19 @@ type Props = {
   cycling: boolean;
   /** 0–1: how much of the page background colour is laid over the picture (the reading-contrast slider). */
   darkness: number;
+  /** Phase 16d: how the picture drifts. "still" = no animation (held at the drift's resting zoom). */
+  motion: "slow" | "medium" | "still";
 };
+
+// One drift cycle, in seconds. "slow" is the speed it always had; styles.css reads the variable.
+const DRIFT_SECONDS = { slow: 24, medium: 12 } as const;
 
 export const SceneBackdrop = memo(function SceneBackdrop({
   backgrounds,
   activeIndex,
   cycling,
   darkness,
+  motion,
 }: Props) {
   const active = backgrounds.length > 0 ? activeIndex % backgrounds.length : 0;
   return (
@@ -31,7 +37,14 @@ export const SceneBackdrop = memo(function SceneBackdrop({
       aria-hidden
       className="scene-backdrop pointer-events-none fixed left-0 top-0 w-full overflow-hidden"
     >
-      <div className="scene-drift absolute inset-0">
+      <div
+        className={`absolute inset-0 ${motion === "still" ? "" : "scene-drift"}`}
+        style={
+          (motion === "still"
+            ? { transform: "scale(1.05)" }
+            : { "--scene-drift-duration": `${DRIFT_SECONDS[motion]}s` }) as CSSProperties
+        }
+      >
         {backgrounds.map((bg, index) => (
           <img
             key={`${bg.name}-${cycling ? "cycling" : "static"}`}

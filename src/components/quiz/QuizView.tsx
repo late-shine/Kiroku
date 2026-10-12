@@ -97,12 +97,15 @@ export function QuizView({
   memory,
   setProgress,
   onBack,
+  onOpenStudio,
 }: {
   lessons: DayLesson[];
   day: number;
   memory: VocabMemory;
   setProgress: Dispatch<SetStateAction<UserProgressState>>;
   onBack: () => void;
+  /** Opens the AI Lesson Studio; offered when there are no lessons to quiz on. */
+  onOpenStudio: () => void;
 }) {
   const [scope, setScope] = useState<QuizScope>("day");
   const [rangeFrom, setRangeFrom] = useState<number | null>(null);
@@ -331,7 +334,18 @@ export function QuizView({
         )}
 
         {total === 0 ? (
-          <p className="mt-10 text-sm text-muted-foreground">{emptyMessage}</p>
+          <div className="mt-10">
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+            {lessons.length === 0 && (
+              <button
+                type="button"
+                onClick={onOpenStudio}
+                className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                Open AI Lesson Studio
+              </button>
+            )}
+          </div>
         ) : session.finished ? (
           <div className="mt-10" aria-live="polite">
             {score.answered === 0 ? (

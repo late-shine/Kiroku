@@ -23,6 +23,7 @@ export const STORAGE_KEYS = {
   voice: "kiroku_voice_v1", // Phase 8 — new key, has no legacy (komorebi_*) counterpart
   tips: "kiroku_tips_v1", // Phase 11b — dismissed tip ids; new key, no legacy counterpart
   sync: "kiroku_sync_v1", // Phase 9b — { uid, lastSyncedAt }: which account this device last synced with; no legacy counterpart, never in a backup
+  atmosphere: "kiroku_atmosphere_v1", // Phase 16d — { cycle, darkness }: this device's scene cycling + reading-contrast; device-only like `voice`, never synced or backed up
 } as const;
 
 /** The pre-rebrand keys, paired with what replaced them. Never write to these. */

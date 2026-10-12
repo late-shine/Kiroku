@@ -163,7 +163,7 @@ body {
   contain: paint;
 }
 @utility scene-drift {
-  animation: scene-drift 24s ease-in-out infinite;
+  animation: scene-drift var(--scene-drift-duration, 24s) ease-in-out infinite;
 }
 @utility pane-in {
   animation: pane-in 0.55s ease-out both;

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   BookOpen,
@@ -35,6 +35,15 @@ import castle from "@/assets/images/neusch-mist.jpg";
 import autumn from "@/assets/images/autumn-castle.jpg";
 import flowers from "@/assets/images/night-flowers.jpg";
 import { STORAGE_KEYS, migrateLegacyStorage } from "@/lib/storage";
+import {
+  DARKNESS_MAX,
+  DARKNESS_MIN,
+  DEFAULT_ATMOSPHERE,
+  loadAtmosphere,
+  saveAtmosphere,
+  type AtmospherePrefs,
+} from "@/lib/atmosphere-prefs";
+import { isEmptySnapshot, snapshotOf } from "@/lib/sync";
 import { speak } from "@/lib/voice";
 import { VoicePicker } from "@/components/voice/VoicePicker";
 import { WelcomePanel } from "@/components/welcome/WelcomePanel";
@@ -144,6 +153,8 @@ function JapaneseDesk() {
     const loadedProgress = loadProgress();
     setLessons(loadedLessons);
     setProgress(loadedProgress);
+    // Phase 16d: this device's scene cycling + reading contrast (device-only; migrates the old cycle key).
+    setAtmosphere(loadAtmosphere(localStorage, STORAGE_KEYS.atmosphere));
     if (
       loadedProgress.currentDay &&
       loadedLessons.some((l) => l.dayNumber === loadedProgress.currentDay)
@@ -161,38 +172,45 @@ function JapaneseDesk() {
   // Phase 11b: the header "?" help card and the dismissible per-screen tips.
   const [helpOpen, setHelpOpen] = useState(false);
   const tips = useTips();
-  const [sceneDarkness, setSceneDarkness] = useState(0.34);
-  const [cycleThemes, setCycleThemes] = useState(false);
-
+  // Phase 16d: cycling + reading contrast are device-only prefs (kiroku_atmosphere_v1). Loaded in the mount effect
+  // above, saved here once `mounted` (so the first render's defaults never overwrite what is stored).
+  const [atmosphere, setAtmosphere] = useState<AtmospherePrefs>(DEFAULT_ATMOSPHERE);
   useEffect(() => {
-    try {
-      if (localStorage.getItem("kiroku_cycle_themes_v1") === "true") {
-        setCycleThemes(true);
-      }
-    } catch {
-      /* storage unavailable */
-    }
-  }, []);
+    if (!mounted) return;
+    saveAtmosphere(localStorage, STORAGE_KEYS.atmosphere, atmosphere);
+  }, [atmosphere, mounted]);
+
+  // Phase 16d: WHILE CYCLING, the scene on screen lives in this state and never in `progress`. The scene index in
+  // `progress` is a synced pref (it is in the sync fingerprint), so writing it on every tick meant a cloud write
+  // every 24 s and two devices overwriting each other. `progress.backgroundIndex` now stays the scene the person
+  // picked; turning cycling off commits the visible scene once. `null` = nothing has ticked yet, show the picked one.
+  const [cycleIndex, setCycleIndex] = useState<number | null>(null);
+  const pickedIndexRef = useRef(progress.backgroundIndex);
+  useEffect(() => {
+    pickedIndexRef.current = progress.backgroundIndex;
+  }, [progress.backgroundIndex]);
+  const visibleIndex = (atmosphere.cycle ? cycleIndex : null) ?? progress.backgroundIndex;
 
   const handleToggleCycleThemes = (enabled: boolean) => {
-    setCycleThemes(enabled);
-    try {
-      localStorage.setItem("kiroku_cycle_themes_v1", enabled ? "true" : "false");
-    } catch {
-      /* storage unavailable */
+    if (!enabled && cycleIndex !== null && cycleIndex !== progress.backgroundIndex) {
+      const shown = cycleIndex;
+      setProgress((p) => ({ ...p, backgroundIndex: shown }));
     }
+    setCycleIndex(null);
+    setAtmosphere((a) => ({ ...a, cycle: enabled }));
+  };
+  const handleChooseScene = (backgroundIndex: number) => {
+    setProgress((p) => ({ ...p, backgroundIndex }));
+    if (atmosphere.cycle) setCycleIndex(backgroundIndex);
   };
 
   useEffect(() => {
-    if (!mounted || !cycleThemes) return;
+    if (!mounted || !atmosphere.cycle) return;
     const interval = setInterval(() => {
-      setProgress((p) => ({
-        ...p,
-        backgroundIndex: (p.backgroundIndex + 1) % backgrounds.length,
-      }));
+      setCycleIndex((i) => ((i ?? pickedIndexRef.current) + 1) % backgrounds.length);
     }, THEME_CYCLE_MS);
     return () => clearInterval(interval);
-  }, [mounted, cycleThemes]);
+  }, [mounted, atmosphere.cycle]);
 
   const lesson = lessons.find((item) => item.dayNumber === day) ?? lessons[0] ?? null;
   const completion =
@@ -257,6 +275,7 @@ function JapaneseDesk() {
   const resetAll = () => {
     setLessons([]);
     setProgress(emptyProgress);
+    setCycleIndex(null);
     setDay(1);
   };
   return (
@@ -280,9 +299,10 @@ function JapaneseDesk() {
       <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
         <SceneBackdrop
           backgrounds={backgrounds}
-          activeIndex={progress.backgroundIndex}
-          cycling={cycleThemes}
-          darkness={sceneDarkness}
+          activeIndex={visibleIndex}
+          cycling={atmosphere.cycle}
+          darkness={atmosphere.darkness}
+          motion={progress.bgZoomSpeed}
         />
 
         <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1520px] flex-col p-3 pb-22 md:p-5 md:pb-22">
@@ -334,6 +354,7 @@ function JapaneseDesk() {
                   memory={progress.vocabMemory}
                   setProgress={setProgress}
                   onBack={() => setTab("lesson")}
+                  onOpenStudio={() => setAiOpen(true)}
                 />
               </>
             )}
@@ -349,6 +370,7 @@ function JapaneseDesk() {
                   setLessons={setLessons}
                   onResetAll={resetAll}
                   onRestored={setDay}
+                  onAI={() => setAiOpen(true)}
                 />
               </>
             )}
@@ -359,12 +381,14 @@ function JapaneseDesk() {
                 )}
                 <AtmosphereView
                   backgrounds={backgrounds}
-                  active={progress.backgroundIndex}
-                  setActive={(backgroundIndex) => setProgress((p) => ({ ...p, backgroundIndex }))}
-                  darkness={sceneDarkness}
-                  setDarkness={setSceneDarkness}
-                  cycle={cycleThemes}
+                  active={visibleIndex}
+                  setActive={handleChooseScene}
+                  darkness={atmosphere.darkness}
+                  setDarkness={(darkness) => setAtmosphere((a) => ({ ...a, darkness }))}
+                  cycle={atmosphere.cycle}
                   onToggleCycle={handleToggleCycleThemes}
+                  motion={progress.bgZoomSpeed}
+                  setMotion={(bgZoomSpeed) => setProgress((p) => ({ ...p, bgZoomSpeed }))}
                 />
               </>
             )}
@@ -472,25 +496,27 @@ function Header({
         ))}
       </nav>
       <div className="flex items-center justify-end gap-1.5">
-        <div className="hidden items-center rounded-full border border-border/70 bg-glass/50 px-1 py-0.5 sm:flex">
-          <button
-            onClick={() => selectDay(day - 1)}
-            aria-label="Previous day"
-            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <ChevronLeft className="size-3.5" />
-          </button>
-          <span className="px-2 font-display text-[11px] font-medium tracking-wide text-primary">
-            Day {day}
-          </span>
-          <button
-            onClick={() => selectDay(Math.min(maxDay, day + 1))}
-            aria-label="Next day"
-            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <ChevronRight className="size-3.5" />
-          </button>
-        </div>
+        {maxDay > 0 && (
+          <div className="hidden items-center rounded-full border border-border/70 bg-glass/50 px-1 py-0.5 sm:flex">
+            <button
+              onClick={() => selectDay(day - 1)}
+              aria-label="Previous day"
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+            <span className="px-2 font-display text-[11px] font-medium tracking-wide text-primary">
+              Day {day}
+            </span>
+            <button
+              onClick={() => selectDay(Math.min(maxDay, day + 1))}
+              aria-label="Next day"
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+          </div>
+        )}
         <HeaderAccount />
         <button
           onClick={onAI}
@@ -1168,6 +1194,7 @@ function ProgressView({
   setLessons,
   onResetAll,
   onRestored,
+  onAI,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
@@ -1175,8 +1202,13 @@ function ProgressView({
   setLessons: React.Dispatch<React.SetStateAction<DayLesson[]>>;
   onResetAll: () => void;
   onRestored: (firstDay: number) => void;
+  onAI: () => void;
 }) {
   const [query, setQuery] = useState("");
+  // The "Restore a backup" button in the empty state clicks the same file input as BackupControls' Restore.
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  // Nothing worth exporting or resetting (the same test the sync uses for an empty device).
+  const hasData = !isEmptySnapshot(snapshotOf(lessons, progress));
   const vocab = lessons
     .flatMap((l) => l.vocab)
     .filter((w) =>
@@ -1198,7 +1230,7 @@ function ProgressView({
             )}
             label="mastered"
           />
-          <Metric value={progress.totalQuizzesTaken} label="quizzes" />
+          <Metric value={progress.totalQuizzesTaken} label="answered" />
           <Metric value={lessons.reduce((n, l) => n + l.vocab.length, 0)} label="words" />
         </div>
         <MomentumGraph />
@@ -1208,61 +1240,93 @@ function ProgressView({
           setLessons={setLessons}
           setProgress={setProgress}
           onRestored={onRestored}
+          canExport={hasData}
+          restoreInputRef={restoreInputRef}
         />
         <AccountCard />
         <div className="mt-4 border-t border-border/50 pt-3">
-          <ResetControl onReset={onResetAll} />
+          <ResetControl onReset={onResetAll} disabled={!hasData} />
         </div>
       </GlassPane>
       <GlassPane className="lg:col-span-2 lg:mt-4">
-        <div className="relative">
-          <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Japanese, reading, or meaning..."
-            className="w-full rounded-xl border border-border/60 bg-glass/60 py-2.5 pl-10 pr-3.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
-          />
-        </div>
-        <div className="mt-4 grid max-h-[520px] gap-2 overflow-y-auto overscroll-contain sm:grid-cols-2 pr-1">
-          {vocab.map((w) => (
-            <div
-              key={w.id}
-              className="flex items-center justify-between rounded-md border border-border bg-glass p-3"
-            >
-              <div>
-                <p className="font-display">
-                  {w.japanese} <span className="text-xs text-muted-foreground">{w.reading}</span>
-                </p>
-                <p className="text-xs text-muted-foreground">{w.meaning}</p>
-              </div>
+        {lessons.length === 0 ? (
+          <div className="py-6">
+            <h2 className="font-display text-xl font-medium text-foreground">No lessons yet</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Build a day with AI Lesson Studio, or restore a backup. Your words will show up here.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2.5">
               <button
-                onClick={() =>
-                  setProgress((p) => ({
-                    ...p,
-                    masteredVocabIds: p.masteredVocabIds.includes(w.id)
-                      ? p.masteredVocabIds.filter((id) => id !== w.id)
-                      : [...p.masteredVocabIds, w.id],
-                  }))
-                }
-                title={
-                  masteryState(w, progress.masteredVocabIds, progress.vocabMemory) === "earned"
-                    ? "Mastered through review"
-                    : undefined
-                }
-                className={
-                  masteryState(w, progress.masteredVocabIds, progress.vocabMemory) !== "none"
-                    ? "text-primary"
-                    : "text-muted-foreground"
-                }
+                type="button"
+                onClick={onAI}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:brightness-105"
               >
-                <Star
-                  className={`size-4 ${progress.masteredVocabIds.includes(w.id) ? "fill-current" : ""}`}
-                />
+                <Bot className="size-4" />
+                Build your first lesson
+              </button>
+              <button
+                type="button"
+                onClick={() => restoreInputRef.current?.click()}
+                className="flex items-center gap-2 rounded-lg border border-border/70 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Upload className="size-4" />
+                Restore a backup
               </button>
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search Japanese, reading, or meaning..."
+                className="w-full rounded-xl border border-border/60 bg-glass/60 py-2.5 pl-10 pr-3.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
+              />
+            </div>
+            <div className="mt-4 grid max-h-[520px] gap-2 overflow-y-auto overscroll-contain sm:grid-cols-2 pr-1">
+              {vocab.map((w) => (
+                <div
+                  key={w.id}
+                  className="flex items-center justify-between rounded-md border border-border bg-glass p-3"
+                >
+                  <div>
+                    <p className="font-display">
+                      {w.japanese}{" "}
+                      <span className="text-xs text-muted-foreground">{w.reading}</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">{w.meaning}</p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setProgress((p) => ({
+                        ...p,
+                        masteredVocabIds: p.masteredVocabIds.includes(w.id)
+                          ? p.masteredVocabIds.filter((id) => id !== w.id)
+                          : [...p.masteredVocabIds, w.id],
+                      }))
+                    }
+                    title={
+                      masteryState(w, progress.masteredVocabIds, progress.vocabMemory) === "earned"
+                        ? "Mastered through review"
+                        : undefined
+                    }
+                    className={
+                      masteryState(w, progress.masteredVocabIds, progress.vocabMemory) !== "none"
+                        ? "text-primary"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    <Star
+                      className={`size-4 ${progress.masteredVocabIds.includes(w.id) ? "fill-current" : ""}`}
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </GlassPane>
     </div>
   );
@@ -1277,12 +1341,17 @@ function BackupControls({
   setLessons,
   setProgress,
   onRestored,
+  canExport,
+  restoreInputRef,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
   setLessons: React.Dispatch<React.SetStateAction<DayLesson[]>>;
   setProgress: React.Dispatch<React.SetStateAction<UserProgressState>>;
   onRestored: (firstDay: number) => void;
+  /** False when there is nothing to export (no lessons and no progress). Restore always stays available. */
+  canExport: boolean;
+  restoreInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const [notice, setNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [pending, setPending] = useState<ParsedBackup | null>(null);
@@ -1329,7 +1398,8 @@ function BackupControls({
       <div className="flex gap-2">
         <button
           onClick={exportData}
-          className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs"
+          disabled={!canExport}
+          className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download className="size-3" />
           Export
@@ -1338,6 +1408,7 @@ function BackupControls({
           <Upload className="size-3" />
           Restore
           <input
+            ref={restoreInputRef}
             type="file"
             accept="application/json,.json"
             className="hidden"
@@ -1349,6 +1420,11 @@ function BackupControls({
           />
         </label>
       </div>
+      {!canExport && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Nothing to export yet. Build or restore a lesson first.
+        </p>
+      )}
       {notice && (
         <p
           role={notice.kind === "error" ? "alert" : "status"}
@@ -1383,7 +1459,7 @@ function BackupControls({
 
 // A stronger confirmation than the curriculum list's ConfirmDialog, since this clears every
 // lesson and all progress at once. Requires typing "reset" rather than a single click.
-function ResetControl({ onReset }: { onReset: () => void }) {
+function ResetControl({ onReset, disabled }: { onReset: () => void; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   // Phase 9c: signed in and synced → a second question about the account's copy (default: leave it alone).
@@ -1392,13 +1468,17 @@ function ResetControl({ onReset }: { onReset: () => void }) {
   const askCloud = sync.linked && sync.canDeleteCloud;
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"
-      >
-        <RotateCcw className="size-3" />
-        Reset all progress
-      </button>
+      <>
+        <button
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          className="flex items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RotateCcw className="size-3" />
+          Reset all progress
+        </button>
+        {disabled && <p className="mt-2 text-xs text-muted-foreground">Nothing to reset yet.</p>}
+      </>
     );
   }
   const canConfirm = text.trim().toLowerCase() === "reset";
@@ -1471,6 +1551,8 @@ function AtmosphereView({
   setDarkness,
   cycle,
   onToggleCycle,
+  motion,
+  setMotion,
 }: {
   backgrounds: { name: string; url: string }[];
   active: number;
@@ -1479,6 +1561,8 @@ function AtmosphereView({
   setDarkness: (v: number) => void;
   cycle: boolean;
   onToggleCycle: (v: boolean) => void;
+  motion: UserProgressState["bgZoomSpeed"];
+  setMotion: (v: UserProgressState["bgZoomSpeed"]) => void;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -1577,7 +1661,32 @@ function AtmosphereView({
           ))}
         </div>
         <div className="mt-6 border-t border-border/40 pt-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>Scene motion</span>
+            <div
+              role="radiogroup"
+              aria-label="Scene motion"
+              className="inline-flex rounded-lg border border-border/60 bg-glass/40 p-0.5"
+            >
+              {(["slow", "medium", "still"] as const).map((speed) => (
+                <button
+                  key={speed}
+                  type="button"
+                  role="radio"
+                  aria-checked={motion === speed}
+                  onClick={() => setMotion(speed)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                    motion === speed
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {speed}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-5 flex items-center justify-between text-xs text-muted-foreground">
             <span>Reading contrast</span>
             <span className="font-mono text-primary font-semibold tabular-nums">
               {Math.round(darkness * 100)}%
@@ -1586,8 +1695,8 @@ function AtmosphereView({
           <input
             className="mt-2 w-full accent-primary"
             type="range"
-            min="0.15"
-            max="0.7"
+            min={DARKNESS_MIN}
+            max={DARKNESS_MAX}
             step="0.01"
             value={darkness}
             onChange={(e) => setDarkness(Number(e.target.value))}

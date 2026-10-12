@@ -4,7 +4,7 @@
  * Pure functions only (no React, no localStorage, no DOM) so they can be tested without a browser.
  * `ProgressView`'s Export / Restore controls in `src/routes/index.tsx` are the only callers.
  *
- * Format (version 2):  { app: "kiroku", version: 2, exportedAt: <ISO string>, lessons, progress }
+ * Format (version 3):  { app: "kiroku", version: 3, exportedAt: <ISO string>, lessons, progress }
  *
  * What is deliberately NOT in a backup:
  * - The Gemini API key (BYOK rule — backup files get shared and emailed). `buildBackup` only accepts
@@ -16,12 +16,19 @@
  * `BACKUP_VERSION` and adds a step to `MIGRATIONS` below, so older backup files keep restoring.
  */
 import { z } from "zod";
-import { dayLessonSchema, grammarExampleSchema, grammarPointSchema } from "@/lib/lesson-schema";
+import {
+  MAX_GRAMMAR_PER_DAY,
+  asArray,
+  dayLessonSchema,
+  grammarExampleSchema,
+  grammarPointSchema,
+  normalizeLessonShape,
+} from "@/lib/lesson-schema";
 import { vocabMemorySchema } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 export const BACKUP_APP = "kiroku";
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 export interface BackupFile {
   app: typeof BACKUP_APP;
@@ -68,7 +75,13 @@ export function buildBackup(
 // Built from the existing schema pieces, so every other rule stays in one place.
 // (Exported in Phase 9b: cloud sync reads lessons back with the same lenient shape check.)
 export const restoredLessonSchema = dayLessonSchema.extend({
-  grammar: grammarPointSchema.extend({ examples: z.array(grammarExampleSchema) }),
+  grammar: z.preprocess(
+    asArray,
+    z
+      .array(grammarPointSchema.extend({ examples: z.array(grammarExampleSchema) }))
+      .min(1)
+      .max(MAX_GRAMMAR_PER_DAY),
+  ),
 });
 
 // Mirrors `UserProgressState` by hand (same as lesson-schema.ts mirrors the lesson types). Every
@@ -128,6 +141,9 @@ type RawFile = Record<string, unknown>;
  * identical, so nothing to convert.
  * v1 → v2 (Phase 14b): progress gains `vocabMemory` (per-word review records). Older files have none, so
  * they restore with an empty memory — set explicitly here rather than left to whatever the caller's defaults hold.
+ * v2 → v3 (Phase 17): a day's `kanji` and `grammar` become arrays (1–5 kanji, 1–3 grammar points). Older files hold a
+ * single object for each; this wraps it into a one-element array. (The lesson schema accepts both shapes too, so a
+ * hand-edited v3 file with a single object still loads.)
  */
 const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
   (file) => file,
@@ -135,6 +151,11 @@ const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
     const progress = file["progress"];
     if (!isRecord(progress) || "vocabMemory" in progress) return file;
     return { ...file, progress: { ...progress, vocabMemory: {} } };
+  },
+  (file) => {
+    const lessons = file["lessons"];
+    if (!Array.isArray(lessons)) return file;
+    return { ...file, lessons: lessons.map((lesson: unknown) => normalizeLessonShape(lesson)) };
   },
 ];
 

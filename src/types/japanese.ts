@@ -58,8 +58,10 @@ export interface DayLesson {
   topic: string;
   completed: boolean;
   dateCompleted?: string;
-  grammar: GrammarPoint;
-  kanji: KanjiItem;
+  /** Phase 17: 1–3 grammar points per day (was a single object before). Always an array in memory; see `normalizeLessonShape`. */
+  grammar: GrammarPoint[];
+  /** Phase 17: 1–5 kanji per day (was a single object before). */
+  kanji: KanjiItem[];
   vocab: VocabWord[];
   naturalPhrase: NaturalPhrase;
   pattern: string;

@@ -20,8 +20,8 @@ import {
   Upload,
   Volume2,
 } from "lucide-react";
-// Phase 11a: the 13 sample days are no longer loaded. `src/data/initialLessons.ts` is kept on
-// disk as an archive but is deliberately imported nowhere — new visitors start empty.
+// Phase 11a: the 13 sample days are no longer loaded. The old sample course is kept as an archive in
+// `handoffs/fixtures/initialLessons.legacy.ts` (moved out of `src/` in Phase 17) and is imported nowhere in the app.
 import type { DayLesson, UserProgressState } from "../types/japanese";
 import { MusicPanel } from "@/components/music/MusicPanel";
 import { SceneBackdrop } from "@/components/atmosphere/SceneBackdrop";
@@ -62,6 +62,8 @@ import {
   pruneMemory,
 } from "@/lib/word-memory";
 import { VocabList } from "@/components/lesson/VocabList";
+import { PointChips } from "@/components/lesson/PointChips";
+import { normalizeLessonShape } from "@/lib/lesson-schema";
 import { AccountCard } from "@/components/account/AccountCard";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
 import { AccountSyncProvider } from "@/components/account/AccountSyncProvider";
@@ -132,7 +134,9 @@ function loadLessons(): DayLesson[] {
     const raw = localStorage.getItem(STORAGE_KEYS.lessons);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    // Phase 17: lessons saved before this phase hold ONE kanji / grammar object; wrap them into arrays on read.
+    // (Saved back as arrays by the persist effect. No other validation, as before.)
+    return Array.isArray(parsed) ? parsed.map((l: DayLesson) => normalizeLessonShape(l)) : [];
   } catch {
     return [];
   }
@@ -663,11 +667,20 @@ function LessonWorkspace({
             className="mt-4 font-display text-2xl font-medium leading-snug tracking-tight text-foreground md:text-3xl"
             style={{ textWrap: "balance" }}
           >
-            {lesson.grammar.title}
+            {lesson.grammar[0]?.title}
           </h1>
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground/90">
-            {lesson.grammar.summary}
+            {lesson.grammar[0]?.summary}
           </p>
+          {lesson.grammar.length > 1 && (
+            <p className="mt-1.5 text-xs text-primary/80">
+              Also today:{" "}
+              {lesson.grammar
+                .slice(1)
+                .map((g) => g.title)
+                .join(" · ")}
+            </p>
+          )}
           <div className="mt-5 flex gap-1 border-b border-border/50 pb-2.5">
             {(["overview", "grammar", "kanji", "vocab"] as LessonTab[]).map((id) => (
               <button
@@ -688,9 +701,11 @@ function LessonWorkspace({
               <Overview lesson={lesson} showReading={progress.showFurigana} />
             )}
             {lessonTab === "grammar" && (
-              <Grammar lesson={lesson} showReading={progress.showFurigana} />
+              <Grammar key={lesson.dayNumber} lesson={lesson} showReading={progress.showFurigana} />
             )}
-            {lessonTab === "kanji" && <Kanji lesson={lesson} showReading={progress.showFurigana} />}
+            {lessonTab === "kanji" && (
+              <Kanji key={lesson.dayNumber} lesson={lesson} showReading={progress.showFurigana} />
+            )}
             {lessonTab === "vocab" && (
               <VocabList
                 lesson={lesson}
@@ -864,7 +879,14 @@ function CurriculumList({
                   isCurrent ? "text-primary font-medium" : "text-foreground/80"
                 }`}
               >
-                <span className="font-display text-lg drop-shadow-sm">{item.kanji.character}</span>
+                <span className="font-display text-lg drop-shadow-sm">
+                  {item.kanji[0]?.character}
+                  {item.kanji.length > 1 && (
+                    <sup className="ml-0.5 font-sans text-[9px] text-muted-foreground">
+                      +{item.kanji.length - 1}
+                    </sup>
+                  )}
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs">{item.title}</span>
                   <span className="block text-[10px] text-muted-foreground/80">
@@ -1011,7 +1033,12 @@ function EmptyLessons({ onAI, onRestore }: { onAI: () => void; onRestore: () => 
 }
 
 function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boolean }) {
-  const ex = lesson.grammar.examples[0];
+  // Phase 17: a day can hold several grammar points / kanji; the Overview shows the first of each and points to the tabs.
+  const grammar = lesson.grammar[0];
+  const kanji = lesson.kanji[0];
+  const moreGrammar = lesson.grammar.length - 1;
+  const moreKanji = lesson.kanji.length - 1;
+  const ex = grammar?.examples[0];
   return (
     <div className="space-y-4">
       <div>
@@ -1019,8 +1046,13 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
           Pattern & Structure
         </p>
         <div className="mt-2 rounded-lg border border-primary/25 bg-primary/10 p-3.5 font-display text-base tracking-wide text-primary shadow-[inset_0_1px_0_0_var(--highlight)]">
-          {lesson.grammar.structure}
+          {grammar?.structure}
         </div>
+        {moreGrammar > 0 && (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            +{moreGrammar} more grammar {moreGrammar === 1 ? "point" : "points"} in the Grammar tab
+          </p>
+        )}
       </div>
       <div className="rounded-lg border border-border/50 bg-glass/40 p-3.5">
         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-1.5">
@@ -1040,13 +1072,16 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
           <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
             Kanji spotlight
           </p>
-          <p className="mt-1 font-display text-4xl font-medium text-primary">
-            {lesson.kanji.character}
-          </p>
-          <p className="mt-1 text-xs font-medium text-foreground">{lesson.kanji.meaning}</p>
+          <p className="mt-1 font-display text-4xl font-medium text-primary">{kanji?.character}</p>
+          <p className="mt-1 text-xs font-medium text-foreground">{kanji?.meaning}</p>
           <p className="mt-0.5 text-[11px] font-mono text-muted-foreground">
-            {lesson.kanji.onyomi.join(" · ")}
+            {kanji?.onyomi.join(" · ")}
           </p>
+          {moreKanji > 0 && (
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              +{moreKanji} more in the Kanji tab
+            </p>
+          )}
         </div>
         <div className="rounded-lg border border-border/40 bg-glass/30 p-3.5">
           <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
@@ -1072,13 +1107,38 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
   );
 }
 function Grammar({ lesson, showReading }: { lesson: DayLesson; showReading: boolean }) {
+  // Phase 17: with several grammar points a chip row picks one; a one-point day renders exactly as before.
+  const [picked, setPicked] = useState(0);
+  const points = lesson.grammar;
+  const point = points[Math.min(picked, points.length - 1)];
+  if (!point) return null;
+  const many = points.length > 1;
   return (
     <div className="space-y-4 text-sm">
+      {many && (
+        <>
+          <PointChips
+            labels={points.map((g) => g.title)}
+            active={Math.min(picked, points.length - 1)}
+            onSelect={setPicked}
+            ariaLabel="Grammar points"
+          />
+          <div>
+            <h2 className="font-display text-lg font-medium leading-snug text-foreground">
+              {point.title}
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{point.summary}</p>
+            <div className="mt-2 rounded-lg border border-primary/25 bg-primary/10 p-3 font-display text-sm tracking-wide text-primary">
+              {point.structure}
+            </div>
+          </div>
+        </>
+      )}
       <div className="rounded-lg border border-border/40 bg-glass/30 p-3.5 leading-relaxed text-foreground/85">
-        {lesson.grammar.explanation}
+        {point.explanation}
       </div>
       <div className="space-y-2.5 pt-1">
-        {lesson.grammar.examples.map((ex, i) => (
+        {point.examples.map((ex, i) => (
           <div
             key={i}
             className="rounded-lg border border-border/40 border-l-2 border-l-primary bg-background/20 p-3"
@@ -1099,31 +1159,42 @@ function Grammar({ lesson, showReading }: { lesson: DayLesson; showReading: bool
 }
 function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolean }) {
   const canSpeak = useSpeechSupported();
+  // Phase 17: with several kanji a chip row picks one; a one-kanji day renders exactly as before.
+  const [picked, setPicked] = useState(0);
+  const all = lesson.kanji;
+  const current = Math.min(picked, all.length - 1);
+  const kanji = all[current];
+  if (!kanji) return null;
   return (
     <div className="space-y-4">
+      <PointChips
+        labels={all.map((k) => k.character)}
+        active={current}
+        onSelect={setPicked}
+        ariaLabel="Kanji of the day"
+        large
+      />
       <div className="flex items-center gap-5 rounded-lg border border-primary/20 bg-primary/5 p-4">
         <span className="font-display text-6xl font-medium text-primary drop-shadow-sm">
-          {lesson.kanji.character}
+          {kanji.character}
         </span>
         <div>
-          <h2 className="font-display text-xl font-medium text-foreground">
-            {lesson.kanji.meaning}
-          </h2>
+          <h2 className="font-display text-xl font-medium text-foreground">{kanji.meaning}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {lesson.kanji.strokes} strokes · Radical {lesson.kanji.radical}
+            {kanji.strokes} strokes · Radical {kanji.radical}
           </p>
           {showReading && (
             <div className="mt-1 text-xs text-foreground/90">
               <span className="text-muted-foreground">On: </span>
-              {lesson.kanji.onyomi.join(" / ") || "—"}
+              {kanji.onyomi.join(" / ") || "—"}
               <span className="mx-2 text-border">|</span>
               <span className="text-muted-foreground">Kun: </span>
-              {lesson.kanji.kunyomi.join(" / ") || "—"}
+              {kanji.kunyomi.join(" / ") || "—"}
             </div>
           )}
           {canSpeak && (
             <button
-              onClick={() => speak(speakableReading(lesson.kanji))}
+              onClick={() => speak(speakableReading(kanji))}
               className="hit-area mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
             >
               <Volume2 className="size-3.5" />
@@ -1137,7 +1208,7 @@ function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolea
           Compounds
         </p>
         <div className="space-y-1.5">
-          {lesson.kanji.compounds.map((c) => (
+          {kanji.compounds.map((c) => (
             <div
               key={c.word}
               className="flex items-center justify-between rounded-lg border border-border/40 bg-glass/30 px-3 py-2 text-sm"
@@ -1156,18 +1227,18 @@ function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolea
           ))}
         </div>
       </div>
-      {(lesson.kanji.memoryTip || lesson.kanji.rendakuNote) && (
+      {(kanji.memoryTip || kanji.rendakuNote) && (
         <div className="space-y-2 border-t border-border/50 pt-3.5 text-xs text-muted-foreground">
-          {lesson.kanji.memoryTip && (
+          {kanji.memoryTip && (
             <p className="rounded-lg border border-border/40 bg-background/20 p-2.5 leading-relaxed">
               <span className="font-semibold text-primary">Memory tip: </span>
-              {lesson.kanji.memoryTip}
+              {kanji.memoryTip}
             </p>
           )}
-          {lesson.kanji.rendakuNote && (
+          {kanji.rendakuNote && (
             <p className="rounded-lg border border-border/40 bg-background/20 p-2.5 leading-relaxed">
               <span className="font-semibold text-primary">Sound notes: </span>
-              {lesson.kanji.rendakuNote}
+              {kanji.rendakuNote}
             </p>
           )}
         </div>

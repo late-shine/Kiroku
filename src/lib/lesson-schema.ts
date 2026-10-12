@@ -55,14 +55,40 @@ export const naturalPhraseSchema = z.object({
   context: z.string().min(1),
 });
 
+/** Phase 17: the most kanji / grammar points one day may carry. The Studio offers 1 / 3 / 5 and 1 / 2 / 3. */
+export const MAX_KANJI_PER_DAY = 5;
+export const MAX_GRAMMAR_PER_DAY = 3;
+
+/**
+ * Phase 17 — the one rule for the old and the new lesson shape: a single object becomes a one-element array,
+ * an array stays as it is. Used by the zod schemas below (so AI import, Restore and cloud sync all accept both
+ * shapes) and by `normalizeLessonShape` for lessons read without zod. Writes are always arrays.
+ */
+export const asArray = (value: unknown): unknown =>
+  value === undefined || value === null || Array.isArray(value) ? value : [value];
+
+/**
+ * Phase 17 — wraps `kanji` / `grammar` of one raw lesson (old single-object shape or new arrays) into arrays,
+ * WITHOUT validating anything else. For code that reads lessons without zod (`loadLessons()` in `index.tsx`,
+ * the backup migration). Anything that isn't a plain object comes back untouched.
+ */
+export function normalizeLessonShape<T>(lesson: T): T {
+  if (typeof lesson !== "object" || lesson === null || Array.isArray(lesson)) return lesson;
+  const raw = lesson as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...raw };
+  if ("kanji" in raw) next["kanji"] = asArray(raw["kanji"]);
+  if ("grammar" in raw) next["grammar"] = asArray(raw["grammar"]);
+  return next as T;
+}
+
 export const dayLessonSchema = z.object({
   dayNumber: z.number().int().positive(),
   title: z.string().min(1),
   topic: z.string().min(1),
   completed: z.boolean().optional(),
   dateCompleted: z.string().optional(),
-  grammar: grammarPointSchema,
-  kanji: kanjiItemSchema,
+  grammar: z.preprocess(asArray, z.array(grammarPointSchema).min(1).max(MAX_GRAMMAR_PER_DAY)),
+  kanji: z.preprocess(asArray, z.array(kanjiItemSchema).min(1).max(MAX_KANJI_PER_DAY)),
   vocab: z.array(vocabWordSchema).min(1, "include at least one vocab word"),
   naturalPhrase: naturalPhraseSchema,
   pattern: z.string().min(1),

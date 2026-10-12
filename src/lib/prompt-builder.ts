@@ -53,6 +53,13 @@ export const MODE_HINTS: Record<PromptMode, string> = {
 export const JLPT_LEVELS: JlptLevel[] = ["N5", "N4", "N3"];
 export const VOCAB_COUNTS = [5, 10, 15] as const;
 export type VocabCount = (typeof VOCAB_COUNTS)[number];
+// Phase 17: how many kanji / grammar points one day teaches (the lesson holds arrays of 1–5 and 1–3).
+export const KANJI_COUNTS = [1, 3, 5] as const;
+export type KanjiCount = (typeof KANJI_COUNTS)[number];
+export const GRAMMAR_COUNTS = [1, 2, 3] as const;
+export type GrammarCount = (typeof GRAMMAR_COUNTS)[number];
+/** The exact number of entries a Learn prompt asks for. `null` (Save only, repair) means "one per item actually present". */
+type PointCounts = { kanji: KanjiCount; grammar: GrammarCount } | null;
 
 export interface PromptOptions {
   day: number;
@@ -60,6 +67,10 @@ export interface PromptOptions {
   style: LessonStyle;
   level: JlptLevel;
   vocabCount: VocabCount;
+  /** Phase 17: kanji per day (1 / 3 / 5). */
+  kanjiCount: KanjiCount;
+  /** Phase 17: grammar points per day (1 / 2 / 3). */
+  grammarCount: GrammarCount;
   romaji: boolean;
   customFocus: string;
   lessons: DayLesson[];
@@ -103,9 +114,13 @@ function priorKnowledgeBlock(day: number, lessons: DayLesson[], progress: UserPr
   }
 
   const highestPriorDay = Math.max(...prior.map((l) => l.dayNumber));
-  const grammarSummary = prior.map((l) => `Day ${l.dayNumber}: ${l.grammar.title} (${l.grammar.structure})`).join("\n");
+  // Phase 17: a day can teach several grammar points / kanji — every one is listed (one grammar line per point).
+  const grammarSummary = prior
+    .flatMap((l) => l.grammar.map((g) => `Day ${l.dayNumber}: ${g.title} (${g.structure})`))
+    .join("\n");
   const kanjiSummary = prior
-    .map((l) => `${l.kanji.character} (${l.kanji.meaning} — On: ${l.kanji.onyomi.join("/") || "—"} / Kun: ${l.kanji.kunyomi.join("/") || "—"})`)
+    .flatMap((l) => l.kanji)
+    .map((k) => `${k.character} (${k.meaning} — On: ${k.onyomi.join("/") || "—"} / Kun: ${k.kunyomi.join("/") || "—"})`)
     .join(", ");
   const allVocab: VocabWord[] = prior.flatMap((l) => l.vocab);
   const vocabSummary = allVocab.map((v) => `${v.japanese} (${v.reading}) — ${v.meaning}`).join(", ");
@@ -139,38 +154,61 @@ ${vocabSummary || "(none recorded)"}${weakSummary}${reviewSummary}
 IMPORTANT: Do NOT skip ahead or assume any grammatical form or vocabulary beyond what's listed above.`;
 }
 
-function schemaAndExampleBlock(day: number, vocabCount: number): string {
+function schemaAndExampleBlock(day: number, vocabCount: number, counts: PointCounts): string {
+  // Phase 17: "grammar" and "kanji" are lists. A Learn prompt asks for an exact number; Save only and repair must never
+  // invent, so they ask for one entry per item actually present in the text.
+  const grammarNote = counts
+    ? `exactly ${counts.grammar} ${counts.grammar === 1 ? "entry" : "entries"}`
+    : "one entry per grammar point actually present in the text (1 to 3), never invent one";
+  const kanjiNote = counts
+    ? `exactly ${counts.kanji} ${counts.kanji === 1 ? "entry" : "entries"}`
+    : "one entry per kanji actually present in the text (1 to 5), never invent one";
+  const compoundsNote = !counts
+    ? "every compound the text lists for that kanji, at least 1"
+    : counts.kanji === 1
+      ? "5 or more"
+      : "at least 3 per kanji";
+  const examplesNote = counts && counts.grammar > 1 ? "at least 3 in each grammar point" : "at least 3";
+  const listsNote =
+    !counts || counts.grammar > 1 || counts.kanji > 1
+      ? `\nThe example shows ONE entry in each of "grammar" and "kanji" to save space — follow the entry counts above, not the example.`
+      : "";
+
   return `Return the lesson as exactly ONE JSON code block (\`\`\`json ... \`\`\`) matching this structure exactly — no extra prose inside the code block, and no fields beyond these:
 
 {
   "dayNumber": number,
   "title": string,
   "topic": string,
-  "grammar": {
-    "title": string, "summary": string, "structure": string, "explanation": string,
-    "negativeForm": string, "questionForm": string, "notes": string[],
-    "examples": [ { "japanese": string, "reading": string, "english": string, "breakdown": string } ]  // at least 3
-  },
-  "kanji": {
-    "character": string, "meaning": string, "strokes": number, "radical": string,
-    "onyomi": string[], "kunyomi": string[],
-    "compounds": [ { "word": string, "reading": string, "meaning": string } ],  // 5 or more
-    "rendakuNote": string, "memoryTip": string
-  },
+  "grammar": [  // ${grammarNote}
+    {
+      "title": string, "summary": string, "structure": string, "explanation": string,
+      "negativeForm": string, "questionForm": string, "notes": string[],
+      "examples": [ { "japanese": string, "reading": string, "english": string, "breakdown": string } ]  // ${examplesNote}
+    }
+  ],
+  "kanji": [  // ${kanjiNote}
+    {
+      "character": string, "meaning": string, "strokes": number, "radical": string,
+      "onyomi": string[], "kunyomi": string[],
+      "compounds": [ { "word": string, "reading": string, "meaning": string } ],  // ${compoundsNote}
+      "rendakuNote": string, "memoryTip": string
+    }
+  ],
   "vocab": [ { "id": "d${day}-1", "japanese": string, "reading": string, "meaning": string, "day": ${day} } ],  // exactly ${vocabCount} entries, ids d${day}-1 through d${day}-${vocabCount}
   "naturalPhrase": { "phrase": string, "reading": string, "meaning": string, "context": string },
   "pattern": string,
   "cultureCorner": string
 }
 
-Example below shows the FORMAT only — write real Day ${day} content, not this placeholder text:
+Example below shows the FORMAT only — write real Day ${day} content, not this placeholder text:${listsNote}
 \`\`\`json
 {
   "dayNumber": ${day},
   "title": "<short title — no 'Day N' prefix, the app adds that>",
   "topic": "<one-line topic>",
-  "grammar": { "title": "...", "summary": "...", "structure": "...", "explanation": "...", "negativeForm": "...", "questionForm": "...", "notes": ["..."], "examples": [ { "japanese": "...", "reading": "...", "english": "...", "breakdown": "..." } ] },
-  "kanji": { "character": "力", "meaning": "Power / Strength", "strokes": 2, "radical": "力", "onyomi": ["リョク", "リキ"], "kunyomi": ["ちから"], "compounds": [ { "word": "努力", "reading": "どりょく", "meaning": "effort" } ], "rendakuNote": "...", "memoryTip": "..." },
+  "grammar": [ { "title": "...", "summary": "...", "structure": "...", "explanation": "...", "negativeForm": "...", "questionForm": "...", "notes": ["..."], "examples": [ { "japanese": "...", "reading": "...", "english": "...", "breakdown": "..." } ] } ],
+  "kanji": [ { "character": "力", "meaning": "Power / Strength", "strokes": 2, "radical": "力", "onyomi": ["リョク", "リキ"], "kunyomi": ["ちから"], "compounds": [ { "word": "努力", "reading": "どりょく", "meaning": "effort" } ], "rendakuNote": "...", "memoryTip": "..." } ],
   "vocab": [ { "id": "d${day}-1", "japanese": "...", "reading": "...", "meaning": "...", "day": ${day} } ],
   "naturalPhrase": { "phrase": "...", "reading": "...", "meaning": "...", "context": "..." },
   "pattern": "...",
@@ -180,12 +218,21 @@ Example below shows the FORMAT only — write real Day ${day} content, not this 
 }
 
 // Shared by "learn-save" and "learn-only" — the actual teaching ask, in prose (not a data-form request).
-function teachingInstructionsBlock(day: number, vocabCount: number): string {
+// Phase 17: with one grammar point / one kanji the wording is exactly what it was before; with more, items 1 and 2 ask for N of each.
+function teachingInstructionsBlock(day: number, vocabCount: number, grammarCount: number, kanjiCount: number): string {
+  const grammarItem =
+    grammarCount === 1
+      ? "Grammar Point — structure, a clear explanation, the negative form, the question form, any extra notes, and at least 3 worked examples (Japanese, reading, English, and a short breakdown of each)."
+      : `${grammarCount} Grammar Points — for EACH one: structure, a clear explanation, the negative form, the question form, any extra notes, and at least 3 worked examples (Japanese, reading, English, and a short breakdown of each). Teach them one after another, clearly separated.`;
+  const kanjiItem =
+    kanjiCount === 1
+      ? "Kanji of the Day — one character with its meaning, stroke count, radical, on'yomi, kun'yomi, 5 or more common compounds (word, reading, meaning), a rendaku/sound-change note if relevant, and a vivid memory tip."
+      : `${kanjiCount} Kanji of the Day — for EACH one: the character with its meaning, stroke count, radical, on'yomi, kun'yomi, at least 3 common compounds (word, reading, meaning), a rendaku/sound-change note if relevant, and a vivid memory tip. Teach them one after another, clearly separated.`;
   return `Teach me Day ${day} like a real tutor would — in your own natural voice, not as a
 data form. Cover exactly these six things, each fully explained, in plain
 readable prose with real examples:
-1. Grammar Point — structure, a clear explanation, the negative form, the question form, any extra notes, and at least 3 worked examples (Japanese, reading, English, and a short breakdown of each).
-2. Kanji of the Day — one character with its meaning, stroke count, radical, on'yomi, kun'yomi, 5 or more common compounds (word, reading, meaning), a rendaku/sound-change note if relevant, and a vivid memory tip.
+1. ${grammarItem}
+2. ${kanjiItem}
 3. ${vocabCount} Themed Vocabulary Words — Japanese, reading, English meaning, matching today's topic.
 4. A Natural Japanese Phrase / colloquial reaction — phrase, reading, meaning, and the natural context where it's used.
 5. Pattern of the Day — one key structural or phonetic takeaway.
@@ -194,14 +241,25 @@ readable prose with real examples:
 Keep everything beginner-appropriate for someone who only knows what's listed above — do not skip ahead.`;
 }
 
+/**
+ * Phase 17 — the analysis-first block (DRAFT WORDING, awaiting the user's approval; see handoffs/phase-17.md). It makes
+ * the AI read the progress tracker and show its working before it teaches. `extractJsonBlock` ignores prose around the
+ * JSON, so the Check section never affects an import. Only Learn + Save and Learn only carry it, and only when there IS
+ * a tracker above it (Day 1 / an empty curriculum has nothing to check against).
+ */
+function analysisFirstBlock(grammarCount: number, kanjiCount: number): string {
+  const grammar = `${grammarCount} grammar point${grammarCount === 1 ? "" : "s"}`;
+  return `BEFORE YOU WRITE ANYTHING — start your reply with a short "Check" section (at most 8 lines, plain text, no JSON): (1) the highest day completed; (2) how many grammar points, kanji and vocabulary words are already known, and the titles of the five most recent grammar points; (3) today's ${grammar} and ${kanjiCount} kanji, named. State that none of them appear in the lists above (including other readings of the same kanji). If one would repeat, choose a different one first. If the progress tracker above looks missing or cut off, stop and ask me to paste it instead of guessing. Only then start the lesson.`;
+}
+
 // The bridge from "done teaching" into the data block — only used by mode: "learn-save".
-function teachThenSaveBridge(day: number, vocabCount: number): string {
+function teachThenSaveBridge(day: number, vocabCount: number, counts: PointCounts): string {
   return `When you're done teaching, add one short natural sentence letting me know
 what's coming next — for example: "Since you're using Kiroku to save your
 progress, here's the block to paste back into Kiroku's Import screen." Then
 output the same lesson as one JSON code block, exactly as specified below.
 
-${schemaAndExampleBlock(day, vocabCount)}`;
+${schemaAndExampleBlock(day, vocabCount, counts)}`;
 }
 
 /**
@@ -230,7 +288,7 @@ IMPORTANT: If you don't genuinely have Day ${day}'s lesson in this conversation'
 
   return `${sourceAndGuard}
 
-${schemaAndExampleBlock(day, vocabCount)}`;
+${schemaAndExampleBlock(day, vocabCount, null)}`;
 }
 
 /**
@@ -257,12 +315,13 @@ Text to fix:
 ${failedText.trim()}
 """
 
-${schemaAndExampleBlock(day, vocabCount)}`;
+${schemaAndExampleBlock(day, vocabCount, null)}`;
 }
 
 /** Pure function: builds the full copy-paste prompt for a given day and set of options. */
 export function buildLessonPrompt(opts: PromptOptions): string {
-  const { day, tone, style, level, vocabCount, romaji, customFocus, lessons, progress, mode, existingLessonText } = opts;
+  const { day, tone, style, level, vocabCount, kanjiCount, grammarCount, romaji, customFocus, lessons, progress, mode, existingLessonText } =
+    opts;
 
   if (mode === "save-only") {
     return buildSaveOnlyPrompt(day, vocabCount, existingLessonText);
@@ -275,10 +334,14 @@ export function buildLessonPrompt(opts: PromptOptions): string {
     ? `Custom focus for today, if it fits naturally alongside the required grammar/vocab progression: ${customFocus.trim()}.`
     : "";
 
+  const counts: PointCounts = { kanji: kanjiCount, grammar: grammarCount };
+  const teaching = teachingInstructionsBlock(day, vocabCount, grammarCount, kanjiCount);
   const requestBody =
-    mode === "learn-save"
-      ? `${teachingInstructionsBlock(day, vocabCount)}\n\n${teachThenSaveBridge(day, vocabCount)}`
-      : teachingInstructionsBlock(day, vocabCount);
+    mode === "learn-save" ? `${teaching}\n\n${teachThenSaveBridge(day, vocabCount, counts)}` : teaching;
+
+  // Phase 17: the "Check" block sits right after the progress tracker, so it only exists when a tracker does.
+  const hasTracker = day > 1 && lessons.some((l) => l.dayNumber < day);
+  const checkBlock = hasTracker ? `\n\n${analysisFirstBlock(grammarCount, kanjiCount)}` : "";
 
   return `I am learning Japanese with you following a progressive daily method. Act as my teacher for today's lesson.
 
@@ -286,7 +349,7 @@ Role & tone: You are my Japanese tutor for Day ${day}. Target level: JLPT ${leve
 ${STYLE_INSTRUCTIONS[style].replace("{vocabCount}", String(vocabCount))}
 ${romajiLine}
 ${focusLine ? focusLine + "\n" : ""}
-${priorKnowledgeBlock(day, lessons, progress, opts.today ?? localDay())}
+${priorKnowledgeBlock(day, lessons, progress, opts.today ?? localDay())}${checkBlock}
 
 === TODAY'S LESSON REQUEST: DAY ${day} ===
 ${requestBody}`;

@@ -10,7 +10,9 @@ import {
   X,
 } from "lucide-react";
 import {
+  GRAMMAR_COUNTS,
   JLPT_LEVELS,
+  KANJI_COUNTS,
   MODE_HINTS,
   MODE_LABELS,
   STYLE_LABELS,
@@ -20,7 +22,9 @@ import {
   buildRepairPrompt,
   buildSaveOnlyPrompt,
   reviewWordsForPrompt,
+  type GrammarCount,
   type JlptLevel,
+  type KanjiCount,
   type LessonStyle,
   type PromptMode,
   type Tone,
@@ -59,6 +63,9 @@ interface StoredOptions {
   style: LessonStyle;
   level: JlptLevel;
   vocabCount: VocabCount;
+  /** Phase 17: kanji / grammar points per day. Saves from before this phase lack them and load the defaults (1 and 1). */
+  kanjiCount: KanjiCount;
+  grammarCount: GrammarCount;
   romaji: boolean;
   customFocus: string;
   mode: PromptMode;
@@ -69,6 +76,8 @@ const DEFAULTS: StoredOptions = {
   style: "balanced",
   level: "N5",
   vocabCount: 10,
+  kanjiCount: 1,
+  grammarCount: 1,
   romaji: false,
   customFocus: "",
   mode: "learn-save",
@@ -88,6 +97,12 @@ function loadStored(): StoredOptions {
       vocabCount: (VOCAB_COUNTS as readonly number[]).includes(parsed.vocabCount)
         ? parsed.vocabCount
         : DEFAULTS.vocabCount,
+      kanjiCount: (KANJI_COUNTS as readonly number[]).includes(parsed.kanjiCount)
+        ? parsed.kanjiCount
+        : DEFAULTS.kanjiCount,
+      grammarCount: (GRAMMAR_COUNTS as readonly number[]).includes(parsed.grammarCount)
+        ? parsed.grammarCount
+        : DEFAULTS.grammarCount,
       romaji: typeof parsed.romaji === "boolean" ? parsed.romaji : DEFAULTS.romaji,
       customFocus:
         typeof parsed.customFocus === "string" ? parsed.customFocus : DEFAULTS.customFocus,
@@ -165,6 +180,8 @@ export function LessonStudio({
   const [style, setStyle] = useState<LessonStyle>(initial.style);
   const [level, setLevel] = useState<JlptLevel>(initial.level);
   const [vocabCount, setVocabCount] = useState<VocabCount>(initial.vocabCount);
+  const [kanjiCount, setKanjiCount] = useState<KanjiCount>(initial.kanjiCount);
+  const [grammarCount, setGrammarCount] = useState<GrammarCount>(initial.grammarCount);
   const [romaji, setRomaji] = useState(initial.romaji);
   const [customFocus, setCustomFocus] = useState(initial.customFocus);
   const [mode, setMode] = useState<PromptMode>(initial.mode);
@@ -188,13 +205,23 @@ export function LessonStudio({
   const geminiRunId = useRef(0);
 
   useEffect(() => {
-    const toStore: StoredOptions = { tone, style, level, vocabCount, romaji, customFocus, mode };
+    const toStore: StoredOptions = {
+      tone,
+      style,
+      level,
+      vocabCount,
+      kanjiCount,
+      grammarCount,
+      romaji,
+      customFocus,
+      mode,
+    };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
     } catch {
       /* storage unavailable — ignore */
     }
-  }, [tone, style, level, vocabCount, romaji, customFocus, mode]);
+  }, [tone, style, level, vocabCount, kanjiCount, grammarCount, romaji, customFocus, mode]);
 
   const prompt = useMemo(
     () =>
@@ -204,6 +231,8 @@ export function LessonStudio({
         style,
         level,
         vocabCount,
+        kanjiCount,
+        grammarCount,
         romaji,
         customFocus,
         lessons,
@@ -217,6 +246,8 @@ export function LessonStudio({
       style,
       level,
       vocabCount,
+      kanjiCount,
+      grammarCount,
       romaji,
       customFocus,
       lessons,
@@ -590,6 +621,43 @@ export function LessonStudio({
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-5">
+                    <div>
+                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Kanji per day
+                      </label>
+                      <OptionGrid
+                        cols={3}
+                        value={kanjiCount}
+                        options={KANJI_COUNTS}
+                        labels={
+                          Object.fromEntries(KANJI_COUNTS.map((v) => [v, String(v)])) as Record<
+                            KanjiCount,
+                            string
+                          >
+                        }
+                        onChange={setKanjiCount}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Grammar points
+                      </label>
+                      <OptionGrid
+                        cols={3}
+                        value={grammarCount}
+                        options={GRAMMAR_COUNTS}
+                        labels={
+                          Object.fromEntries(GRAMMAR_COUNTS.map((v) => [v, String(v)])) as Record<
+                            GrammarCount,
+                            string
+                          >
+                        }
+                        onChange={setGrammarCount}
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between rounded-md border border-border bg-glass px-3 py-2.5">
                     <span className="text-xs font-semibold text-foreground">Include romaji</span>
                     <button
@@ -807,9 +875,13 @@ function ImportPreviewCard({
       <p className="font-display text-sm text-primary">
         Day {lesson.dayNumber}: {stripDayPrefix(lesson.title)}
       </p>
-      <p className="mt-1 text-muted-foreground">Grammar: {lesson.grammar.title}</p>
+      <p className="mt-1 text-muted-foreground">
+        {lesson.grammar.length === 1 ? "Grammar" : `${lesson.grammar.length} grammar points`}:{" "}
+        {lesson.grammar.map((g) => g.title).join(" · ")}
+      </p>
       <p className="text-muted-foreground">
-        Kanji: {lesson.kanji.character} ({lesson.kanji.meaning})
+        {lesson.kanji.length === 1 ? "Kanji" : `${lesson.kanji.length} kanji`}:{" "}
+        {lesson.kanji.map((k) => `${k.character} (${k.meaning})`).join(" · ")}
       </p>
       <p className="text-muted-foreground">{lesson.vocab.length} vocab words</p>
       {fromGemini && (

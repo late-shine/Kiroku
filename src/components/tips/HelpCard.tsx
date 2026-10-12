@@ -37,7 +37,7 @@ export function HelpCard({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="text-muted-foreground hover:text-foreground"
+            className="hit-area text-muted-foreground hover:text-foreground"
           >
             <X className="size-4" />
           </button>

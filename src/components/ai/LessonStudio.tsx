@@ -402,7 +402,7 @@ export function LessonStudio({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="hit-area rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <X className="size-4" />
           </button>

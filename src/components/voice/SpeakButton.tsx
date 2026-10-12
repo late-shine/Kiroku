@@ -1,7 +1,7 @@
 // Phase 16c: the small speaker button used next to Japanese text (kanji compounds, grammar examples, the
 // Overview example and phrase). It calls the existing `speak()`, which already uses the voice saved in the
-// Atmosphere tab. The icon is small; the button is 44 px so a thumb can hit it (Phase 16e adds a shared
-// hit-area utility, until then this is plain size-11 plus negative margins from the caller).
+// Atmosphere tab. The icon is small; the 44 px tap target comes from the shared `hit-area` utility (Phase 16e),
+// so the button takes no extra room in the row.
 import { Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { speak } from "@/lib/voice";
@@ -26,7 +26,7 @@ export function SpeakButton({
       onClick={() => speak(text)}
       aria-label={`Listen to ${label}`}
       className={cn(
-        "grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "hit-area grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >

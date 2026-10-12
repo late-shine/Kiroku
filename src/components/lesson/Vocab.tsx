@@ -85,7 +85,7 @@ export function Vocab({
                     aria-label="Add to review"
                     title="Add to review"
                     onClick={() => add([word])}
-                    className="text-muted-foreground transition-colors hover:text-primary"
+                    className="hit-area text-muted-foreground transition-colors hover:text-primary"
                   >
                     <BookmarkPlus className="size-4" />
                   </button>
@@ -101,7 +101,7 @@ export function Vocab({
                     }))
                   }
                   title={mastery === "earned" ? "Mastered through review" : undefined}
-                  className={`transition-transform active:scale-90 ${
+                  className={`hit-area transition-transform active:scale-90 ${
                     mastery !== "none"
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground"

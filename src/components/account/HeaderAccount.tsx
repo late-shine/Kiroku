@@ -58,7 +58,7 @@ export function HeaderAccount() {
         aria-label={label}
         title={label}
         type="button"
-        className="relative rounded-md border border-border p-2 text-muted-foreground hover:bg-accent hover:text-primary"
+        className="hit-area rounded-md border border-border p-2 text-muted-foreground hover:bg-accent hover:text-primary"
       >
         <User className="size-3.5" />
       </button>
@@ -71,7 +71,7 @@ export function HeaderAccount() {
         <button
           aria-label={label}
           title={label}
-          className={`relative rounded-md border p-2 hover:bg-accent hover:text-primary ${
+          className={`hit-area rounded-md border p-2 hover:bg-accent hover:text-primary ${
             signedInAs ? "border-primary/40 text-primary" : "border-border text-muted-foreground"
           }`}
         >

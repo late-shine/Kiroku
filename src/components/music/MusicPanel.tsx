@@ -284,7 +284,7 @@ export function MusicPanel({
               onClick={onToggleExpanded}
               aria-label="Collapse music player"
               title="Collapse"
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="hit-area rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <ChevronDown className="size-4" />
             </button>

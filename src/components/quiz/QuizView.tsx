@@ -82,8 +82,12 @@ function Pane({ children }: { children: ReactNode }) {
 }
 
 const segmentWrap = "flex items-center gap-1 rounded-full border border-border/50 bg-glass/50 p-1";
+// Phase 16e: the four scope pills ("This day", "All days", "Day range", "Due today · N") add up to about 350 px, wider
+// than a phone's pane, so on a phone they sit in a 2 x 2 grid instead of squeezing and wrapping inside each pill.
+const scopeWrap =
+  "grid grid-cols-2 items-center gap-1 rounded-2xl border border-border/50 bg-glass/50 p-1 sm:flex sm:rounded-full";
 const segmentClass = (on: boolean) =>
-  `rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+  `hit-area whitespace-nowrap rounded-full px-3 py-1 text-center text-[11px] font-medium transition-all ${
     on
       ? "bg-primary text-primary-foreground shadow-sm"
       : "text-muted-foreground hover:text-foreground"
@@ -238,7 +242,7 @@ export function QuizView({
           <span className="text-right text-xs text-muted-foreground">{counter}</span>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className={segmentWrap}>
+          <div className={scopeWrap}>
             {QUIZ_SCOPES.map((sc) => (
               <button
                 key={sc.id}
@@ -340,7 +344,7 @@ export function QuizView({
               <button
                 type="button"
                 onClick={onOpenStudio}
-                className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                className="hit-area mt-4 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
               >
                 Open AI Lesson Studio
               </button>

@@ -471,7 +471,7 @@ function Header({
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+            className={`hit-area flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
               tab === id
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
@@ -522,7 +522,7 @@ function Header({
           onClick={onAI}
           aria-label="AI lesson import"
           title="AI lesson import"
-          className="rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
+          className="hit-area rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
         >
           <Bot className="size-3.5" />
         </button>
@@ -530,7 +530,7 @@ function Header({
           onClick={onSound}
           aria-label="Music player"
           title="Music player"
-          className="rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
+          className="hit-area rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
         >
           <Music2 className="size-3.5" />
         </button>
@@ -538,7 +538,7 @@ function Header({
           onClick={onHelp}
           aria-label="Help"
           title="Help"
-          className="rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
+          className="hit-area rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
         >
           <CircleHelp className="size-3.5" />
         </button>
@@ -594,176 +594,205 @@ function LessonWorkspace({
   onDeleteDays: (dayNumbers: number[]) => void;
 }) {
   const done = progress.completedDays.includes(lesson.dayNumber);
+  const atFirst = lesson.dayNumber <= 1;
+  const atLast = lesson.dayNumber >= lessons.length;
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-12">
-      <GlassPane className="lg:col-span-5 lg:ml-2" tilt="-0.5deg">
-        <div className="flex items-center justify-between gap-3 border-b border-border/40 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-sm font-semibold tracking-wide text-primary">
-              文法
-            </span>
-            <span className="text-muted-foreground/60">·</span>
-            <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-              Day {lesson.dayNumber}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setProgress((p) => ({ ...p, showFurigana: !p.showFurigana }))}
-              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all ${
-                progress.showFurigana
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border/60 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Furigana {progress.showFurigana ? "on" : "off"}
-            </button>
-            <button
-              onClick={complete}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all ${
-                done
-                  ? "border-success/40 bg-success/15 text-success"
-                  : "border-border/60 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {done && <Check className="size-3" />}
-              {done ? "Completed" : "Mark done"}
-            </button>
-          </div>
-        </div>
-        <h1
-          className="mt-4 font-display text-2xl font-medium leading-snug tracking-tight text-foreground md:text-3xl"
-          style={{ textWrap: "balance" }}
+    <>
+      {/* Phase 16e: on a phone the header's day stepper is hidden, so this row is the quick way to change day (the
+          bottom arrows and the curriculum list stay). Same `selectDay` as everywhere else, which clamps. */}
+      <div className="mx-auto mb-4 flex w-fit items-center rounded-full border border-border/70 bg-glass/50 px-1 py-0.5 sm:hidden">
+        <button
+          type="button"
+          onClick={() => selectDay(lesson.dayNumber - 1)}
+          disabled={atFirst}
+          aria-label="Previous day"
+          className="hit-area rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >
-          {lesson.grammar.title}
-        </h1>
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground/90">
-          {lesson.grammar.summary}
-        </p>
-        <div className="mt-5 flex gap-1 border-b border-border/50 pb-2.5">
-          {(["overview", "grammar", "kanji", "vocab"] as LessonTab[]).map((id) => (
-            <button
-              key={id}
-              onClick={() => setLessonTab(id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-all ${
-                lessonTab === id
-                  ? "bg-primary/20 text-primary shadow-sm"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              }`}
-            >
-              {id}
-            </button>
-          ))}
-        </div>
-        <div className="mt-5 min-h-[320px]">
-          {lessonTab === "overview" && (
-            <Overview lesson={lesson} showReading={progress.showFurigana} />
-          )}
-          {lessonTab === "grammar" && (
-            <Grammar lesson={lesson} showReading={progress.showFurigana} />
-          )}
-          {lessonTab === "kanji" && <Kanji lesson={lesson} showReading={progress.showFurigana} />}
-          {lessonTab === "vocab" && (
-            <VocabList
-              lesson={lesson}
-              progress={progress}
-              setProgress={setProgress}
-              showReading={progress.showFurigana}
-            />
-          )}
-        </div>
-        <div className="mt-6 flex items-center justify-between border-t border-border/50 pt-4">
-          <div className="flex gap-1.5">
-            <button
-              onClick={() => selectDay(lesson.dayNumber - 1)}
-              aria-label="Previous lesson"
-              className="rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-            <button
-              onClick={() => selectDay(lesson.dayNumber + 1)}
-              aria-label="Next lesson"
-              className="rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <ChevronRight className="size-4" />
-            </button>
+          <ChevronLeft className="size-4" />
+        </button>
+        <span className="px-3 font-display text-xs font-medium tracking-wide text-primary">
+          Day {lesson.dayNumber} of {lessons.length}
+        </span>
+        <button
+          type="button"
+          onClick={() => selectDay(lesson.dayNumber + 1)}
+          disabled={atLast}
+          aria-label="Next day"
+          className="hit-area rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+      <div className="grid items-start gap-5 lg:grid-cols-12">
+        <GlassPane className="lg:col-span-5 lg:ml-2" tilt="-0.5deg">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="font-display text-sm font-semibold tracking-wide text-primary">
+                文法
+              </span>
+              <span className="text-muted-foreground/60">·</span>
+              <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                Day {lesson.dayNumber}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setProgress((p) => ({ ...p, showFurigana: !p.showFurigana }))}
+                className={`hit-area whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all ${
+                  progress.showFurigana
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border/60 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Furigana {progress.showFurigana ? "on" : "off"}
+              </button>
+              <button
+                onClick={complete}
+                className={`hit-area flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all ${
+                  done
+                    ? "border-success/40 bg-success/15 text-success"
+                    : "border-border/60 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {done && <Check className="size-3" />}
+                {done ? "Completed" : "Mark done"}
+              </button>
+            </div>
           </div>
-          <button
-            onClick={onQuiz}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:brightness-105 active:scale-[0.98]"
+          <h1
+            className="mt-4 font-display text-2xl font-medium leading-snug tracking-tight text-foreground md:text-3xl"
+            style={{ textWrap: "balance" }}
           >
-            <Sparkles className="size-4" />
-            Quiz this day
-          </button>
-        </div>
-      </GlassPane>
-      <GlassPane className="lg:col-span-4 lg:mt-4" delay="120ms">
-        <div className="flex items-center justify-between">
-          <span className="font-display text-xs font-semibold tracking-wider text-primary">
-            学習 · PROGRESS
-          </span>
-          <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Momentum
-          </span>
-        </div>
-        <div className="relative mx-auto mt-6 grid size-44 place-items-center">
-          <svg viewBox="0 0 100 100" className="size-44 -rotate-90">
-            <circle
-              cx="50"
-              cy="50"
-              r="40"
-              fill="none"
-              stroke="currentColor"
-              className="text-foreground/10"
-              strokeWidth="4"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="40"
-              fill="none"
-              stroke="currentColor"
-              className="text-primary transition-all duration-1000 ease-out"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeDasharray="251"
-              strokeDashoffset={251 - (251 * completion) / 100}
-            />
-          </svg>
-          <div className="absolute text-center">
-            <p className="font-display text-3xl font-medium tracking-tight text-foreground">
-              {completion}%
-            </p>
-            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              complete
-            </p>
+            {lesson.grammar.title}
+          </h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground/90">
+            {lesson.grammar.summary}
+          </p>
+          <div className="mt-5 flex gap-1 border-b border-border/50 pb-2.5">
+            {(["overview", "grammar", "kanji", "vocab"] as LessonTab[]).map((id) => (
+              <button
+                key={id}
+                onClick={() => setLessonTab(id)}
+                className={`hit-area rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-all ${
+                  lessonTab === id
+                    ? "bg-primary/20 text-primary shadow-sm"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                }`}
+              >
+                {id}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="mt-6 grid grid-cols-3 border-t border-border/50 pt-4 text-center">
-          <Metric value={progress.completedDays.length} label="days" />
-          <Metric value={lessons.length} label="kanji" />
-          <Metric
-            value={countMastered(
-              lessons.flatMap((l) => l.vocab),
-              progress.masteredVocabIds,
-              progress.vocabMemory,
+          <div className="mt-5 min-h-[320px]">
+            {lessonTab === "overview" && (
+              <Overview lesson={lesson} showReading={progress.showFurigana} />
             )}
-            label="mastered"
+            {lessonTab === "grammar" && (
+              <Grammar lesson={lesson} showReading={progress.showFurigana} />
+            )}
+            {lessonTab === "kanji" && <Kanji lesson={lesson} showReading={progress.showFurigana} />}
+            {lessonTab === "vocab" && (
+              <VocabList
+                lesson={lesson}
+                progress={progress}
+                setProgress={setProgress}
+                showReading={progress.showFurigana}
+              />
+            )}
+          </div>
+          <div className="mt-6 flex items-center justify-between border-t border-border/50 pt-4">
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => selectDay(lesson.dayNumber - 1)}
+                aria-label="Previous lesson"
+                className="hit-area rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                onClick={() => selectDay(lesson.dayNumber + 1)}
+                aria-label="Next lesson"
+                className="hit-area rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+            <button
+              onClick={onQuiz}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:brightness-105 active:scale-[0.98]"
+            >
+              <Sparkles className="size-4" />
+              Quiz this day
+            </button>
+          </div>
+        </GlassPane>
+        <GlassPane className="lg:col-span-4 lg:mt-4" delay="120ms">
+          <div className="flex items-center justify-between">
+            <span className="font-display text-xs font-semibold tracking-wider text-primary">
+              学習 · PROGRESS
+            </span>
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Momentum
+            </span>
+          </div>
+          <div className="relative mx-auto mt-6 grid size-44 place-items-center">
+            <svg viewBox="0 0 100 100" className="size-44 -rotate-90">
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                fill="none"
+                stroke="currentColor"
+                className="text-foreground/10"
+                strokeWidth="4"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                fill="none"
+                stroke="currentColor"
+                className="text-primary transition-all duration-1000 ease-out"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray="251"
+                strokeDashoffset={251 - (251 * completion) / 100}
+              />
+            </svg>
+            <div className="absolute text-center">
+              <p className="font-display text-3xl font-medium tracking-tight text-foreground">
+                {completion}%
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.25em] text-muted-foreground">
+                complete
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-3 border-t border-border/50 pt-4 text-center">
+            <Metric value={progress.completedDays.length} label="days" />
+            <Metric value={lessons.length} label="kanji" />
+            <Metric
+              value={countMastered(
+                lessons.flatMap((l) => l.vocab),
+                progress.masteredVocabIds,
+                progress.vocabMemory,
+              )}
+              label="mastered"
+            />
+          </div>
+          <MomentumGraph />
+        </GlassPane>
+        <GlassPane className="lg:col-span-3 lg:mt-8" tilt="0.5deg" delay="240ms">
+          <CurriculumList
+            lessons={lessons}
+            currentDay={lesson.dayNumber}
+            completedDays={progress.completedDays}
+            selectDay={selectDay}
+            onDeleteDays={onDeleteDays}
           />
-        </div>
-        <MomentumGraph />
-      </GlassPane>
-      <GlassPane className="lg:col-span-3 lg:mt-8" tilt="0.5deg" delay="240ms">
-        <CurriculumList
-          lessons={lessons}
-          currentDay={lesson.dayNumber}
-          completedDays={progress.completedDays}
-          selectDay={selectDay}
-          onDeleteDays={onDeleteDays}
-        />
-      </GlassPane>
-    </div>
+        </GlassPane>
+      </div>
+    </>
   );
 }
 
@@ -999,9 +1028,7 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
         </p>
         <div className="flex items-start justify-between gap-2">
           <p className="font-display text-lg tracking-wide text-foreground">{ex?.japanese}</p>
-          {ex?.japanese && (
-            <SpeakButton text={ex.japanese} label={ex.japanese} className="-mb-3 -mr-2 -mt-2.5" />
-          )}
+          {ex?.japanese && <SpeakButton text={ex.japanese} label={ex.japanese} />}
         </div>
         {showReading && (
           <p className="mt-1 text-xs font-mono text-primary/80 tracking-wide">{ex?.reading}</p>
@@ -1029,11 +1056,7 @@ function Overview({ lesson, showReading }: { lesson: DayLesson; showReading: boo
             <p className="font-display text-base tracking-wide text-foreground">
               {lesson.naturalPhrase.phrase}
             </p>
-            <SpeakButton
-              text={lesson.naturalPhrase.phrase}
-              label={lesson.naturalPhrase.phrase}
-              className="-mb-3 -mr-2 -mt-3"
-            />
+            <SpeakButton text={lesson.naturalPhrase.phrase} label={lesson.naturalPhrase.phrase} />
           </div>
           {showReading && (
             <p className="mt-0.5 text-[11px] font-mono text-primary/80">
@@ -1062,7 +1085,7 @@ function Grammar({ lesson, showReading }: { lesson: DayLesson; showReading: bool
           >
             <div className="flex items-start justify-between gap-2">
               <p className="font-display text-base tracking-wide text-foreground">{ex.japanese}</p>
-              <SpeakButton text={ex.japanese} label={ex.japanese} className="-mb-3 -mr-1.5 -mt-3" />
+              <SpeakButton text={ex.japanese} label={ex.japanese} />
             </div>
             {showReading && (
               <p className="mt-0.5 text-xs font-mono text-primary/80">{ex.reading}</p>
@@ -1101,7 +1124,7 @@ function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolea
           {canSpeak && (
             <button
               onClick={() => speak(speakableReading(lesson.kanji))}
-              className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+              className="hit-area mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
             >
               <Volume2 className="size-3.5" />
               Listen
@@ -1127,7 +1150,7 @@ function Kanji({ lesson, showReading }: { lesson: DayLesson; showReading: boolea
               </span>
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">{c.meaning}</span>
-                <SpeakButton text={c.reading || c.word} label={c.word} className="-my-2 -mr-2" />
+                <SpeakButton text={c.reading || c.word} label={c.word} className="-my-1" />
               </span>
             </div>
           ))}
@@ -1259,7 +1282,7 @@ function ProgressView({
               <button
                 type="button"
                 onClick={onAI}
-                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:brightness-105"
+                className="hit-area flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:brightness-105"
               >
                 <Bot className="size-4" />
                 Build your first lesson
@@ -1267,7 +1290,7 @@ function ProgressView({
               <button
                 type="button"
                 onClick={() => restoreInputRef.current?.click()}
-                className="flex items-center gap-2 rounded-lg border border-border/70 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className="hit-area flex items-center gap-2 rounded-lg border border-border/70 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Upload className="size-4" />
                 Restore a backup
@@ -1312,11 +1335,11 @@ function ProgressView({
                         ? "Mastered through review"
                         : undefined
                     }
-                    className={
+                    className={`hit-area ${
                       masteryState(w, progress.masteredVocabIds, progress.vocabMemory) !== "none"
                         ? "text-primary"
                         : "text-muted-foreground"
-                    }
+                    }`}
                   >
                     <Star
                       className={`size-4 ${progress.masteredVocabIds.includes(w.id) ? "fill-current" : ""}`}
@@ -1675,7 +1698,7 @@ function AtmosphereView({
                   role="radio"
                   aria-checked={motion === speed}
                   onClick={() => setMotion(speed)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                  className={`hit-area rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
                     motion === speed
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground"

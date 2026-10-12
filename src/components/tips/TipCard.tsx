@@ -25,7 +25,7 @@ export function TipCard({
       </div>
       <button
         onClick={() => onDismiss(id)}
-        className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-accent"
+        className="hit-area shrink-0 rounded-md border border-border px-2.5 py-1 text-[11px] hover:bg-accent"
       >
         Got it
       </button>

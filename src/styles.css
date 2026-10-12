@@ -152,6 +152,23 @@ body {
   }
 }
 
+/* Phase 16e: extends a control's tap target to at least 44 x 44 px WITHOUT changing how it looks or lays out: an
+   invisible ::after sized from the element itself. Each side grows only as far as needed (a control already 44 px or
+   more wide/tall gets no extension on that axis), so tall pills are not stretched sideways. Needs `position: relative`
+   (set here, so don't combine it with absolute/fixed), and a control that clips (`overflow-hidden`) or already uses
+   ::after must not take it. Neighbouring targets may overlap by a few px; the later one in the page wins there. */
+@utility hit-area {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: min(0px, calc((100% - 44px) / 2));
+    bottom: min(0px, calc((100% - 44px) / 2));
+    left: min(0px, calc((100% - 44px) / 2));
+    right: min(0px, calc((100% - 44px) / 2));
+  }
+}
+
 /* The scene container: as tall as the LARGE viewport, so the Android URL bar hiding/showing never resizes it.
    The build step keeps only the last of two `height` declarations, so the min-height is the fallback for
    browsers without lvh (their `height: 100lvh` is dropped and min-height still gives a full-screen box).

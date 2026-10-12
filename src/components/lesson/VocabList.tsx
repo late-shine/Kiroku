@@ -82,7 +82,7 @@ export function VocabList({
                     onClick={() => addWords([word])}
                     aria-label={`Add ${word.japanese} to review`}
                     title="Add to review"
-                    className="rounded p-1 text-muted-foreground hover:text-primary"
+                    className="hit-area rounded p-1 text-muted-foreground hover:text-primary"
                   >
                     <Plus className="size-4" />
                   </button>
@@ -91,7 +91,7 @@ export function VocabList({
                   aria-label="Toggle mastery"
                   onClick={() => toggleStar(word.id)}
                   title={mastery === "earned" ? "Mastered through review" : undefined}
-                  className={mastery !== "none" ? "text-primary" : "text-muted-foreground"}
+                  className={`hit-area ${mastery !== "none" ? "text-primary" : "text-muted-foreground"}`}
                 >
                   <Star
                     className={`size-4 ${masteredVocabIds.includes(word.id) ? "fill-current" : ""}`}

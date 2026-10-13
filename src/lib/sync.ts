@@ -3,7 +3,8 @@
  * can be checked from a plain script (handoffs/phase-9b-sync-check.ts and phase-9c-sync-check.ts).
  *
  * WHAT SYNCS: the lessons; the learning progress inside `UserProgressState` (completed days, starred ids, weak ids,
- * the per-word review records, the two quiz counters); and, since 9c, a few small preferences (`prefs`: background,
+ * the per-word review records, the two quiz counters, and since 18a the study log: answers per local day, for the
+ * 7-day graph); and, since 9c, a few small preferences (`prefs`: background,
  * zoom speed, furigana, dismissed tip ids) and the record of which days were deleted (`deleted`, "tombstones").
  * WHAT DOES NOT: the Gemini key, music, the voice choice (a voice that exists on one device usually doesn't exist on
  * another: see src/lib/voice.ts), the temporary quiz state. `currentDay` and `lastQuizScore` are not synced either:
@@ -16,6 +17,7 @@
  *   progress/completedDays { d1: true, d2: true }      (maps, never arrays: arrays and empty nodes don't survive)
  *   progress/masteredVocabIds, weakVocabIds  { "d14-3": true }
  *   progress/totalQuizzesTaken, totalCorrectAnswers  numbers
+ *   progress/studyLog/<YYYY-MM-DD>  { a: answered, c: correct }   (18a; a map keyed by local day, at most ~120 days)
  *   memory/<vocabId>       one record per word: japanese, box, due, right, wrong, lastAnswered
  *   prefs                  backgroundIndex, bgZoomSpeed, showFurigana, tips { "quiz": true }   (9c)
  *   deleted/d5             "2026-10-05T10:00:00.000Z": a day was deleted at that time (9c, see below)
@@ -38,7 +40,8 @@
  * changes here, change the rules too (the check script evaluates the real rules file against real trees).
  */
 import { restoredLessonSchema } from "@/lib/backup";
-import { parseStoredMemory, type VocabMemory } from "@/lib/word-memory";
+import { mergeLogs, pruneLog, type StudyLog } from "@/lib/study-log";
+import { isValidDay, localDay, parseStoredMemory, type VocabMemory } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState, WordMemory } from "@/types/japanese";
 
 export const SYNC_SCHEMA = 1;
@@ -60,6 +63,8 @@ export interface SyncProgress {
   vocabMemory: VocabMemory;
   totalQuizzesTaken: number;
   totalCorrectAnswers: number;
+  /** Phase 18a: answers per LOCAL day. Merged per day (larger of each count), like the two counters. */
+  studyLog: StudyLog;
 }
 
 /** Small preferences (9c). Every field is optional: absent = "this side has no opinion". */
@@ -111,6 +116,7 @@ export function snapshotOf(
       vocabMemory: { ...progress.vocabMemory },
       totalQuizzesTaken: progress.totalQuizzesTaken,
       totalCorrectAnswers: progress.totalCorrectAnswers,
+      studyLog: { ...progress.studyLog },
     },
     prefs: {
       backgroundIndex: progress.backgroundIndex,
@@ -135,7 +141,8 @@ export function isEmptySnapshot(s: SyncSnapshot): boolean {
     p.weakVocabIds.length === 0 &&
     Object.keys(p.vocabMemory).length === 0 &&
     p.totalQuizzesTaken === 0 &&
-    p.totalCorrectAnswers === 0
+    p.totalCorrectAnswers === 0 &&
+    Object.keys(p.studyLog).length === 0
   );
 }
 
@@ -158,6 +165,7 @@ export function applyProgress(s: SyncSnapshot, current: UserProgressState): User
     vocabMemory: { ...s.progress.vocabMemory },
     totalQuizzesTaken: s.progress.totalQuizzesTaken,
     totalCorrectAnswers: s.progress.totalCorrectAnswers,
+    studyLog: { ...s.progress.studyLog },
     backgroundIndex: s.prefs.backgroundIndex ?? current.backgroundIndex,
     bgZoomSpeed: s.prefs.bgZoomSpeed ?? current.bgZoomSpeed,
     showFurigana: s.prefs.showFurigana ?? current.showFurigana,
@@ -225,6 +233,7 @@ function canonicalSnapshot(s: SyncSnapshot): string {
     memory: s.progress.vocabMemory,
     quizzes: s.progress.totalQuizzesTaken,
     correct: s.progress.totalCorrectAnswers,
+    studyLog: s.progress.studyLog,
     // an empty tip list and no tip list are the same thing (the account never stores an empty node)
     prefs: {
       ...s.prefs,
@@ -281,6 +290,19 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
   if (mastered.length > 0) progress["masteredVocabIds"] = flags(mastered);
   const weak = p.weakVocabIds.filter((id) => WORD_ID_RE.test(id));
   if (weak.length > 0) progress["weakVocabIds"] = flags(weak);
+  // 18a: `studyLog/<day> = { a, c }`. Days and counts the rules would refuse are left out (one refused value rejects the WHOLE write).
+  const studyLog: Record<string, { a: number; c: number }> = {};
+  for (const [day, entry] of Object.entries(p.studyLog)) {
+    if (
+      isValidDay(day) &&
+      isCount(entry.answered) &&
+      isCount(entry.correct) &&
+      entry.correct <= entry.answered
+    ) {
+      studyLog[day] = { a: entry.answered, c: entry.correct };
+    }
+  }
+  if (Object.keys(studyLog).length > 0) progress["studyLog"] = studyLog;
 
   const memory: Record<string, WordMemory> = {};
   for (const [id, rec] of Object.entries(p.vocabMemory)) {
@@ -318,8 +340,22 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
 
 export type DecodeResult = { ok: true; snapshot: SyncSnapshot } | { ok: false; message: string };
 
-const nonNegativeInt = (value: unknown): number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
+const nonNegativeInt = (value: unknown): number => (isCount(value) ? value : 0);
+
+/** The account's `progress/studyLog`: entries that are not a real day with 0 <= c <= a (whole numbers) are dropped. */
+function decodeStudyLog(node: unknown): StudyLog {
+  const out: StudyLog = {};
+  if (!isRecord(node)) return out;
+  for (const [day, entry] of Object.entries(node)) {
+    if (!isValidDay(day) || !isRecord(entry)) continue;
+    const a = entry["a"];
+    const c = entry["c"];
+    if (isCount(a) && isCount(c) && c <= a) out[day] = { answered: a, correct: c };
+  }
+  return out;
+}
 
 function keysWithTrue(node: unknown, accept: (key: string) => boolean): string[] {
   if (!isRecord(node)) return [];
@@ -364,6 +400,7 @@ export function decodeCloud(raw: unknown): DecodeResult {
       vocabMemory: {},
       totalQuizzesTaken: 0,
       totalCorrectAnswers: 0,
+      studyLog: {},
     },
     prefs: {},
     tombstones: {},
@@ -439,6 +476,7 @@ export function decodeCloud(raw: unknown): DecodeResult {
         vocabMemory: parseStoredMemory(raw["memory"]),
         totalQuizzesTaken: nonNegativeInt(rawProgress["totalQuizzesTaken"]),
         totalCorrectAnswers: nonNegativeInt(rawProgress["totalCorrectAnswers"]),
+        studyLog: decodeStudyLog(rawProgress["studyLog"]),
       },
       prefs: decodePrefs(raw["prefs"]),
       tombstones,
@@ -582,7 +620,7 @@ export interface SyncSummary {
 /**
  * The data part of a merge (PLAN.md, Phase 9 rule 1): union of days, and a day on both sides with different content
  * keeps THIS DEVICE's version (lessons have no timestamps); word records merge per word (see `pickRecord`); the two
- * counters take the larger value; completed days and starred ids are the union; a weak id follows whichever side won
+ * counters take the larger value, and so does each day of the study log (`mergeLogs`); completed days and starred ids are the union; a weak id follows whichever side won
  * that word's record (so a right answer that cleared it isn't undone), or the union when only one side has the
  * record. Prefs are merged as on a first meeting (the account's win unless only the device has one); `planSync`
  * redoes them against the saved base. Deletions are NOT handled here (see `planSync`). Pure: neither input is changed.
@@ -629,6 +667,7 @@ export function mergeSnapshots(device: SyncSnapshot, cloud: SyncSnapshot): SyncS
       vocabMemory,
       totalQuizzesTaken: Math.max(d.totalQuizzesTaken, c.totalQuizzesTaken),
       totalCorrectAnswers: Math.max(d.totalCorrectAnswers, c.totalCorrectAnswers),
+      studyLog: mergeLogs(d.studyLog, c.studyLog),
     },
     prefs: mergePrefs(device.prefs, cloud.prefs, null),
     tombstones: { ...cloud.tombstones },
@@ -747,6 +786,11 @@ export function planSync(
     }
     result = { ...device, tombstones };
   }
+  // 18a: the study log keeps only its last 120 days here too, so a merge can't bring back days a device already pruned
+  // (which would otherwise bounce between the device and the account after every answer). Usually returns it unchanged.
+  const studyLog = pruneLog(result.progress.studyLog, localDay(ctx.now));
+  if (studyLog !== result.progress.studyLog)
+    result = { ...result, progress: { ...result.progress, studyLog } };
 
   const deviceDays = new Map(device.lessons.map((l) => [l.dayNumber, l] as const));
   const cloudDays = new Map(cloud.lessons.map((l) => [l.dayNumber, l] as const));

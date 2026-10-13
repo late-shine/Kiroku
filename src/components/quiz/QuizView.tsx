@@ -13,6 +13,7 @@ import {
   reviewCount,
   type VocabMemory,
 } from "@/lib/word-memory";
+import { pruneLog, recordStudy } from "@/lib/study-log";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 import {
   DEFAULT_QUESTION_STYLE,
@@ -198,6 +199,8 @@ export function QuizView({
       weakVocabIds: updateWeakIds(p.weakVocabIds, id, correct),
       // Phase 14b: every answer, in every scope, updates the word's review record (box + due date).
       vocabMemory: recordAnswer(p.vocabMemory, question.word, correct, now),
+      // Phase 18a: one more answer on today's local day, for the 7-day graph (older than 120 days is dropped).
+      studyLog: pruneLog(recordStudy(p.studyLog, localDay(now), correct), localDay(now)),
     }));
   };
   const next = () =>

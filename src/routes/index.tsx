@@ -61,6 +61,7 @@ import {
   parseStoredMemory,
   pruneMemory,
 } from "@/lib/word-memory";
+import { parseStoredStudyLog } from "@/lib/study-log";
 import { VocabList } from "@/components/lesson/VocabList";
 import { PointChips } from "@/components/lesson/PointChips";
 import { normalizeLessonShape } from "@/lib/lesson-schema";
@@ -109,6 +110,7 @@ const emptyProgress: UserProgressState = {
   vocabMemory: {},
   totalQuizzesTaken: 0,
   totalCorrectAnswers: 0,
+  studyLog: {},
   backgroundIndex: 0,
   bgZoomSpeed: "slow",
   showFurigana: true,
@@ -119,7 +121,13 @@ function loadProgress() {
   migrateLegacyStorage();
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.progress) ?? "{}");
-    return { ...emptyProgress, ...saved, vocabMemory: parseStoredMemory(saved?.vocabMemory) };
+    return {
+      ...emptyProgress,
+      ...saved,
+      vocabMemory: parseStoredMemory(saved?.vocabMemory),
+      // Phase 18a: saves from before the study log have none; anything malformed is dropped.
+      studyLog: parseStoredStudyLog(saved?.studyLog),
+    };
   } catch {
     return emptyProgress;
   }

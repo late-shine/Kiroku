@@ -102,6 +102,12 @@ export interface WordMemory {
   lastAnswered: string;
 }
 
+/** Phase 18a: what was answered on one local calendar day (`correct` never exceeds `answered`). */
+export interface StudyDay {
+  answered: number;
+  correct: number;
+}
+
 export interface UserProgressState {
   completedDays: number[];
   currentDay: number;
@@ -111,6 +117,11 @@ export interface UserProgressState {
   vocabMemory: Record<string, WordMemory>;
   totalQuizzesTaken: number;
   totalCorrectAnswers: number;
+  /**
+   * Phase 18a: quiz activity per LOCAL calendar day, keyed "YYYY-MM-DD", at most the last 120 days. The data
+   * under the 7-day graph (18b). Empty for new users and for backups made before 18a.
+   */
+  studyLog: Record<string, StudyDay>;
   lastQuizScore?: { correct: number; total: number; date: string };
   backgroundIndex: number;
   bgZoomSpeed: "slow" | "medium" | "still";

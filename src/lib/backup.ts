@@ -4,7 +4,7 @@
  * Pure functions only (no React, no localStorage, no DOM) so they can be tested without a browser.
  * `ProgressView`'s Export / Restore controls in `src/routes/index.tsx` are the only callers.
  *
- * Format (version 3):  { app: "kiroku", version: 3, exportedAt: <ISO string>, lessons, progress }
+ * Format (version 4):  { app: "kiroku", version: 4, exportedAt: <ISO string>, lessons, progress }
  *
  * What is deliberately NOT in a backup:
  * - The Gemini API key (BYOK rule — backup files get shared and emailed). `buildBackup` only accepts
@@ -24,11 +24,12 @@ import {
   grammarPointSchema,
   normalizeLessonShape,
 } from "@/lib/lesson-schema";
+import { studyLogSchema } from "@/lib/study-log";
 import { vocabMemorySchema } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 export const BACKUP_APP = "kiroku";
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 
 export interface BackupFile {
   app: typeof BACKUP_APP;
@@ -96,6 +97,7 @@ const progressSchema = z
     vocabMemory: vocabMemorySchema,
     totalQuizzesTaken: z.number().int().nonnegative(),
     totalCorrectAnswers: z.number().int().nonnegative(),
+    studyLog: studyLogSchema,
     lastQuizScore: z.object({
       correct: z.number().int().nonnegative(),
       total: z.number().int().nonnegative(),
@@ -121,6 +123,7 @@ function fillProgress(
     vocabMemory: parsed.vocabMemory ?? defaults.vocabMemory,
     totalQuizzesTaken: parsed.totalQuizzesTaken ?? defaults.totalQuizzesTaken,
     totalCorrectAnswers: parsed.totalCorrectAnswers ?? defaults.totalCorrectAnswers,
+    studyLog: parsed.studyLog ?? defaults.studyLog,
     ...(lastQuizScore ? { lastQuizScore } : {}),
     backgroundIndex: parsed.backgroundIndex ?? defaults.backgroundIndex,
     bgZoomSpeed: parsed.bgZoomSpeed ?? defaults.bgZoomSpeed,
@@ -144,6 +147,8 @@ type RawFile = Record<string, unknown>;
  * v2 → v3 (Phase 17): a day's `kanji` and `grammar` become arrays (1–5 kanji, 1–3 grammar points). Older files hold a
  * single object for each; this wraps it into a one-element array. (The lesson schema accepts both shapes too, so a
  * hand-edited v3 file with a single object still loads.)
+ * v3 → v4 (Phase 18a): progress gains `studyLog` (quiz activity per local day, for the 7-day graph). Older files have
+ * none, so they restore with an empty log: there is no honest way to rebuild earlier days.
  */
 const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
   (file) => file,
@@ -156,6 +161,11 @@ const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
     const lessons = file["lessons"];
     if (!Array.isArray(lessons)) return file;
     return { ...file, lessons: lessons.map((lesson: unknown) => normalizeLessonShape(lesson)) };
+  },
+  (file) => {
+    const progress = file["progress"];
+    if (!isRecord(progress) || "studyLog" in progress) return file;
+    return { ...file, progress: { ...progress, studyLog: {} } };
   },
 ];
 

@@ -62,6 +62,7 @@ import {
   pruneMemory,
 } from "@/lib/word-memory";
 import { parseStoredStudyLog } from "@/lib/study-log";
+import { RhythmChart } from "@/components/progress/RhythmChart";
 import { VocabList } from "@/components/lesson/VocabList";
 import { PointChips } from "@/components/lesson/PointChips";
 import { normalizeLessonShape } from "@/lib/lesson-schema";
@@ -803,7 +804,7 @@ function LessonWorkspace({
               label="mastered"
             />
           </div>
-          <MomentumGraph />
+          <RhythmChart studyLog={progress.studyLog} compact />
         </GlassPane>
         <GlassPane className="lg:col-span-3 lg:mt-8" tilt="0.5deg" delay="240ms">
           <CurriculumList
@@ -1266,29 +1267,6 @@ function Metric({ value, label }: { value: number; label: string }) {
     </div>
   );
 }
-function MomentumGraph() {
-  return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-        <span>7-day rhythm</span>
-        <span className="text-primary font-semibold">steady</span>
-      </div>
-      <svg viewBox="0 0 280 72" className="mt-2 w-full">
-        <path
-          d="M2 60 C35 58,38 32,70 40 S115 54,140 31 S185 12,210 26 S250 45,278 12"
-          fill="none"
-          stroke="currentColor"
-          className="graph-draw text-primary drop-shadow-[0_0_6px_var(--glow)]"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeDasharray="500"
-        />
-        <path d="M2 66H278" stroke="currentColor" className="text-foreground/10" strokeWidth="1" />
-      </svg>
-    </div>
-  );
-}
-
 function ProgressView({
   lessons,
   progress,
@@ -1335,7 +1313,7 @@ function ProgressView({
           <Metric value={progress.totalQuizzesTaken} label="answered" />
           <Metric value={lessons.reduce((n, l) => n + l.vocab.length, 0)} label="words" />
         </div>
-        <MomentumGraph />
+        <RhythmChart studyLog={progress.studyLog} />
         <BackupControls
           lessons={lessons}
           progress={progress}

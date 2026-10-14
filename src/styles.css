@@ -134,12 +134,13 @@ body {
     transform: translateY(0) rotate(var(--tilt, 0deg));
   }
 }
-@keyframes line-draw {
+/* Phase 18b: the 7-day chart's bars grow up from the baseline (reduced motion is handled by the global rule below). */
+@keyframes bar-grow {
   from {
-    stroke-dashoffset: 500;
+    transform: scaleY(0);
   }
   to {
-    stroke-dashoffset: 0;
+    transform: scaleY(1);
   }
 }
 @keyframes equalize {
@@ -185,8 +186,9 @@ body {
 @utility pane-in {
   animation: pane-in 0.55s ease-out both;
 }
-@utility graph-draw {
-  animation: line-draw 1.5s ease-out both;
+@utility bar-grow {
+  animation: bar-grow 0.7s ease-out both;
+  transform-origin: bottom;
 }
 @utility equalize {
   animation: equalize 0.9s ease-in-out infinite;

@@ -134,3 +134,94 @@ export function mergeLogs(a: StudyLog, b: StudyLog): StudyLog {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Phase 18b — what the 7-day chart shows. Pure text and numbers, so the wording is checkable without a browser
+// (handoffs/phase-18-study-log-check.ts); `src/components/progress/RhythmChart.tsx` only draws them.
+// ---------------------------------------------------------------------------------------------
+
+export const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+/** 0 = Sunday … 6 = Saturday for a local day "YYYY-MM-DD", or null when `day` is not a real day. */
+export function weekdayOf(day: string): number | null {
+  if (!isValidDay(day)) return null;
+  return new Date(
+    Number(day.slice(0, 4)),
+    Number(day.slice(5, 7)) - 1,
+    Number(day.slice(8, 10)),
+  ).getDay();
+}
+
+/** "Tue" / "Tuesday" for a local day ("" when it is not a real day). */
+export function weekdayName(day: string, long = false): string {
+  const n = weekdayOf(day);
+  const name = n === null ? undefined : WEEKDAY_NAMES[n];
+  return name === undefined ? "" : long ? name : name.slice(0, 3);
+}
+
+/** The bar scale: the tallest day, but never less than 10, so a day with 1-2 answers stays visible without filling the chart. */
+export const chartScale = (days: readonly StudyDay[]): number =>
+  Math.max(10, ...days.map((d) => d.answered));
+
+export interface WeekTotals {
+  answered: number;
+  correct: number;
+  /** Days with at least one answer. */
+  activeDays: number;
+  /** Whole-number share of right answers, or null when nothing was answered. */
+  percentRight: number | null;
+}
+
+export function weekTotals(days: readonly StudyDay[]): WeekTotals {
+  const answered = days.reduce((n, d) => n + d.answered, 0);
+  const correct = days.reduce((n, d) => n + d.correct, 0);
+  return {
+    answered,
+    correct,
+    activeDays: days.filter((d) => d.answered > 0).length,
+    percentRight: answered > 0 ? Math.round((correct / answered) * 100) : null,
+  };
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** The line under the chart: "12 answers · 5 of 7 days · 83% right". */
+export function weekCaption(days: readonly StudyDay[]): string {
+  const t = weekTotals(days);
+  if (t.answered === 0) return `No answers in the last ${days.length} days`;
+  return `${plural(t.answered, "answer")} · ${t.activeDays} of ${days.length} days · ${t.percentRight}% right`;
+}
+
+/** One day, as shown when a bar is tapped or hovered: "Tue · 12 answered · 10 right". */
+export function dayCaption(d: DayActivity): string {
+  const name = weekdayName(d.day);
+  return d.answered === 0
+    ? `${name} · nothing answered`
+    : `${name} · ${d.answered} answered · ${d.correct} right`;
+}
+
+/** The whole week in one sentence, for the chart's `aria-label`. */
+export function weekAriaLabel(days: readonly DayActivity[], hasHistory: boolean): string {
+  const t = weekTotals(days);
+  if (!hasHistory) return `Quiz activity, last ${days.length} days: no answers yet.`;
+  const head =
+    t.answered === 0
+      ? `Quiz activity, last ${days.length} days: no answers this week.`
+      : `Quiz activity, last ${days.length} days: ${plural(t.answered, "answer")}, ${t.percentRight}% right, on ${t.activeDays} of ${days.length} days.`;
+  const each = days
+    .map((d) =>
+      d.answered === 0
+        ? `${weekdayName(d.day, true)}: none.`
+        : `${weekdayName(d.day, true)}: ${d.answered} answered, ${d.correct} right.`,
+    )
+    .join(" ");
+  return `${head} ${each}`;
+}

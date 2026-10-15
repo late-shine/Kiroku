@@ -1,0 +1,158 @@
+/**
+ * Phase 19a — the Profile page's pure part: the stored shape (`localStorage["kiroku_profile_v1"]`), name cleaning,
+ * the avatar presets, and the fallbacks that decide what name and picture to show. No React, no localStorage, no
+ * Firebase, so it can be checked from a plain script (handoffs/phase-19a-profile-check.ts).
+ *
+ * WHAT SYNCS: `name` and `glyph` (the avatar choice), as two entries of the account's `prefs` (see src/lib/sync.ts).
+ * WHAT DOES NOT: `lastExportAt` (when THIS device last made a backup file) stays on the device, and nothing here is
+ * in a backup file. The Google photo is never stored by Kiroku at all: it comes from the signed-in account each time.
+ *
+ * `null` means "never set on this device": it takes no part in a sync, so a device that was only used to export a
+ * backup can never overwrite the name another device chose. An empty string `""` for the name is a real choice
+ * ("use my Google name"), and it syncs.
+ */
+
+/** The rules cap `prefs/name` at this many characters (UTF-16 units, as the rules' `.length` counts them). */
+export const MAX_NAME_LENGTH = 24;
+
+/** The avatar the person can pick instead of the automatic one. The ids are what is stored and synced. */
+export const PROFILE_GLYPHS = [
+  { id: "ki", char: "記", label: "Record" },
+  { id: "neko", char: "猫", label: "Cat" },
+  { id: "tsuki", char: "月", label: "Moon" },
+  { id: "ha", char: "葉", label: "Leaf" },
+  { id: "hana", char: "花", label: "Flower" },
+  { id: "hoshi", char: "星", label: "Star" },
+  { id: "hotaru", char: "蛍", label: "Firefly" },
+  { id: "koke", char: "苔", label: "Moss" },
+] as const;
+
+/** "Automatic": your Google photo when signed in and it has one, otherwise your initial. The default. */
+export const GLYPH_AUTO = "auto";
+
+export const PROFILE_GLYPH_IDS: readonly string[] = [
+  GLYPH_AUTO,
+  ...PROFILE_GLYPHS.map((g) => g.id),
+];
+
+export const isGlyphId = (value: unknown): value is string =>
+  typeof value === "string" && PROFILE_GLYPH_IDS.includes(value);
+
+export interface Profile {
+  /** The name the person typed (`""` = deliberately empty); `null` = never set on this device. */
+  name: string | null;
+  /** `GLYPH_AUTO` or one of `PROFILE_GLYPHS`; `null` = never set on this device. */
+  glyph: string | null;
+  /** ISO time this device last made a backup file. Device-only, never synced. */
+  lastExportAt: string | null;
+}
+
+export const DEFAULT_PROFILE: Profile = { name: null, glyph: null, lastExportAt: null };
+
+/**
+ * Turns whatever was typed into a storable name: control characters dropped, runs of whitespace collapsed, trimmed,
+ * at most `MAX_NAME_LENGTH` UTF-16 units (a character is never cut in half).
+ */
+export function cleanName(raw: string): string {
+  let text = raw
+    // eslint-disable-next-line no-control-regex -- dropping control characters is the point
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length > MAX_NAME_LENGTH) {
+    text = text.slice(0, MAX_NAME_LENGTH);
+    const last = text.charCodeAt(text.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, -1); // half of an emoji
+    text = text.trim();
+  }
+  return text;
+}
+
+const validTime = (value: unknown): value is string =>
+  typeof value === "string" && value.length <= 40 && !Number.isNaN(Date.parse(value));
+
+/** Reads the stored text back safely. Missing, corrupt or odd data → the default; one bad field is just dropped. */
+export function parseStoredProfile(raw: string | null): Profile {
+  if (!raw) return { ...DEFAULT_PROFILE };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { ...DEFAULT_PROFILE };
+    }
+    const record = parsed as Record<string, unknown>;
+    const name = record["name"];
+    const glyph = record["glyph"];
+    const exported = record["lastExportAt"];
+    return {
+      name: typeof name === "string" ? cleanName(name) : null,
+      glyph: isGlyphId(glyph) ? glyph : null,
+      lastExportAt: validTime(exported) ? exported : null,
+    };
+  } catch {
+    return { ...DEFAULT_PROFILE };
+  }
+}
+
+export const serializeProfile = (profile: Profile): string => JSON.stringify(profile);
+
+/** The part of the profile that syncs (nothing for a field that was never set). */
+export function profileSyncFields(profile: Profile): { name?: string; glyph?: string } {
+  return {
+    ...(profile.name !== null ? { name: profile.name } : {}),
+    ...(profile.glyph !== null ? { glyph: profile.glyph } : {}),
+  };
+}
+
+/** What the sign-in knows about the person (all optional: nobody is signed in, or Google gave less). */
+export interface AccountIdentity {
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
+
+const localPart = (email: string) => email.split("@")[0] ?? "";
+
+/** The name to show: the typed one, else the Google name, else the start of the email, else "Learner". */
+export function resolveName(
+  profile: Pick<Profile, "name">,
+  account: AccountIdentity | null,
+): string {
+  const typed = profile.name ? cleanName(profile.name) : "";
+  if (typed) return typed;
+  const google = account?.displayName ? cleanName(account.displayName) : "";
+  if (google) return google;
+  const mail = account?.email ? cleanName(localPart(account.email)) : "";
+  return mail || "Learner";
+}
+
+/** First letter of a name, upper-cased (a whole character, so an emoji or a kanji is not cut in half). */
+export const initialOf = (name: string): string => {
+  const first = [...name.trim()][0] ?? "";
+  return first.toUpperCase();
+};
+
+export type Avatar =
+  | { kind: "photo"; url: string }
+  | { kind: "glyph"; char: string; id: string }
+  | { kind: "initial"; char: string }
+  | { kind: "none" };
+
+/** Only a plain https address is ever used as a picture. */
+const safePhoto = (url: string | null): string | null =>
+  url !== null && /^https:\/\//i.test(url) ? url : null;
+
+/**
+ * Which picture to show. A chosen glyph always wins; otherwise the Google photo (signed in, and Google has one);
+ * otherwise the initial of the resolved name, but only when there IS a name to take it from (typed, or signed in).
+ * With none of those the caller shows its neutral icon (`none`).
+ */
+export function avatarFor(profile: Profile, account: AccountIdentity | null): Avatar {
+  const glyph = PROFILE_GLYPHS.find((g) => g.id === profile.glyph);
+  if (glyph) return { kind: "glyph", char: glyph.char, id: glyph.id };
+  const photo = safePhoto(account?.photoURL ?? null);
+  if (photo) return { kind: "photo", url: photo };
+  const hasSource = Boolean(profile.name) || account !== null;
+  if (!hasSource) return { kind: "none" };
+  const initial = initialOf(resolveName(profile, account));
+  return initial ? { kind: "initial", char: initial } : { kind: "none" };
+}

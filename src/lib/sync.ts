@@ -5,7 +5,8 @@
  * WHAT SYNCS: the lessons; the learning progress inside `UserProgressState` (completed days, starred ids, weak ids,
  * the per-word review records, the two quiz counters, and since 18a the study log: answers per local day, for the
  * 7-day graph); and, since 9c, a few small preferences (`prefs`: background,
- * zoom speed, furigana, dismissed tip ids) and the record of which days were deleted (`deleted`, "tombstones").
+ * zoom speed, furigana, dismissed tip ids, and since 19a the profile name and avatar choice) and the record of which
+ * days were deleted (`deleted`, "tombstones").
  * WHAT DOES NOT: the Gemini key, music, the voice choice (a voice that exists on one device usually doesn't exist on
  * another: see src/lib/voice.ts), the temporary quiz state. `currentDay` and `lastQuizScore` are not synced either:
  * nothing in the app reads or writes them any more.
@@ -20,6 +21,7 @@
  *   progress/studyLog/<YYYY-MM-DD>  { a: answered, c: correct }   (18a; a map keyed by local day, at most ~120 days)
  *   memory/<vocabId>       one record per word: japanese, box, due, right, wrong, lastAnswered
  *   prefs                  backgroundIndex, bgZoomSpeed, showFurigana, tips { "quiz": true }   (9c)
+ *                          name (a string, <= 24 characters, "" allowed), glyph (an avatar id)     (19a)
  *   deleted/d5             "2026-10-05T10:00:00.000Z": a day was deleted at that time (9c, see below)
  *   meta                   { schema: 1, updatedAt }
  * An empty account reads back as `null`; a missing node always means "empty", never "deleted". A deletion is only
@@ -40,6 +42,7 @@
  * changes here, change the rules too (the check script evaluates the real rules file against real trees).
  */
 import { restoredLessonSchema } from "@/lib/backup";
+import { MAX_NAME_LENGTH, isGlyphId } from "@/lib/profile";
 import { mergeLogs, pruneLog, type StudyLog } from "@/lib/study-log";
 import { isValidDay, localDay, parseStoredMemory, type VocabMemory } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState, WordMemory } from "@/types/japanese";
@@ -74,6 +77,9 @@ export interface SyncPrefs {
   showFurigana?: boolean;
   /** Dismissed first-run tip ids, sorted. */
   tips?: string[];
+  /** Phase 19a: the profile name (may be `""`: "use my Google name") and the avatar choice (an id from src/lib/profile.ts). */
+  name?: string;
+  glyph?: string;
 }
 
 /** Everything that syncs, in the shape the app already uses (arrays and a record, not the cloud's maps). */
@@ -100,12 +106,14 @@ const sortedUnique = (xs: readonly string[]): string[] => [...new Set(xs)].sort(
 
 /**
  * `tips`: this device's dismissed tip ids (pass them when you have them; leave out in tests that don't care).
- * The three screen prefs come from `progress`, where the app already keeps them.
+ * `profile` (19a): this device's profile name and avatar choice; a field this device never set is left out, so it
+ * takes no part in the merge. The three screen prefs come from `progress`, where the app already keeps them.
  */
 export function snapshotOf(
   lessons: readonly DayLesson[],
   progress: UserProgressState,
   tips?: readonly string[],
+  profile?: { name?: string; glyph?: string },
 ): SyncSnapshot {
   return {
     lessons: [...lessons].sort((a, b) => a.dayNumber - b.dayNumber),
@@ -123,6 +131,8 @@ export function snapshotOf(
       bgZoomSpeed: progress.bgZoomSpeed,
       showFurigana: progress.showFurigana,
       ...(tips ? { tips: sortedUnique(tips) } : {}),
+      ...(profile?.name !== undefined ? { name: profile.name } : {}),
+      ...(profile?.glyph !== undefined ? { glyph: profile.glyph } : {}),
     },
     tombstones: {},
   };
@@ -324,6 +334,9 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
   if (typeof pr.showFurigana === "boolean") prefs["showFurigana"] = pr.showFurigana;
   const tips = (pr.tips ?? []).filter((id) => TIP_KEY_RE.test(id));
   if (tips.length > 0) prefs["tips"] = flags(tips);
+  // 19a: a name over the limit is left out (one refused value rejects the WHOLE write); "" is kept so that clearing a name syncs.
+  if (typeof pr.name === "string" && pr.name.length <= MAX_NAME_LENGTH) prefs["name"] = pr.name;
+  if (isGlyphId(pr.glyph)) prefs["glyph"] = pr.glyph;
 
   const deleted: Record<string, string> = {};
   for (const [key, at] of Object.entries(s.tombstones)) {
@@ -382,6 +395,9 @@ function decodePrefs(node: unknown): SyncPrefs {
   }
   if (typeof node["showFurigana"] === "boolean") prefs.showFurigana = node["showFurigana"];
   if ("tips" in node) prefs.tips = keysWithTrue(node["tips"], (k) => TIP_KEY_RE.test(k)).sort();
+  const name = node["name"];
+  if (typeof name === "string" && name.length <= MAX_NAME_LENGTH) prefs.name = name;
+  if (isGlyphId(node["glyph"])) prefs.glyph = node["glyph"];
   return prefs;
 }
 
@@ -578,6 +594,9 @@ export function sanitizePrefs(raw: unknown): SyncPrefs {
       tips.filter((t): t is string => typeof t === "string" && TIP_KEY_RE.test(t)),
     );
   }
+  const name = raw["name"];
+  if (typeof name === "string" && name.length <= MAX_NAME_LENGTH) out.name = name;
+  if (isGlyphId(raw["glyph"])) out.glyph = raw["glyph"];
   return out;
 }
 
@@ -601,6 +620,10 @@ export function mergePrefs(device: SyncPrefs, cloud: SyncPrefs, base: SyncPrefs 
   if (furigana !== undefined) out.showFurigana = furigana;
   const tips = mergeTips(device.tips, cloud.tips, base?.tips, hasBase);
   if (tips !== undefined) out.tips = tips;
+  const name = pickScalar(device.name, cloud.name, base?.name, hasBase);
+  if (name !== undefined) out.name = name;
+  const glyph = pickScalar(device.glyph, cloud.glyph, base?.glyph, hasBase);
+  if (glyph !== undefined) out.glyph = glyph;
   return out;
 }
 

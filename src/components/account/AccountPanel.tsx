@@ -1,6 +1,7 @@
 // Phases 9a-9c: the account body (status, sign in / sign out, sync, errors). Purely presentational: it renders what
-// the shared controllers say, so the header popover and the Progress card look the same.
-import { useState } from "react";
+// the shared controllers say. Phase 19a: it now lives only on the Profile page (the header popover and the Progress
+// card are gone), and its two long explanatory paragraphs sit behind a "How syncing works" disclosure.
+import { useState, type ReactNode } from "react";
 import { LogIn, LogOut, RefreshCw } from "lucide-react";
 import { timeAgo } from "@/lib/sync";
 import type { AccountSyncValue } from "./AccountSyncContext";
@@ -9,6 +10,18 @@ import type { SyncController } from "./useSync";
 const buttonClass =
   "mt-3 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs disabled:opacity-50";
 const linkClass = "underline underline-offset-2 hover:text-primary disabled:opacity-50";
+
+/** The long explanations, folded away so the account block stays short. */
+function HowSyncingWorks({ children }: { children: ReactNode }) {
+  return (
+    <details className="mt-3 text-[11px] text-muted-foreground">
+      <summary className="cursor-pointer select-none py-1 underline underline-offset-2 hover:text-primary">
+        How syncing works
+      </summary>
+      <div className="mt-1 space-y-2">{children}</div>
+    </details>
+  );
+}
 
 /** The line under the email: what sync is doing right now, in plain words. */
 function StatusLine({ sync }: { sync: SyncController }) {
@@ -46,14 +59,18 @@ export function AccountPanel({ account, sync }: AccountSyncValue) {
       {auth.status === "out" && (
         <>
           <p className="mt-2 text-xs text-muted-foreground">
-            Optional. Kiroku works fully without an account. Sign in to keep a copy of your lessons
-            and progress in your account and carry it between devices. Nothing is sent until you
-            choose how to sync the first time.
+            Optional. Kiroku works fully without an account.
           </p>
           <button onClick={() => void account.signIn()} disabled={working} className={buttonClass}>
             <LogIn className="size-3" />
             Sign in with Google
           </button>
+          <HowSyncingWorks>
+            <p>
+              Sign in to keep a copy of your lessons and progress in your account and carry it
+              between devices. Nothing is sent until you choose how to sync the first time.
+            </p>
+          </HowSyncingWorks>
         </>
       )}
       {auth.status === "in" && (
@@ -93,10 +110,12 @@ export function AccountPanel({ account, sync }: AccountSyncValue) {
                   </span>
                 </label>
               )}
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Syncs lessons, review progress, stars and a few display settings. Your Gemini key,
-                music and voice stay on this device.
-              </p>
+              <HowSyncingWorks>
+                <p>
+                  Syncs lessons, review progress, stars, your name and avatar, and a few display
+                  settings. Your Gemini key, music and voice stay on this device.
+                </p>
+              </HowSyncingWorks>
               <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                 <button
                   onClick={() => void sync.chooseHow()}

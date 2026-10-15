@@ -1,17 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import {
   BookOpen,
   Bot,
   Check,
   ChevronLeft,
   ChevronRight,
-  Download,
   CircleHelp,
   Image,
   Music2,
-  RotateCcw,
   Search,
   Sparkles,
   Star,
@@ -25,7 +22,6 @@ import {
 import type { DayLesson, UserProgressState } from "../types/japanese";
 import { MusicPanel } from "@/components/music/MusicPanel";
 import { SceneBackdrop } from "@/components/atmosphere/SceneBackdrop";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { SpeakButton } from "@/components/voice/SpeakButton";
 import { useSpeechSupported } from "@/hooks/use-speech-supported";
 import { speakableReading } from "@/lib/speak-text";
@@ -43,11 +39,9 @@ import {
   saveAtmosphere,
   type AtmospherePrefs,
 } from "@/lib/atmosphere-prefs";
-import { isEmptySnapshot, snapshotOf } from "@/lib/sync";
 import { speak } from "@/lib/voice";
 import { VoicePicker } from "@/components/voice/VoicePicker";
 import { WelcomePanel } from "@/components/welcome/WelcomePanel";
-import { buildBackup, parseBackup, type ParsedBackup } from "@/lib/backup";
 import { HelpCard } from "@/components/tips/HelpCard";
 import { TipCard } from "@/components/tips/TipCard";
 import { useTips } from "@/components/tips/useTips";
@@ -66,7 +60,8 @@ import { RhythmChart } from "@/components/progress/RhythmChart";
 import { VocabList } from "@/components/lesson/VocabList";
 import { PointChips } from "@/components/lesson/PointChips";
 import { normalizeLessonShape } from "@/lib/lesson-schema";
-import { AccountCard } from "@/components/account/AccountCard";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ProfilePage } from "@/components/profile/ProfilePage";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
 import { AccountSyncProvider } from "@/components/account/AccountSyncProvider";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
@@ -91,7 +86,7 @@ export const Route = createFileRoute("/")({
   component: JapaneseDesk,
 });
 
-type MainTab = "lesson" | "quiz" | "progress" | "atmosphere";
+type MainTab = "lesson" | "quiz" | "progress" | "atmosphere" | "profile";
 type LessonTab = "overview" | "grammar" | "kanji" | "vocab";
 const backgrounds = [
   { name: "Misty companions", url: cats },
@@ -329,6 +324,7 @@ function JapaneseDesk() {
             onAI={() => setAiOpen(true)}
             onSound={() => setSoundOpen((v) => !v)}
             onHelp={() => setHelpOpen(true)}
+            onProfile={() => setTab("profile")}
           />
           <main className="flex-1 overflow-y-auto py-5 md:py-7">
             {mounted &&
@@ -348,11 +344,11 @@ function JapaneseDesk() {
                   onDeleteDays={deleteDays}
                 />
               ) : welcomeSkipped ? (
-                <EmptyLessons onAI={() => setAiOpen(true)} onRestore={() => setTab("progress")} />
+                <EmptyLessons onAI={() => setAiOpen(true)} onRestore={() => setTab("profile")} />
               ) : (
                 <WelcomePanel
                   onAI={() => setAiOpen(true)}
-                  onRestore={() => setTab("progress")}
+                  onRestore={() => setTab("profile")}
                   onSkip={() => setWelcomeSkipped(true)}
                 />
               ))}
@@ -380,10 +376,34 @@ function JapaneseDesk() {
                   lessons={lessons}
                   progress={progress}
                   setProgress={setProgress}
-                  setLessons={setLessons}
-                  onResetAll={resetAll}
-                  onRestored={setDay}
                   onAI={() => setAiOpen(true)}
+                  onRestore={() => setTab("profile")}
+                />
+              </>
+            )}
+            {mounted && tab === "profile" && (
+              <>
+                {tips.isVisible("profile") && (
+                  <TipCard id="profile" onDismiss={tips.dismiss} className="mb-4 max-w-5xl" />
+                )}
+                <ProfilePage
+                  lessons={lessons}
+                  progress={progress}
+                  setLessons={setLessons}
+                  setProgress={setProgress}
+                  emptyProgress={emptyProgress}
+                  onRestored={setDay}
+                  onResetAll={resetAll}
+                  due={quizDue}
+                  mastered={countMastered(
+                    lessons.flatMap((l) => l.vocab),
+                    progress.masteredVocabIds,
+                    progress.vocabMemory,
+                  )}
+                  onOpenProgress={() => setTab("progress")}
+                  onOpenQuiz={() => setTab("quiz")}
+                  onOpenAtmosphere={() => setTab("atmosphere")}
+                  onShowTipsAgain={tips.showAgain}
                 />
               </>
             )}
@@ -451,6 +471,7 @@ function Header({
   onAI,
   onSound,
   onHelp,
+  onProfile,
 }: {
   quizDue: number;
   tab: MainTab;
@@ -461,6 +482,7 @@ function Header({
   onAI: () => void;
   onSound: () => void;
   onHelp: () => void;
+  onProfile: () => void;
 }) {
   const nav: { id: MainTab; label: string; icon: typeof BookOpen }[] = [
     { id: "lesson", label: "Lessons", icon: BookOpen },
@@ -530,7 +552,7 @@ function Header({
             </button>
           </div>
         )}
-        <HeaderAccount />
+        <HeaderAccount onOpen={onProfile} active={tab === "profile"} />
         <button
           onClick={onAI}
           aria-label="AI lesson import"
@@ -955,56 +977,6 @@ function CurriculumList({
   );
 }
 
-// A page-level, styled dialog rather than window.confirm — guaranteed to render inside the page
-// itself (no native dialog that can end up behind the window or lose focus), and it can show a
-// count for a bulk delete, which window.confirm's fixed wording can't do cleanly.
-function ConfirmDialog({
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  useScrollLock();
-  // Portaled to <body>: the curriculum pane has backdrop-blur + a rotate transform, and either one makes
-  // a `fixed` child position relative to the pane instead of the viewport (dialog would be squashed inside it).
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-background/70 p-4 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="glass-panel-strong w-full max-w-sm rounded-xl p-5"
-      >
-        <h2 className="font-display text-lg font-medium text-foreground">{title}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{body}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded-lg border border-border/70 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="rounded-lg bg-destructive px-3.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 // Shown when every day has been deleted or reset — the old code returned null here (a blank
 // screen with no way back in), which was never exercised until Phase 3d made zero lessons reachable.
 function EmptyLessons({ onAI, onRestore }: { onAI: () => void; onRestore: () => void }) {
@@ -1018,7 +990,7 @@ function EmptyLessons({ onAI, onRestore }: { onAI: () => void; onRestore: () => 
           Your curriculum is empty
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Build a day with AI Lesson Studio, or restore a backup from the Progress tab.
+          Build a day with AI Lesson Studio, or restore a backup from your Profile.
         </p>
         <div className="mt-6 flex flex-wrap gap-2.5">
           <button
@@ -1271,24 +1243,17 @@ function ProgressView({
   lessons,
   progress,
   setProgress,
-  setLessons,
-  onResetAll,
-  onRestored,
   onAI,
+  onRestore,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
   setProgress: React.Dispatch<React.SetStateAction<UserProgressState>>;
-  setLessons: React.Dispatch<React.SetStateAction<DayLesson[]>>;
-  onResetAll: () => void;
-  onRestored: (firstDay: number) => void;
   onAI: () => void;
+  /** Phase 19a: Export / Restore / Reset live on the Profile page now, so this opens it. */
+  onRestore: () => void;
 }) {
   const [query, setQuery] = useState("");
-  // The "Restore a backup" button in the empty state clicks the same file input as BackupControls' Restore.
-  const restoreInputRef = useRef<HTMLInputElement>(null);
-  // Nothing worth exporting or resetting (the same test the sync uses for an empty device).
-  const hasData = !isEmptySnapshot(snapshotOf(lessons, progress));
   const vocab = lessons
     .flatMap((l) => l.vocab)
     .filter((w) =>
@@ -1314,19 +1279,6 @@ function ProgressView({
           <Metric value={lessons.reduce((n, l) => n + l.vocab.length, 0)} label="words" />
         </div>
         <RhythmChart studyLog={progress.studyLog} />
-        <BackupControls
-          lessons={lessons}
-          progress={progress}
-          setLessons={setLessons}
-          setProgress={setProgress}
-          onRestored={onRestored}
-          canExport={hasData}
-          restoreInputRef={restoreInputRef}
-        />
-        <AccountCard />
-        <div className="mt-4 border-t border-border/50 pt-3">
-          <ResetControl onReset={onResetAll} disabled={!hasData} />
-        </div>
       </GlassPane>
       <GlassPane className="lg:col-span-2 lg:mt-4">
         {lessons.length === 0 ? (
@@ -1346,7 +1298,7 @@ function ProgressView({
               </button>
               <button
                 type="button"
-                onClick={() => restoreInputRef.current?.click()}
+                onClick={onRestore}
                 className="hit-area flex items-center gap-2 rounded-lg border border-border/70 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Upload className="size-4" />
@@ -1408,217 +1360,6 @@ function ProgressView({
           </>
         )}
       </GlassPane>
-    </div>
-  );
-}
-
-// Phase 13 — Export + validated Restore. All the checking lives in `src/lib/backup.ts`; this only
-// shows the result. A bad file never touches state: it becomes an in-app message, and a good one
-// waits behind a ConfirmDialog that shows day counts before anything is replaced.
-function BackupControls({
-  lessons,
-  progress,
-  setLessons,
-  setProgress,
-  onRestored,
-  canExport,
-  restoreInputRef,
-}: {
-  lessons: DayLesson[];
-  progress: UserProgressState;
-  setLessons: React.Dispatch<React.SetStateAction<DayLesson[]>>;
-  setProgress: React.Dispatch<React.SetStateAction<UserProgressState>>;
-  onRestored: (firstDay: number) => void;
-  /** False when there is nothing to export (no lessons and no progress). Restore always stays available. */
-  canExport: boolean;
-  restoreInputRef: React.RefObject<HTMLInputElement | null>;
-}) {
-  const [notice, setNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
-  const [pending, setPending] = useState<ParsedBackup | null>(null);
-  const { sync } = useAccountSync();
-  const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
-
-  const exportData = () => {
-    setNotice(null);
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(buildBackup(lessons, progress), null, 2)], {
-        type: "application/json",
-      }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "kiroku-backup.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
-  const chooseFile = async (file?: File) => {
-    if (!file) return;
-    setNotice(null);
-    let text: string;
-    try {
-      text = await file.text();
-    } catch {
-      setNotice({ kind: "error", text: "Couldn't read that file, so nothing was restored." });
-      return;
-    }
-    const result = parseBackup(text, emptyProgress);
-    if (!result.ok) {
-      setNotice({ kind: "error", text: result.message });
-      return;
-    }
-    setPending(result.data);
-  };
-
-  const madeOn = pending?.exportedAt
-    ? ` It was exported on ${new Date(pending.exportedAt).toLocaleDateString()}.`
-    : "";
-  return (
-    <div className="mt-5">
-      <div className="flex gap-2">
-        <button
-          onClick={exportData}
-          disabled={!canExport}
-          className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Download className="size-3" />
-          Export
-        </button>
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-xs">
-          <Upload className="size-3" />
-          Restore
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              void chooseFile(file);
-            }}
-          />
-        </label>
-      </div>
-      {!canExport && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Nothing to export yet. Build or restore a lesson first.
-        </p>
-      )}
-      {notice && (
-        <p
-          role={notice.kind === "error" ? "alert" : "status"}
-          className={`mt-3 text-xs ${notice.kind === "error" ? "text-destructive" : "text-success"}`}
-        >
-          {notice.text}
-        </p>
-      )}
-      {pending && (
-        <ConfirmDialog
-          title="Replace your data with this backup?"
-          body={`${lessons.length === 0 ? `Restore the backup's ${days(pending.lessons.length)}?` : `Replace your ${days(lessons.length)} with the backup's ${days(pending.lessons.length)}?`}${madeOn} Your current lessons and progress will be overwritten — export first if you want to keep them.${sync.linked ? " You're signed in with sync, so the restored days will be ADDED to your account on the next sync; nothing in your account is deleted, and days your account has that this backup doesn't will come back to this device." : ""}`}
-          confirmLabel="Replace"
-          onConfirm={() => {
-            setLessons(pending.lessons);
-            setProgress(pending.progress);
-            // Phase 11b: point the shell at the first restored day (lessons come back sorted), so the header can't read D1 for a backup that starts at Day 5. An empty backup leaves `day` alone.
-            const firstRestored = pending.lessons[0];
-            if (firstRestored) onRestored(firstRestored.dayNumber);
-            setNotice({
-              kind: "success",
-              text: `Restored ${days(pending.lessons.length)} from the backup.`,
-            });
-            setPending(null);
-          }}
-          onCancel={() => setPending(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-// A stronger confirmation than the curriculum list's ConfirmDialog, since this clears every
-// lesson and all progress at once. Requires typing "reset" rather than a single click.
-function ResetControl({ onReset, disabled }: { onReset: () => void; disabled: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  // Phase 9c: signed in and synced → a second question about the account's copy (default: leave it alone).
-  const { sync } = useAccountSync();
-  const [alsoCloud, setAlsoCloud] = useState(false);
-  const askCloud = sync.linked && sync.canDeleteCloud;
-  if (!open) {
-    return (
-      <>
-        <button
-          onClick={() => setOpen(true)}
-          disabled={disabled}
-          className="flex items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <RotateCcw className="size-3" />
-          Reset all progress
-        </button>
-        {disabled && <p className="mt-2 text-xs text-muted-foreground">Nothing to reset yet.</p>}
-      </>
-    );
-  }
-  const canConfirm = text.trim().toLowerCase() === "reset";
-  return (
-    <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-      <p className="text-xs text-muted-foreground">
-        This deletes every lesson and all progress — back it up first if you're not sure. Type{" "}
-        <span className="font-semibold text-foreground">reset</span> to confirm.
-      </p>
-      {askCloud && (
-        <label className="flex cursor-pointer items-start gap-2 text-xs">
-          <input
-            type="checkbox"
-            className="mt-0.5 accent-primary"
-            checked={alsoCloud}
-            onChange={(e) => setAlsoCloud(e.target.checked)}
-          />
-          <span>
-            Also delete the copy in my account
-            <span className="block text-muted-foreground">
-              {alsoCloud
-                ? "Your account's copy is erased too. Your other devices keep theirs and may upload it again."
-                : "Left off: your account keeps its copy, and automatic sync is switched off on this device so it doesn't bring everything straight back. Sync now brings it back whenever you want."}
-            </span>
-          </span>
-        </label>
-      )}
-      <div className="flex gap-2">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="reset"
-          className="min-w-0 flex-1 rounded-md border border-border bg-glass px-2 py-1.5 text-xs outline-none focus:border-destructive"
-        />
-        <button
-          disabled={!canConfirm}
-          onClick={() => {
-            onReset();
-            if (askCloud) {
-              if (alsoCloud) void sync.deleteCloudData();
-              else sync.setAuto(false);
-            }
-            setOpen(false);
-            setText("");
-            setAlsoCloud(false);
-          }}
-          className="shrink-0 rounded-md bg-destructive px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-40"
-        >
-          Confirm
-        </button>
-        <button
-          onClick={() => {
-            setOpen(false);
-            setText("");
-          }}
-          className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs"
-        >
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }

@@ -30,7 +30,13 @@ import {
   readCloudStamp,
   writeCloud,
 } from "@/lib/firebase";
-import { PREFS_CHANGED_EVENT, readDismissedTips, writeDismissedTips } from "@/lib/prefs-storage";
+import {
+  PREFS_CHANGED_EVENT,
+  readDismissedTips,
+  readProfileForSync,
+  writeDismissedTips,
+  writeProfileFromSync,
+} from "@/lib/prefs-storage";
 import { STORAGE_KEYS } from "@/lib/storage";
 import {
   applyProgress,
@@ -254,7 +260,12 @@ export function useSync({
 
   const deviceSnapshot = useCallback(
     (): SyncSnapshot =>
-      snapshotOf(latest.current.lessons, latest.current.progress, readDismissedTips()),
+      snapshotOf(
+        latest.current.lessons,
+        latest.current.progress,
+        readDismissedTips(),
+        readProfileForSync(), // Phase 19a: the name and avatar this device chose
+      ),
     [],
   );
 
@@ -355,6 +366,7 @@ export function useSync({
       callbacks.current.setLessons(finalSnap.lessons);
       callbacks.current.setProgress((p) => applyProgress(finalSnap, p));
       if (finalSnap.prefs.tips) writeDismissedTips(finalSnap.prefs.tips);
+      writeProfileFromSync(finalSnap.prefs); // Phase 19a: the account's name / avatar choice, when it has one
       callbacks.current.onApplied(finalSnap.lessons);
     }
 

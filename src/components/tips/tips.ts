@@ -6,7 +6,7 @@
  * Reading never throws: anything unreadable counts as "nothing dismissed".
  */
 
-export const TIP_IDS = ["studio", "quiz", "progress", "atmosphere"] as const;
+export const TIP_IDS = ["studio", "quiz", "progress", "atmosphere", "profile"] as const;
 export type TipId = (typeof TIP_IDS)[number];
 
 const isTipId = (value: unknown): value is TipId =>
@@ -43,12 +43,18 @@ export const TIP_COPY: Record<TipId, { title: string; body: string }> = {
     title: "Choose what to practise",
     body: "Use This day, All days or Day range at the top. Due today asks only the words you've added to review. Questions come only from lessons you've saved in Kiroku.",
   },
+  // Phase 19a: Export / Restore moved to the Profile page, so the approved "Back up now and then" wording moved with
+  // them (unchanged, as the `profile` tip). The Progress tip got new wording (approved 2026-10-15; the chips arrive in 19b).
   progress: {
-    title: "Back up now and then",
-    body: "Everything is stored in this browser only. Export saves a backup file; Restore replaces your lessons and progress with one (you'll be asked first). Export before you clear your browser data or reset.",
+    title: "Your week, your words",
+    body: "Your stats and every word from your lessons are here.",
   },
   atmosphere: {
     title: "Pick a reading voice",
     body: "Tap a voice at the bottom to hear a sample and keep it for reading Japanese aloud. The list can take a second to appear.",
+  },
+  profile: {
+    title: "Back up now and then",
+    body: "Everything is stored in this browser only. Export saves a backup file; Restore replaces your lessons and progress with one (you'll be asked first). Export before you clear your browser data or reset.",
   },
 };

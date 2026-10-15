@@ -13,7 +13,13 @@ import type { FirebaseOptions } from "firebase/app";
 import type { Auth } from "firebase/auth";
 import type { Database } from "firebase/database";
 
-export type Account = { uid: string; email: string | null; displayName: string | null };
+/** `photoURL` (Phase 19a): the Google profile picture address, when Google has one. Never stored by Kiroku; used only to draw the avatar. */
+export type Account = {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+};
 
 type AuthModule = typeof import("firebase/auth");
 type Loaded = { auth: Auth; mod: AuthModule };
@@ -24,9 +30,9 @@ type DbLoaded = { db: Database; mod: DbModule };
 export function isFirebaseConfigured(): boolean {
   return Boolean(
     import.meta.env.VITE_FIREBASE_API_KEY &&
-      import.meta.env.VITE_FIREBASE_AUTH_DOMAIN &&
-      import.meta.env.VITE_FIREBASE_PROJECT_ID &&
-      import.meta.env.VITE_FIREBASE_APP_ID,
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN &&
+    import.meta.env.VITE_FIREBASE_PROJECT_ID &&
+    import.meta.env.VITE_FIREBASE_APP_ID,
   );
 }
 
@@ -62,8 +68,18 @@ function load(): Promise<Loaded> {
   return loading;
 }
 
-function toAccount(user: { uid: string; email: string | null; displayName: string | null }): Account {
-  return { uid: user.uid, email: user.email, displayName: user.displayName };
+function toAccount(user: {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL?: string | null;
+}): Account {
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL ?? null,
+  };
 }
 
 /** Calls `onChange` with the signed-in account (or null) now and on every change. Returns a stop function. */
@@ -104,7 +120,10 @@ export async function signInWithGoogle(): Promise<"signed-in" | "redirecting" | 
     if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
       return "cancelled";
     }
-    if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/operation-not-supported-in-this-environment"
+    ) {
       await mod.signInWithRedirect(auth, provider);
       return "redirecting";
     }

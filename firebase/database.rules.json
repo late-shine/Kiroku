@@ -90,6 +90,12 @@
               ".validate": "$tip.matches(/^[a-z0-9-]{1,40}$/) && newData.val() === true"
             }
           },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 24"
+          },
+          "glyph": {
+            ".validate": "newData.isString() && (newData.val() === 'auto' || newData.val() === 'ki' || newData.val() === 'neko' || newData.val() === 'tsuki' || newData.val() === 'ha' || newData.val() === 'hana' || newData.val() === 'hoshi' || newData.val() === 'hotaru' || newData.val() === 'koke')"
+          },
           "$other": { ".validate": false }
         },
 

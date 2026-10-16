@@ -68,6 +68,7 @@ import {
   resolveDay,
   stepDay,
 } from "@/lib/day-nav";
+import { clearDayWordState, isReplacement, upsertLesson } from "@/lib/day-replace";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ProfilePage } from "@/components/profile/ProfilePage";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
@@ -480,11 +481,11 @@ function JapaneseDesk() {
             onDismissTip={() => tips.dismiss("studio")}
             onClose={() => setAiOpen(false)}
             onImport={(newLesson) => {
-              setLessons((old) =>
-                [...old.filter((l) => l.dayNumber !== newLesson.dayNumber), newLesson].sort(
-                  (a, b) => a.dayNumber - b.dayNumber,
-                ),
-              );
+              // The Studio has already asked before a replacement. A replaced day starts over: its old word
+              // records, starred/weak ids and "done" mark go, so they cannot attach to new words at the same ids.
+              const replacing = isReplacement(lessons, newLesson.dayNumber);
+              setLessons((old) => upsertLesson(old, newLesson));
+              if (replacing) setProgress((p) => clearDayWordState(p, newLesson.dayNumber));
               setDay(newLesson.dayNumber);
               setAiOpen(false);
             }}

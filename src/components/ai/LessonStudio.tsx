@@ -30,6 +30,7 @@ import {
   type Tone,
   type VocabCount,
 } from "@/lib/prompt-builder";
+import { mayImport, studioDayNotice } from "@/lib/day-replace";
 import { detectDayNumber, parseLessonFromText, stripDayPrefix } from "@/lib/lesson-schema";
 import { readGeminiRefusal, type GeminiAttempt } from "@/lib/gemini-fallback";
 import {
@@ -398,9 +399,8 @@ export function LessonStudio({
   const confirmImport = () => {
     if (!importResult?.success || !importResult.lesson) return;
     const lesson = importResult.lesson;
-    const alreadyExists = lessons.some((l) => l.dayNumber === lesson.dayNumber);
-    if (alreadyExists && !window.confirm(`Day ${lesson.dayNumber} already exists — replace it?`))
-      return;
+    // A missing day needs no existing lesson and no question; replacing a real one asks first.
+    if (!mayImport(lessons, lesson.dayNumber, (message) => window.confirm(message))) return;
     onImport(lesson);
   };
 
@@ -410,12 +410,10 @@ export function LessonStudio({
     { id: "import", label: "3. Import" },
   ];
 
-  const dayHint =
-    day === 1
-      ? "Foundations lesson — no assumed knowledge"
-      : day > highestDay
-        ? "New lesson"
-        : "Existing lesson — rebuilding its prompt";
+  const dayNotice = studioDayNotice(
+    lessons.map((l) => l.dayNumber),
+    day,
+  );
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-0 backdrop-blur-md sm:p-4">
@@ -481,8 +479,16 @@ export function LessonStudio({
                   >
                     <ChevronRight className="size-4" />
                   </button>
-                  <span className="text-xs text-muted-foreground">{dayHint}</span>
+                  <span className="text-xs text-muted-foreground">{dayNotice.hint}</span>
                 </div>
+                {dayNotice.warning && (
+                  <p
+                    role="status"
+                    className="mt-2 rounded-md border border-primary/40 bg-primary/10 p-2 text-xs text-muted-foreground"
+                  >
+                    {dayNotice.warning}
+                  </p>
+                )}
               </div>
 
               <div>

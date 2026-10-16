@@ -60,6 +60,14 @@ import { RhythmChart } from "@/components/progress/RhythmChart";
 import { VocabList } from "@/components/lesson/VocabList";
 import { PointChips } from "@/components/lesson/PointChips";
 import { normalizeLessonShape } from "@/lib/lesson-schema";
+import {
+  dayAfterDelete,
+  dayPositionLabel,
+  deleteDaysConfirm,
+  lessonPosition,
+  resolveDay,
+  stepDay,
+} from "@/lib/day-nav";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ProfilePage } from "@/components/profile/ProfilePage";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
@@ -163,14 +171,13 @@ function JapaneseDesk() {
     setProgress(loadedProgress);
     // Phase 16d: this device's scene cycling + reading contrast (device-only; migrates the old cycle key).
     setAtmosphere(loadAtmosphere(localStorage, STORAGE_KEYS.atmosphere));
-    if (
-      loadedProgress.currentDay &&
-      loadedLessons.some((l) => l.dayNumber === loadedProgress.currentDay)
-    ) {
-      setDay(loadedProgress.currentDay);
-    } else if (loadedLessons[0]?.dayNumber) {
-      setDay(loadedLessons[0].dayNumber);
-    }
+    // A saved day that was deleted since (or a backup that never had it) opens on the nearest
+    // remaining day — not on lessons[0] while the shell still remembers the missing number.
+    const restored = resolveDay(
+      loadedLessons.map((l) => l.dayNumber),
+      loadedProgress.currentDay,
+    );
+    if (restored !== null) setDay(restored);
     setMounted(true);
   }, []);
   const [tab, setTab] = useState<MainTab>("lesson");
@@ -220,7 +227,19 @@ function JapaneseDesk() {
     return () => clearInterval(interval);
   }, [mounted, atmosphere.cycle]);
 
-  const lesson = lessons.find((item) => item.dayNumber === day) ?? lessons[0] ?? null;
+  const lessonDays = lessons.map((l) => l.dayNumber);
+  // Only an existing day is shown. A hole (Day 14 deleted, state still 14) resolves to the
+  // next remaining day, never to lessons[0], so completion cannot be written under a phantom day.
+  const activeDay = resolveDay(lessonDays, day);
+  const lesson =
+    activeDay === null ? null : (lessons.find((item) => item.dayNumber === activeDay) ?? null);
+  const position = activeDay === null ? null : lessonPosition(lessonDays, activeDay);
+  const prevDay = activeDay === null ? null : stepDay(lessonDays, activeDay, -1);
+  const nextDay = activeDay === null ? null : stepDay(lessonDays, activeDay, 1);
+  useEffect(() => {
+    if (!mounted || activeDay === null || activeDay === day) return;
+    setDay(activeDay);
+  }, [mounted, activeDay, day]);
   const completion =
     lessons.length > 0 ? Math.round((progress.completedDays.length / lessons.length) * 100) : 0;
   useEffect(() => {
@@ -243,14 +262,19 @@ function JapaneseDesk() {
         localDay(),
       ).length
     : 0;
-  const selectDay = (value: number) => setDay(Math.max(1, Math.min(lessons.length, value)));
-  const complete = () =>
+  const selectDay = (value: number) => {
+    if (lessonDays.includes(value)) setDay(value);
+  };
+  const complete = () => {
+    if (!lesson) return;
+    const target = lesson.dayNumber;
     setProgress((p) => ({
       ...p,
-      completedDays: p.completedDays.includes(day)
-        ? p.completedDays.filter((d) => d !== day)
-        : [...p.completedDays, day],
+      completedDays: p.completedDays.includes(target)
+        ? p.completedDays.filter((d) => d !== target)
+        : [...p.completedDays, target],
     }));
+  };
   // No confirmation here — CurriculumList shows an in-app ConfirmDialog before calling this,
   // for both a single delete and a multi-select bulk delete (previously this used
   // window.confirm, which some setups can leave stuck behind the page focus-wise).
@@ -269,16 +293,10 @@ function JapaneseDesk() {
         (id) => !dayNumbers.some((d) => id.startsWith(`d${d}-`)),
       ),
     }));
-    if (toDelete.has(day)) {
-      const remaining = lessons.map((l) => l.dayNumber).filter((n) => !toDelete.has(n));
-      if (remaining.length === 0) {
-        setDay(1);
-      } else {
-        const higher = remaining.filter((n) => n > day).sort((a, b) => a - b)[0];
-        const lower = remaining.filter((n) => n < day).sort((a, b) => b - a)[0];
-        setDay(higher ?? lower ?? remaining[0]!);
-      }
-    }
+    const lookingAt = activeDay ?? day;
+    const next = dayAfterDelete(lessonDays, lookingAt, dayNumbers);
+    if (next === null) setDay(1);
+    else if (next !== day) setDay(next);
   };
   const resetAll = () => {
     setLessons([]);
@@ -287,7 +305,9 @@ function JapaneseDesk() {
     setDay(1);
   };
   return (
-    // Phase 9b: one shared account + sync state for the header button and the Progress card. `onApplied` keeps `day` on a real day after a sync replaced the lessons.
+    // Phase 9b: one shared account + sync state for the header button and the Progress card.
+    // After a sync replaces the lessons, stay on the same day if it is still there; otherwise
+    // the nearest remaining day (never a missing number, and never an unrelated first lesson).
     <AccountSyncProvider
       lessons={lessons}
       progress={progress}
@@ -296,8 +316,12 @@ function JapaneseDesk() {
       onApplied={(applied) =>
         setTimeout(
           () =>
-            setDay((d) =>
-              applied.some((l) => l.dayNumber === d) ? d : (applied[0]?.dayNumber ?? 1),
+            setDay(
+              (d) =>
+                resolveDay(
+                  applied.map((l) => l.dayNumber),
+                  d,
+                ) ?? 1,
             ),
           0,
         )
@@ -317,9 +341,19 @@ function JapaneseDesk() {
           <Header
             tab={tab}
             setTab={setTab}
-            day={day}
-            selectDay={selectDay}
-            maxDay={lessons.length}
+            positionLabel={
+              activeDay !== null && position !== null
+                ? dayPositionLabel(activeDay, position, lessons.length)
+                : null
+            }
+            onPrev={() => {
+              if (prevDay !== null) setDay(prevDay);
+            }}
+            onNext={() => {
+              if (nextDay !== null) setDay(nextDay);
+            }}
+            canPrev={prevDay !== null}
+            canNext={nextDay !== null}
             quizDue={quizDue}
             onAI={() => setAiOpen(true)}
             onSound={() => setSoundOpen((v) => !v)}
@@ -359,7 +393,7 @@ function JapaneseDesk() {
                 )}
                 <QuizView
                   lessons={lessons}
-                  day={day}
+                  day={activeDay ?? day}
                   memory={progress.vocabMemory}
                   setProgress={setProgress}
                   onBack={() => setTab("lesson")}
@@ -464,9 +498,11 @@ function JapaneseDesk() {
 function Header({
   tab,
   setTab,
-  day,
-  selectDay,
-  maxDay,
+  positionLabel,
+  onPrev,
+  onNext,
+  canPrev,
+  canNext,
   quizDue,
   onAI,
   onSound,
@@ -476,9 +512,11 @@ function Header({
   quizDue: number;
   tab: MainTab;
   setTab: (v: MainTab) => void;
-  day: number;
-  selectDay: (v: number) => void;
-  maxDay: number;
+  positionLabel: string | null;
+  onPrev: () => void;
+  onNext: () => void;
+  canPrev: boolean;
+  canNext: boolean;
   onAI: () => void;
   onSound: () => void;
   onHelp: () => void;
@@ -531,22 +569,26 @@ function Header({
         ))}
       </nav>
       <div className="flex items-center justify-end gap-1.5">
-        {maxDay > 0 && (
+        {positionLabel && (
           <div className="hidden items-center rounded-full border border-border/70 bg-glass/50 px-1 py-0.5 sm:flex">
             <button
-              onClick={() => selectDay(day - 1)}
+              type="button"
+              onClick={onPrev}
+              disabled={!canPrev}
               aria-label="Previous day"
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
             >
               <ChevronLeft className="size-3.5" />
             </button>
-            <span className="px-2 font-display text-[11px] font-medium tracking-wide text-primary">
-              Day {day}
+            <span className="whitespace-nowrap px-2 font-display text-[11px] font-medium tracking-wide text-primary">
+              {positionLabel}
             </span>
             <button
-              onClick={() => selectDay(Math.min(maxDay, day + 1))}
+              type="button"
+              onClick={onNext}
+              disabled={!canNext}
               aria-label="Next day"
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
             >
               <ChevronRight className="size-3.5" />
             </button>
@@ -629,29 +671,39 @@ function LessonWorkspace({
   onDeleteDays: (dayNumbers: number[]) => void;
 }) {
   const done = progress.completedDays.includes(lesson.dayNumber);
-  const atFirst = lesson.dayNumber <= 1;
-  const atLast = lesson.dayNumber >= lessons.length;
+  const lessonDays = lessons.map((l) => l.dayNumber);
+  const place = lessonPosition(lessonDays, lesson.dayNumber);
+  const prev = stepDay(lessonDays, lesson.dayNumber, -1);
+  const next = stepDay(lessonDays, lesson.dayNumber, 1);
+  const placeLabel =
+    place === null
+      ? `Day ${lesson.dayNumber}`
+      : dayPositionLabel(lesson.dayNumber, place, lessons.length);
   return (
     <>
       {/* Phase 16e: on a phone the header's day stepper is hidden, so this row is the quick way to change day (the
-          bottom arrows and the curriculum list stay). Same `selectDay` as everywhere else, which clamps. */}
-      <div className="mx-auto mb-4 flex w-fit items-center rounded-full border border-border/70 bg-glass/50 px-1 py-0.5 sm:hidden">
+          bottom arrows and the curriculum list stay). Arrows walk the remaining days, not day ± 1. */}
+      <div className="mx-auto mb-4 flex w-fit max-w-full items-center rounded-full border border-border/70 bg-glass/50 px-1 py-0.5 sm:hidden">
         <button
           type="button"
-          onClick={() => selectDay(lesson.dayNumber - 1)}
-          disabled={atFirst}
+          onClick={() => {
+            if (prev !== null) selectDay(prev);
+          }}
+          disabled={prev === null}
           aria-label="Previous day"
           className="hit-area rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >
           <ChevronLeft className="size-4" />
         </button>
-        <span className="px-3 font-display text-xs font-medium tracking-wide text-primary">
-          Day {lesson.dayNumber} of {lessons.length}
+        <span className="whitespace-nowrap px-3 font-display text-xs font-medium tracking-wide text-primary">
+          {placeLabel}
         </span>
         <button
           type="button"
-          onClick={() => selectDay(lesson.dayNumber + 1)}
-          disabled={atLast}
+          onClick={() => {
+            if (next !== null) selectDay(next);
+          }}
+          disabled={next === null}
           aria-label="Next day"
           className="hit-area rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >
@@ -749,16 +801,24 @@ function LessonWorkspace({
           <div className="mt-6 flex items-center justify-between border-t border-border/50 pt-4">
             <div className="flex gap-1.5">
               <button
-                onClick={() => selectDay(lesson.dayNumber - 1)}
+                type="button"
+                onClick={() => {
+                  if (prev !== null) selectDay(prev);
+                }}
+                disabled={prev === null}
                 aria-label="Previous lesson"
-                className="hit-area rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="hit-area rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
               >
                 <ChevronLeft className="size-4" />
               </button>
               <button
-                onClick={() => selectDay(lesson.dayNumber + 1)}
+                type="button"
+                onClick={() => {
+                  if (next !== null) selectDay(next);
+                }}
+                disabled={next === null}
                 aria-label="Next lesson"
-                className="hit-area rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="hit-area rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
               >
                 <ChevronRight className="size-4" />
               </button>
@@ -957,12 +1017,8 @@ function CurriculumList({
       )}
       {confirmDays && (
         <ConfirmDialog
-          title={
-            confirmDays.length === 1
-              ? `Delete Day ${confirmDays[0]}?`
-              : `Delete ${confirmDays.length} days?`
-          }
-          body="This can't be undone."
+          title={deleteDaysConfirm(confirmDays).title}
+          body={deleteDaysConfirm(confirmDays).body}
           confirmLabel="Delete"
           onConfirm={() => {
             onDeleteDays(confirmDays);

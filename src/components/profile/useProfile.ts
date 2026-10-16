@@ -7,7 +7,15 @@
  * client render match.
  */
 import { useCallback, useEffect, useState } from "react";
-import { cleanName, isGlyphId, DEFAULT_PROFILE, type Profile } from "@/lib/profile";
+import {
+  DEFAULT_PROFILE,
+  GLYPH_AUTO,
+  GLYPH_UPLOAD,
+  cleanName,
+  isAvatarDataUrl,
+  isGlyphId,
+  type Profile,
+} from "@/lib/profile";
 import {
   PROFILE_RELOAD_EVENT,
   announcePrefsChanged,
@@ -41,10 +49,32 @@ export function useProfile() {
     announcePrefsChanged();
   }, []);
 
+  /**
+   * Phase 19a-2: stores an uploaded picture (a small `data:` address from `fileToAvatarDataUrl`) and selects it.
+   * Anything that is not a valid small picture is ignored.
+   */
+  const setPhoto = useCallback((dataUrl: string) => {
+    if (!isAvatarDataUrl(dataUrl)) return;
+    saveProfile({ ...readProfile(), photo: dataUrl, glyph: GLYPH_UPLOAD });
+    announcePrefsChanged();
+  }, []);
+
+  /** Removes the uploaded picture on purpose (`""` syncs, so the other devices drop it too) and goes back to Automatic. */
+  const removePhoto = useCallback(() => {
+    const current = readProfile();
+    if (!current.photo) return;
+    saveProfile({
+      ...current,
+      photo: "",
+      glyph: current.glyph === GLYPH_UPLOAD ? GLYPH_AUTO : current.glyph,
+    });
+    announcePrefsChanged();
+  }, []);
+
   /** Remembers that this device just made a backup file. Device-only: not announced to the sync. */
   const markExported = useCallback(() => {
     saveProfile({ ...readProfile(), lastExportAt: new Date().toISOString() });
   }, []);
 
-  return { profile, setName, setGlyph, markExported };
+  return { profile, setName, setGlyph, setPhoto, removePhoto, markExported };
 }

@@ -3,7 +3,8 @@
  * the avatar presets, and the fallbacks that decide what name and picture to show. No React, no localStorage, no
  * Firebase, so it can be checked from a plain script (handoffs/phase-19a-profile-check.ts).
  *
- * WHAT SYNCS: `name` and `glyph` (the avatar choice), as two entries of the account's `prefs` (see src/lib/sync.ts).
+ * WHAT SYNCS: `name`, `glyph` (the avatar choice) and, since 19a-2, `photo` (a tiny uploaded picture), as entries of
+ * the account's `prefs` (see src/lib/sync.ts).
  * WHAT DOES NOT: `lastExportAt` (when THIS device last made a backup file) stays on the device, and nothing here is
  * in a backup file. The Google photo is never stored by Kiroku at all: it comes from the signed-in account each time.
  *
@@ -30,10 +31,33 @@ export const PROFILE_GLYPHS = [
 /** "Automatic": your Google photo when signed in and it has one, otherwise your initial. The default. */
 export const GLYPH_AUTO = "auto";
 
+/** 19a-2: "use the picture I uploaded" (kept in `photo`). With no uploaded picture it behaves like Automatic. */
+export const GLYPH_UPLOAD = "upload";
+
 export const PROFILE_GLYPH_IDS: readonly string[] = [
   GLYPH_AUTO,
+  GLYPH_UPLOAD,
   ...PROFILE_GLYPHS.map((g) => g.id),
 ];
+
+/** The uploaded picture is shrunk to this many pixels square before it is stored (see src/lib/avatar-image.ts). */
+export const AVATAR_PIXELS = 128;
+/** The rules cap `prefs/photo` at this many characters (the whole `data:` address). A 128 px picture is a few KB. */
+export const MAX_PHOTO_LENGTH = 16000;
+
+const PHOTO_RE = /^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * An uploaded picture as it is stored and synced: a base64 `data:` address of a JPEG or WebP, within the size cap.
+ * Anything else (SVG, PNG, another scheme, too long) is refused, so the value is safe to put in an `<img>`.
+ * The same test is in `firebase/database.rules.json`.
+ */
+export const isAvatarDataUrl = (value: unknown): value is string =>
+  typeof value === "string" && value.length <= MAX_PHOTO_LENGTH && PHOTO_RE.test(value);
+
+/** A stored or synced `photo` value: a valid picture, or `""` (the person removed their picture). */
+export const isPhotoValue = (value: unknown): value is string =>
+  value === "" || isAvatarDataUrl(value);
 
 export const isGlyphId = (value: unknown): value is string =>
   typeof value === "string" && PROFILE_GLYPH_IDS.includes(value);
@@ -43,11 +67,18 @@ export interface Profile {
   name: string | null;
   /** `GLYPH_AUTO` or one of `PROFILE_GLYPHS`; `null` = never set on this device. */
   glyph: string | null;
+  /** The uploaded picture (`isAvatarDataUrl`); `""` = removed on purpose; `null` = never set on this device. */
+  photo: string | null;
   /** ISO time this device last made a backup file. Device-only, never synced. */
   lastExportAt: string | null;
 }
 
-export const DEFAULT_PROFILE: Profile = { name: null, glyph: null, lastExportAt: null };
+export const DEFAULT_PROFILE: Profile = {
+  name: null,
+  glyph: null,
+  photo: null,
+  lastExportAt: null,
+};
 
 /**
  * Turns whatever was typed into a storable name: control characters dropped, runs of whitespace collapsed, trimmed,
@@ -82,10 +113,12 @@ export function parseStoredProfile(raw: string | null): Profile {
     const record = parsed as Record<string, unknown>;
     const name = record["name"];
     const glyph = record["glyph"];
+    const photo = record["photo"];
     const exported = record["lastExportAt"];
     return {
       name: typeof name === "string" ? cleanName(name) : null,
       glyph: isGlyphId(glyph) ? glyph : null,
+      photo: isPhotoValue(photo) ? photo : null,
       lastExportAt: validTime(exported) ? exported : null,
     };
   } catch {
@@ -96,10 +129,15 @@ export function parseStoredProfile(raw: string | null): Profile {
 export const serializeProfile = (profile: Profile): string => JSON.stringify(profile);
 
 /** The part of the profile that syncs (nothing for a field that was never set). */
-export function profileSyncFields(profile: Profile): { name?: string; glyph?: string } {
+export function profileSyncFields(profile: Profile): {
+  name?: string;
+  glyph?: string;
+  photo?: string;
+} {
   return {
     ...(profile.name !== null ? { name: profile.name } : {}),
     ...(profile.glyph !== null ? { glyph: profile.glyph } : {}),
+    ...(profile.photo !== null ? { photo: profile.photo } : {}),
   };
 }
 
@@ -142,12 +180,16 @@ const safePhoto = (url: string | null): string | null =>
   url !== null && /^https:\/\//i.test(url) ? url : null;
 
 /**
- * Which picture to show. A chosen glyph always wins; otherwise the Google photo (signed in, and Google has one);
- * otherwise the initial of the resolved name, but only when there IS a name to take it from (typed, or signed in).
- * With none of those the caller shows its neutral icon (`none`).
+ * Which picture to show. A chosen glyph always wins; so does a chosen upload (when one is stored; without it the
+ * choice behaves like Automatic); otherwise the Google photo (signed in, and Google has one); otherwise the initial of
+ * the resolved name, but only when there IS a name to take it from (typed, or signed in). With none of those the
+ * caller shows its neutral icon (`none`). An uploaded picture comes back as a `photo`, like the Google one.
  */
 export function avatarFor(profile: Profile, account: AccountIdentity | null): Avatar {
   const glyph = PROFILE_GLYPHS.find((g) => g.id === profile.glyph);
+  if (profile.glyph === GLYPH_UPLOAD && profile.photo && isAvatarDataUrl(profile.photo)) {
+    return { kind: "photo", url: profile.photo };
+  }
   if (glyph) return { kind: "glyph", char: glyph.char, id: glyph.id };
   const photo = safePhoto(account?.photoURL ?? null);
   if (photo) return { kind: "photo", url: photo };

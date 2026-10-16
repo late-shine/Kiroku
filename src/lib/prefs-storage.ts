@@ -14,6 +14,7 @@ import { parseDismissed, serializeDismissed } from "@/components/tips/tips";
 import {
   cleanName,
   isGlyphId,
+  isPhotoValue,
   parseStoredProfile,
   profileSyncFields,
   serializeProfile,
@@ -74,7 +75,7 @@ export function saveProfile(profile: Profile): void {
 }
 
 /** What this device offers the sync: the name and avatar it has chosen (a field never set is left out). */
-export function readProfileForSync(): { name?: string; glyph?: string } {
+export function readProfileForSync(): { name?: string; glyph?: string; photo?: string } {
   return profileSyncFields(readProfile());
 }
 
@@ -83,12 +84,17 @@ export function readProfileForSync(): { name?: string; glyph?: string } {
  * `useProfile`. Only the fields the sync result actually has are written, and nothing is announced as a change,
  * so applying the account's values never triggers another sync by itself.
  */
-export function writeProfileFromSync(prefs: { name?: string; glyph?: string }): void {
+export function writeProfileFromSync(prefs: {
+  name?: string;
+  glyph?: string;
+  photo?: string;
+}): void {
   const current = readProfile();
   const next: Profile = {
     ...current,
     ...(prefs.name !== undefined ? { name: cleanName(prefs.name) } : {}),
     ...(prefs.glyph !== undefined && isGlyphId(prefs.glyph) ? { glyph: prefs.glyph } : {}),
+    ...(prefs.photo !== undefined && isPhotoValue(prefs.photo) ? { photo: prefs.photo } : {}),
   };
   if (serializeProfile(next) === serializeProfile(current)) return;
   saveProfile(next);

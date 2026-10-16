@@ -94,7 +94,10 @@
             ".validate": "newData.isString() && newData.val().length <= 24"
           },
           "glyph": {
-            ".validate": "newData.isString() && (newData.val() === 'auto' || newData.val() === 'ki' || newData.val() === 'neko' || newData.val() === 'tsuki' || newData.val() === 'ha' || newData.val() === 'hana' || newData.val() === 'hoshi' || newData.val() === 'hotaru' || newData.val() === 'koke')"
+            ".validate": "newData.isString() && (newData.val() === 'auto' || newData.val() === 'upload' || newData.val() === 'ki' || newData.val() === 'neko' || newData.val() === 'tsuki' || newData.val() === 'ha' || newData.val() === 'hana' || newData.val() === 'hoshi' || newData.val() === 'hotaru' || newData.val() === 'koke')"
+          },
+          "photo": {
+            ".validate": "newData.isString() && (newData.val() === '' || (newData.val().length <= 16000 && newData.val().matches(/^data:image\\/(jpeg|webp);base64,[A-Za-z0-9+\\/]+={0,2}$/)))"
           },
           "$other": { ".validate": false }
         },

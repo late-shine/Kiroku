@@ -4,15 +4,24 @@
  * One column on phones, two from `lg`. It owns no app state: lessons and progress come in as props, the profile
  * (name, avatar, last backup) comes from `useProfile`, the account from the shared account/sync context.
  */
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { AccountCard } from "@/components/account/AccountCard";
 import { Avatar } from "@/components/profile/Avatar";
 import { BackupControls } from "@/components/profile/BackupControls";
 import { ResetControl } from "@/components/profile/ResetControl";
 import { useProfile } from "@/components/profile/useProfile";
+import { AvatarImageError, fileToAvatarDataUrl } from "@/lib/avatar-image";
 import {
   GLYPH_AUTO,
+  GLYPH_UPLOAD,
   MAX_NAME_LENGTH,
   PROFILE_GLYPHS,
   avatarFor,
@@ -109,7 +118,7 @@ export function ProfilePage({
   onShowTipsAgain: () => void;
 }) {
   const { account } = useAccountSync();
-  const { profile, setName, setGlyph, markExported } = useProfile();
+  const { profile, setName, setGlyph, setPhoto, removePhoto, markExported } = useProfile();
   const identity = account.auth.status === "in" ? account.auth.account : null;
   const hasData = !isEmptySnapshot(snapshotOf(lessons, progress));
 
@@ -126,6 +135,30 @@ export function ProfilePage({
   const avatar = avatarFor(profile, identity);
   const autoAvatar = avatarFor({ ...profile, glyph: GLYPH_AUTO }, identity);
   const chosen = profile.glyph ?? GLYPH_AUTO;
+
+  // Phase 19a-2: the uploaded picture. The file is shrunk in the browser first (see src/lib/avatar-image.ts).
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const uploadedAvatar = avatarFor({ ...profile, glyph: GLYPH_UPLOAD }, null);
+  const onPickPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // so choosing the same file again still counts
+    if (!file) return;
+    setPhotoError(null);
+    setPhotoBusy(true);
+    try {
+      setPhoto(await fileToAvatarDataUrl(file));
+    } catch (error) {
+      setPhotoError(
+        error instanceof AvatarImageError
+          ? error.message
+          : "Couldn't use that picture. Try a different one.",
+      );
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const [tipsReset, setTipsReset] = useState(false);
   const lastBackup = profile.lastExportAt
@@ -186,6 +219,22 @@ export function ProfilePage({
               iconClassName="size-4"
             />
           </button>
+          {profile.photo && uploadedAvatar.kind === "photo" && (
+            <button
+              type="button"
+              onClick={() => setGlyph(GLYPH_UPLOAD)}
+              aria-pressed={chosen === GLYPH_UPLOAD}
+              aria-label="Your uploaded picture"
+              title="Your uploaded picture"
+              className={`grid size-10 place-items-center rounded-full border transition-colors ${
+                chosen === GLYPH_UPLOAD
+                  ? "border-primary bg-primary/15"
+                  : "border-border/70 hover:border-primary/50"
+              }`}
+            >
+              <Avatar avatar={uploadedAvatar} fallbackChar={initial} className="size-8" />
+            </button>
+          )}
           {PROFILE_GLYPHS.map((g) => (
             <button
               key={g.id}
@@ -205,11 +254,45 @@ export function ProfilePage({
             </button>
           ))}
         </div>
-        {account.configured && (
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            Your name and avatar sync with your account.
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(e) => void onPickPhoto(e)}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={photoBusy}
+            className="hit-area rounded-md border border-border px-3 py-2 text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {photoBusy ? "Preparing…" : profile.photo ? "Change picture" : "Upload a picture"}
+          </button>
+          {profile.photo && (
+            <button
+              type="button"
+              onClick={() => {
+                setPhotoError(null);
+                removePhoto();
+              }}
+              className="hit-area rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              Remove picture
+            </button>
+          )}
+        </div>
+        {photoError && (
+          <p role="alert" className="mt-2 text-[11px] text-destructive">
+            {photoError}
           </p>
         )}
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          {account.configured
+            ? "Your name, avatar and uploaded picture sync with your Kiroku account (not Google). Pictures are shrunk to a small square first."
+            : "Pictures are shrunk to a small square and kept on this device."}
+        </p>
       </Section>
 
       <Section label="概要 · AT A GLANCE" delay="60ms">

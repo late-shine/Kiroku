@@ -22,6 +22,7 @@
  *   memory/<vocabId>       one record per word: japanese, box, due, right, wrong, lastAnswered
  *   prefs                  backgroundIndex, bgZoomSpeed, showFurigana, tips { "quiz": true }   (9c)
  *                          name (a string, <= 24 characters, "" allowed), glyph (an avatar id)     (19a)
+ *                          photo (a small data: address of a JPEG/WebP, or "")                  (19a-2)
  *   deleted/d5             "2026-10-05T10:00:00.000Z": a day was deleted at that time (9c, see below)
  *   meta                   { schema: 1, updatedAt }
  * An empty account reads back as `null`; a missing node always means "empty", never "deleted". A deletion is only
@@ -42,7 +43,7 @@
  * changes here, change the rules too (the check script evaluates the real rules file against real trees).
  */
 import { restoredLessonSchema } from "@/lib/backup";
-import { MAX_NAME_LENGTH, isGlyphId } from "@/lib/profile";
+import { MAX_NAME_LENGTH, isGlyphId, isPhotoValue } from "@/lib/profile";
 import { mergeLogs, pruneLog, type StudyLog } from "@/lib/study-log";
 import { isValidDay, localDay, parseStoredMemory, type VocabMemory } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState, WordMemory } from "@/types/japanese";
@@ -80,6 +81,8 @@ export interface SyncPrefs {
   /** Phase 19a: the profile name (may be `""`: "use my Google name") and the avatar choice (an id from src/lib/profile.ts). */
   name?: string;
   glyph?: string;
+  /** Phase 19a-2: the uploaded avatar as a small `data:` address (see `isAvatarDataUrl`), or `""` once removed. */
+  photo?: string;
 }
 
 /** Everything that syncs, in the shape the app already uses (arrays and a record, not the cloud's maps). */
@@ -113,7 +116,7 @@ export function snapshotOf(
   lessons: readonly DayLesson[],
   progress: UserProgressState,
   tips?: readonly string[],
-  profile?: { name?: string; glyph?: string },
+  profile?: { name?: string; glyph?: string; photo?: string },
 ): SyncSnapshot {
   return {
     lessons: [...lessons].sort((a, b) => a.dayNumber - b.dayNumber),
@@ -133,6 +136,7 @@ export function snapshotOf(
       ...(tips ? { tips: sortedUnique(tips) } : {}),
       ...(profile?.name !== undefined ? { name: profile.name } : {}),
       ...(profile?.glyph !== undefined ? { glyph: profile.glyph } : {}),
+      ...(profile?.photo !== undefined ? { photo: profile.photo } : {}),
     },
     tombstones: {},
   };
@@ -337,6 +341,8 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
   // 19a: a name over the limit is left out (one refused value rejects the WHOLE write); "" is kept so that clearing a name syncs.
   if (typeof pr.name === "string" && pr.name.length <= MAX_NAME_LENGTH) prefs["name"] = pr.name;
   if (isGlyphId(pr.glyph)) prefs["glyph"] = pr.glyph;
+  // 19a-2: only a valid small picture (or "" = removed) is written; anything else would get the whole write refused.
+  if (isPhotoValue(pr.photo)) prefs["photo"] = pr.photo;
 
   const deleted: Record<string, string> = {};
   for (const [key, at] of Object.entries(s.tombstones)) {
@@ -398,6 +404,7 @@ function decodePrefs(node: unknown): SyncPrefs {
   const name = node["name"];
   if (typeof name === "string" && name.length <= MAX_NAME_LENGTH) prefs.name = name;
   if (isGlyphId(node["glyph"])) prefs.glyph = node["glyph"];
+  if (isPhotoValue(node["photo"])) prefs.photo = node["photo"];
   return prefs;
 }
 
@@ -597,6 +604,7 @@ export function sanitizePrefs(raw: unknown): SyncPrefs {
   const name = raw["name"];
   if (typeof name === "string" && name.length <= MAX_NAME_LENGTH) out.name = name;
   if (isGlyphId(raw["glyph"])) out.glyph = raw["glyph"];
+  if (isPhotoValue(raw["photo"])) out.photo = raw["photo"];
   return out;
 }
 
@@ -624,6 +632,8 @@ export function mergePrefs(device: SyncPrefs, cloud: SyncPrefs, base: SyncPrefs 
   if (name !== undefined) out.name = name;
   const glyph = pickScalar(device.glyph, cloud.glyph, base?.glyph, hasBase);
   if (glyph !== undefined) out.glyph = glyph;
+  const photo = pickScalar(device.photo, cloud.photo, base?.photo, hasBase);
+  if (photo !== undefined) out.photo = photo;
   return out;
 }
 

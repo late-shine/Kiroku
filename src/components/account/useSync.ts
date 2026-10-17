@@ -10,6 +10,8 @@
 //     when the tab regains focus or the connection returns, and about two seconds after a local change. The person can
 //     switch that off ("Sync automatically"); "Sync now" and "Choose how to sync…" keep working either way.
 //  4. Days deleted on a linked device are remembered (`noteDeleted`) until a sync tells the account, so they never come back.
+//  5. Days whose lesson was replaced on a linked device are remembered (`noteReplaced`) the same way, so the account's old
+//     completion / star / weak / word state for that day is dropped and other devices take the new lesson.
 // The pure rules are in src/lib/sync.ts (read its header), the one-sync procedure in src/lib/sync-run.ts, the database
 // calls in src/lib/firebase.ts. This file only decides WHEN to sync and puts the result on screen.
 import {
@@ -115,6 +117,8 @@ export type SyncController = {
   confirmDelete: () => void;
   /** Tell the sync that days were deleted on this device (call it right after deleting). No-op if never synced. */
   noteDeleted: (days: number[]) => void;
+  /** Tell the sync that a day's lesson was replaced on this device (call it right before the replacement). No-op if never synced. */
+  noteReplaced: (day: number) => void;
   /** Signed in with sync available: the person can delete the account copy (Reset offers it). */
   canDeleteCloud: boolean;
   /** Deletes the account copy now (no dialog: the caller has already asked). Never touches this device. */
@@ -133,6 +137,8 @@ type Link = {
   auto: boolean;
   /** Days deleted here that the account hasn't been told about yet. */
   pending: number[];
+  /** Days whose lesson was replaced here that the account hasn't been told about yet. */
+  pendingReplaces: number[];
   /** Tombstones already seen or created by this device (see src/lib/sync.ts). */
   seen: Record<string, string>;
   /** The prefs both sides held after the last sync. */
@@ -157,6 +163,9 @@ function readLink(): Link | null {
       auto: r["auto"] !== false,
       pending: Array.isArray(r["pending"])
         ? r["pending"].filter((d): d is number => Number.isInteger(d) && d > 0)
+        : [],
+      pendingReplaces: Array.isArray(r["pendingReplaces"])
+        ? r["pendingReplaces"].filter((d): d is number => Number.isInteger(d) && d > 0)
         : [],
       seen,
       base: "base" in r ? sanitizePrefs(r["base"]) : null,
@@ -330,6 +339,7 @@ export function useSync({
     const ctx: SyncContext = {
       linked,
       pendingDeletes: linked && before ? before.pending : [],
+      pendingReplaces: linked && before ? before.pendingReplaces : [],
       seenTombstones: linked && before ? before.seen : {},
       basePrefs: linked && before ? before.base : null,
       now: new Date(),
@@ -357,8 +367,10 @@ export function useSync({
     if (plan.replaceDevice) {
       if (mode === "merge") {
         const gone = [...plan.removedDays, ...(linkRef.current?.pending ?? [])];
+        // A day another device replaced is taken from the account, not from what this device still holds of it.
+        const nowOnDevice = stripDays(deviceSnapshot(), plan.adoptedDays);
         finalSnap = {
-          ...stripDays(mergeSnapshots(deviceSnapshot(), plan.result), gone),
+          ...stripDays(mergeSnapshots(nowOnDevice, plan.result), gone),
           prefs: plan.result.prefs,
           tombstones: plan.result.tombstones,
         };
@@ -372,6 +384,7 @@ export function useSync({
 
     const now = linkRef.current;
     const included = new Set(ctx.pendingDeletes);
+    const includedReplaces = new Set(ctx.pendingReplaces ?? []);
     // Defer the AccountSyncProvider state updates to the next tick so they do not collide
     // with the re-render of JapaneseDesk triggered by setLessons / setProgress above.
     setTimeout(() => {
@@ -381,6 +394,10 @@ export function useSync({
         auto: now !== null && now.uid === forUid ? now.auto : true,
         pending:
           now !== null && now.uid === forUid ? now.pending.filter((d) => !included.has(d)) : [],
+        pendingReplaces:
+          now !== null && now.uid === forUid
+            ? now.pendingReplaces.filter((d) => !includedReplaces.has(d))
+            : [],
         seen: plan.nextSeen,
         base: plan.nextBasePrefs,
       });
@@ -512,6 +529,7 @@ export function useSync({
             lastSyncedAt: new Date().toISOString(),
             auto: true,
             pending: [],
+            pendingReplaces: [],
             seen: {},
             base: null,
           });
@@ -627,6 +645,15 @@ export function useSync({
     });
   };
 
+  const noteReplaced = (day: number) => {
+    const current = linkRef.current;
+    if (!current || !Number.isInteger(day) || day <= 0) return;
+    setLink({
+      ...current,
+      pendingReplaces: [...new Set([...current.pendingReplaces, day])].sort((a, b) => a - b),
+    });
+  };
+
   // ---- what to show -----------------------------------------------------------------------------
 
   const linked = uid !== null && link !== null && link.uid === uid;
@@ -665,6 +692,7 @@ export function useSync({
     runChoice,
     confirmDelete,
     noteDeleted,
+    noteReplaced,
     canDeleteCloud: configured && uid !== null,
     deleteCloudData,
     askWipeSignOut: () => {

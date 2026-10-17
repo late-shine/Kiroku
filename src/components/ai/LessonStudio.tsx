@@ -30,7 +30,8 @@ import {
   type Tone,
   type VocabCount,
 } from "@/lib/prompt-builder";
-import { mayImport, studioDayNotice } from "@/lib/day-replace";
+import { useAccountSync } from "@/components/account/AccountSyncContext";
+import { isReplacement, mayImport, studioDayNotice } from "@/lib/day-replace";
 import { detectDayNumber, parseLessonFromText, stripDayPrefix } from "@/lib/lesson-schema";
 import { readGeminiRefusal, type GeminiAttempt } from "@/lib/gemini-fallback";
 import {
@@ -172,6 +173,7 @@ export function LessonStudio({
   onImport: (lesson: DayLesson) => void;
 }) {
   useScrollLock();
+  const { sync } = useAccountSync();
   const initial = useRef(loadStored()).current;
   const highestDay = Math.max(...lessons.map((l) => l.dayNumber), 0);
 
@@ -401,6 +403,8 @@ export function LessonStudio({
     const lesson = importResult.lesson;
     // A missing day needs no existing lesson and no question; replacing a real one asks first.
     if (!mayImport(lessons, lesson.dayNumber, (message) => window.confirm(message))) return;
+    // A replaced day is announced to the account too, so its old state does not come back on the next sync.
+    if (isReplacement(lessons, lesson.dayNumber)) sync.noteReplaced(lesson.dayNumber);
     onImport(lesson);
   };
 

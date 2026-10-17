@@ -108,6 +108,12 @@
           }
         },
 
+        "replaced": {
+          "$day": {
+            ".validate": "$day.matches(/^d[0-9]{1,5}$/) && newData.isString() && newData.val().length <= 40"
+          }
+        },
+
         "meta": {
           "schema": {
             ".validate": "newData.isNumber()"

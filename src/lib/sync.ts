@@ -24,6 +24,7 @@
  *                          name (a string, <= 24 characters, "" allowed), glyph (an avatar id)     (19a)
  *                          photo (a small data: address of a JPEG/WebP, or "")                  (19a-2)
  *   deleted/d5             "2026-10-05T10:00:00.000Z": a day was deleted at that time (9c, see below)
+ *   replaced/d5            "2026-10-17T10:00:00.000Z": a day was replaced at that time (see REPLACED DAYS)
  *   meta                   { schema: 1, updatedAt }
  * An empty account reads back as `null`; a missing node always means "empty", never "deleted". A deletion is only
  * ever expressed by a `deleted/dN` tombstone.
@@ -38,6 +39,19 @@
  *    is kept and the tombstone is cleared. A device that has never synced with this account counts every tombstone as
  *    seen, so a first sync never deletes anything from the device.
  * A restore adds, never deletes: it queues nothing, so days the backup doesn't have simply come back from the account.
+ *
+ * REPLACED DAYS (Studio safety follow-up). Replacing a day that exists (the Lesson Studio, after its confirmation) clears that
+ * day's completion mark, starred / weak ids and word records on the device. A union merge would bring all of that back from
+ * the account, and a device that still holds the old lesson would push it up again (the device's lesson wins a conflict). So
+ * a replacement works like a delete, with the same two small records and no clock comparisons between devices:
+ *  - this device keeps a list of days it replaced since its last good sync (`pendingReplaces`, in localStorage). The next
+ *    sync strips the ACCOUNT's copy of those days' state before merging (this device's new lesson and state win) and writes
+ *    `replaced/dN = time`;
+ *  - this device remembers which of those records it has seen (`seenTombstones`, key `rN` → time, next to the delete keys).
+ *    A `replaced/dN` it has NOT seen, for a day it still holds, means another device replaced that day: this device drops its
+ *    own copy of the day (lesson and state) and takes the account's new version. A first sync (never linked) keeps its copy.
+ * A `replaced` record is only kept for days that exist after the merge, so deleting a day retires it. If two devices replace the
+ * same day, the one that syncs last wins. Like `deleted`, only the account side carries any; a device snapshot has none.
  *
  * The id/size limits below are mirrored by the `.validate` rules in firebase/database.rules.json. If a limit
  * changes here, change the rules too (the check script evaluates the real rules file against real trees).
@@ -92,6 +106,8 @@ export interface SyncSnapshot {
   prefs: SyncPrefs;
   /** Deleted days, `d5` → ISO time. Only the account side ever carries any; a device snapshot has none. */
   tombstones: Record<string, string>;
+  /** Replaced days, `d5` → ISO time. Like `tombstones`, only the account side carries any. Absent = none. */
+  replaced?: Record<string, string>;
 }
 
 export type SyncMode = "merge" | "use-cloud" | "use-device";
@@ -102,6 +118,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const dayOfKey = (key: string): number => Number(key.slice(1));
 const dayOfWordId = (id: string): number => Number(id.slice(1, id.indexOf("-")));
 const sortedUnique = (xs: readonly string[]): string[] => [...new Set(xs)].sort();
+/** The same snapshot as a device would hold it: no delete tombstones, no replaced-day records. */
+const withoutMarks = (s: SyncSnapshot): SyncSnapshot => ({
+  lessons: s.lessons,
+  progress: s.progress,
+  prefs: s.prefs,
+  tombstones: {},
+});
 
 // ---------------------------------------------------------------------------------------------
 // Snapshots
@@ -254,6 +277,7 @@ function canonicalSnapshot(s: SyncSnapshot): string {
       tips: s.prefs.tips && s.prefs.tips.length > 0 ? sortedUnique(s.prefs.tips) : undefined,
     },
     tombstones: s.tombstones,
+    replaced: s.replaced ?? {},
   });
 }
 
@@ -265,7 +289,7 @@ export const snapshotsEqual = (a: SyncSnapshot, b: SyncSnapshot): boolean =>
  * A short fingerprint of everything on this device that syncs (tombstones excluded: a device has none). Automatic
  * sync compares the current fingerprint with the one saved after the last sync to decide whether anything changed.
  */
-export const deviceKey = (s: SyncSnapshot): string => canonicalSnapshot({ ...s, tombstones: {} });
+export const deviceKey = (s: SyncSnapshot): string => canonicalSnapshot(withoutMarks(s));
 
 // ---------------------------------------------------------------------------------------------
 // Cloud encoding
@@ -349,11 +373,17 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
     if (DAY_KEY_RE.test(key) && validTime(at)) deleted[key] = at;
   }
 
+  const replaced: Record<string, string> = {};
+  for (const [key, at] of Object.entries(s.replaced ?? {})) {
+    if (DAY_KEY_RE.test(key) && validTime(at)) replaced[key] = at;
+  }
+
   const tree: CloudTree = { progress, meta: { schema: SYNC_SCHEMA, updatedAt: now.toISOString() } };
   if (Object.keys(lessons).length > 0) tree["lessons"] = lessons;
   if (Object.keys(memory).length > 0) tree["memory"] = memory;
   if (Object.keys(prefs).length > 0) tree["prefs"] = prefs;
   if (Object.keys(deleted).length > 0) tree["deleted"] = deleted;
+  if (Object.keys(replaced).length > 0) tree["replaced"] = replaced;
   return tree;
 }
 
@@ -486,6 +516,13 @@ export function decodeCloud(raw: unknown): DecodeResult {
     }
   }
 
+  const replaced: Record<string, string> = {};
+  if (isRecord(raw["replaced"])) {
+    for (const [key, at] of Object.entries(raw["replaced"])) {
+      if (DAY_KEY_RE.test(key) && validTime(at)) replaced[key] = at;
+    }
+  }
+
   return {
     ok: true,
     snapshot: {
@@ -503,6 +540,7 @@ export function decodeCloud(raw: unknown): DecodeResult {
       },
       prefs: decodePrefs(raw["prefs"]),
       tombstones,
+      ...(Object.keys(replaced).length > 0 ? { replaced } : {}),
     },
   };
 }
@@ -713,7 +751,9 @@ export interface SyncContext {
   linked: boolean;
   /** Days deleted on this device since its last good sync. */
   pendingDeletes: readonly number[];
-  /** Tombstones this device has already acted on or created: `d5` → time. */
+  /** Days whose lesson was replaced on this device since its last good sync (absent = none). */
+  pendingReplaces?: readonly number[];
+  /** Tombstones this device has already acted on or created: `d5` → time. Replaced-day records are kept here too, as `r5` → time. */
   seenTombstones: Readonly<Record<string, string>>;
   /** What the prefs were on both sides after the last sync; null = never synced. */
   basePrefs: SyncPrefs | null;
@@ -740,12 +780,25 @@ export type SyncPlan =
       summary: SyncSummary;
       /** Days taken off this device because they were deleted on another device. */
       removedDays: number[];
+      /** Days this device replaced (the account's old state for them was dropped). */
+      replacedDays: number[];
+      /** Days this device gave up its own copy of, because another device replaced them (it now holds the account's). */
+      adoptedDays: number[];
       /** The tombstones this device should remember as seen after a successful sync. */
       nextSeen: Record<string, string>;
       /** The prefs this device should remember as "what we both held" after a successful sync. */
       nextBasePrefs: SyncPrefs;
     }
   | { ok: false; message: string };
+
+const replacedKey = (day: number) => `r${day}`;
+
+/** What to remember as seen after a sync: the delete tombstones, and the replaced-day records under their `rN` keys. */
+function seenOf(s: SyncSnapshot): Record<string, string> {
+  const out: Record<string, string> = { ...s.tombstones };
+  for (const [key, at] of Object.entries(s.replaced ?? {})) out[replacedKey(dayOfKey(key))] = at;
+  return out;
+}
 
 function planMerge(device: SyncSnapshot, cloud: SyncSnapshot, ctx: SyncContext) {
   const deviceDays = new Set(device.lessons.map((l) => l.dayNumber));
@@ -764,11 +817,45 @@ function planMerge(device: SyncSnapshot, cloud: SyncSnapshot, ctx: SyncContext) 
   }
   removedDays.sort(byNumber);
 
+  // Days replaced here since the last sync (that still exist here): the account's old state for them must not come back.
+  const replacedDays = [...new Set(ctx.pendingReplaces ?? [])]
+    .filter((d) => deviceDays.has(d))
+    .sort(byNumber);
+  const replaced: Record<string, string> = { ...cloud.replaced };
+  for (const day of replacedDays) replaced[`d${day}`] = ctx.now.toISOString();
+  // Days another device replaced since we last looked: take the account's new version instead of keeping ours.
+  const adoptedDays: number[] = [];
+  for (const [key, at] of Object.entries(cloud.replaced ?? {})) {
+    const day = dayOfKey(key);
+    if (replacedDays.includes(day) || !deviceDays.has(day) || removedDays.includes(day)) continue;
+    if (ctx.linked && ctx.seenTombstones[replacedKey(day)] !== at) adoptedDays.push(day);
+  }
+  adoptedDays.sort(byNumber);
+
   // Whatever is still tombstoned (or was just deleted here) must not survive in the account's copy either.
   const deadDays = [...pending, ...Object.keys(tombstones).map(dayOfKey)];
-  const merged = mergeSnapshots(stripDays(device, removedDays), stripDays(cloud, deadDays));
+  const merged = mergeSnapshots(
+    stripDays(device, [...removedDays, ...adoptedDays]),
+    stripDays(cloud, [...deadDays, ...replacedDays]),
+  );
   const prefs = mergePrefs(device.prefs, cloud.prefs, ctx.basePrefs);
-  return { result: { ...merged, prefs, tombstones }, removedDays };
+  // A replaced-day record only matters while the day exists; deleting the day retires it.
+  const kept = new Set(merged.lessons.map((l) => l.dayNumber));
+  const replacedKept: Record<string, string> = {};
+  for (const [key, at] of Object.entries(replaced)) {
+    if (kept.has(dayOfKey(key))) replacedKept[key] = at;
+  }
+  return {
+    result: {
+      ...merged,
+      prefs,
+      tombstones,
+      ...(Object.keys(replacedKept).length > 0 ? { replaced: replacedKept } : {}),
+    },
+    removedDays,
+    replacedDays,
+    adoptedDays,
+  };
 }
 
 /**
@@ -784,8 +871,10 @@ export function planSync(
 ): SyncPlan {
   let result: SyncSnapshot;
   let removedDays: number[] = [];
+  let replacedDays: number[] = [];
+  let adoptedDays: number[] = [];
   if (mode === "merge") {
-    ({ result, removedDays } = planMerge(device, cloud, ctx));
+    ({ result, removedDays, replacedDays, adoptedDays } = planMerge(device, cloud, ctx));
   } else if (mode === "use-cloud") {
     if (isEmptySnapshot(cloud)) {
       return {
@@ -817,7 +906,13 @@ export function planSync(
       if (!deviceDays.has(day) && !(`d${day}` in tombstones))
         tombstones[`d${day}`] = ctx.now.toISOString();
     }
-    result = { ...device, tombstones };
+    // Days replaced here are announced; records for days this device has and others replaced stay (it is the mirror now).
+    const replaced: Record<string, string> = {};
+    for (const [key, at] of Object.entries(cloud.replaced ?? {}))
+      if (deviceDays.has(dayOfKey(key))) replaced[key] = at;
+    for (const day of ctx.pendingReplaces ?? [])
+      if (deviceDays.has(day)) replaced[`d${day}`] = ctx.now.toISOString();
+    result = { ...device, tombstones, ...(Object.keys(replaced).length > 0 ? { replaced } : {}) };
   }
   // 18a: the study log keeps only its last 120 days here too, so a merge can't bring back days a device already pruned
   // (which would otherwise bounce between the device and the account after every answer). Usually returns it unchanged.
@@ -831,6 +926,7 @@ export function planSync(
   const conflictDays: number[] = [];
   if (mode === "merge") {
     for (const [day, lesson] of deviceDays) {
+      if (replacedDays.includes(day) || adoptedDays.includes(day)) continue; // a replacement is not a conflict
       const other = cloudDays.get(day);
       if (other && !sameLesson(lesson, other)) conflictDays.push(day);
     }
@@ -842,7 +938,7 @@ export function planSync(
     mode,
     result,
     writeCloud: !snapshotsEqual(result, cloud),
-    replaceDevice: !snapshotsEqual({ ...result, tombstones: {} }, { ...device, tombstones: {} }),
+    replaceDevice: !snapshotsEqual(withoutMarks(result), withoutMarks(device)),
     summary: {
       daysFromCloud: [...resultDays].filter((day) => !deviceDays.has(day)).length,
       daysToCloud: [...resultDays].filter((day) => !cloudDays.has(day)).length,
@@ -851,7 +947,9 @@ export function planSync(
       removedFromCloud: [...cloudDays.keys()].filter((day) => !resultDays.has(day)).length,
     },
     removedDays,
-    nextSeen: { ...result.tombstones },
+    replacedDays,
+    adoptedDays,
+    nextSeen: seenOf(result),
     nextBasePrefs: { ...result.prefs },
   };
 }
@@ -882,6 +980,11 @@ export function describeSyncResult(plan: Extract<SyncPlan, { ok: true }>): strin
     if (plan.removedDays.length > 0) {
       parts.push(
         `Removed ${plan.removedDays.map((d) => `Day ${d}`).join(", ")} (deleted on another device).`,
+      );
+    }
+    if (plan.adoptedDays.length > 0) {
+      parts.push(
+        `Updated ${plan.adoptedDays.map((d) => `Day ${d}`).join(", ")} from your account (replaced on another device).`,
       );
     }
     if (parts.length === 0) parts.push("Progress and settings merged.");

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   BookOpen,
   Bot,
@@ -9,9 +9,7 @@ import {
   CircleHelp,
   Image,
   Music2,
-  Search,
   Sparkles,
-  Star,
   Trash2,
   Trophy,
   Upload,
@@ -51,12 +49,15 @@ import {
   countMastered,
   dueWords,
   localDay,
-  masteryState,
   parseStoredMemory,
   pruneMemory,
 } from "@/lib/word-memory";
 import { parseStoredStudyLog } from "@/lib/study-log";
 import { RhythmChart } from "@/components/progress/RhythmChart";
+import { MemoryBlock } from "@/components/progress/MemoryBlock";
+import { WordList } from "@/components/progress/WordList";
+import { useToday } from "@/hooks/use-today";
+import { memorySummary } from "@/lib/memory-summary";
 import { VocabList } from "@/components/lesson/VocabList";
 import { PointChips } from "@/components/lesson/PointChips";
 import { normalizeLessonShape } from "@/lib/lesson-schema";
@@ -1310,12 +1311,21 @@ function ProgressView({
   /** Phase 19a: Export / Restore / Reset live on the Profile page now, so this opens it. */
   onRestore: () => void;
 }) {
-  const [query, setQuery] = useState("");
-  const vocab = lessons
-    .flatMap((l) => l.vocab)
-    .filter((w) =>
-      `${w.japanese} ${w.reading} ${w.meaning}`.toLowerCase().includes(query.toLowerCase()),
-    );
+  // Client-only (the shell mounts this tab after hydration), and re-read when the tab comes back, so the numbers
+  // here use the same "today" as the Quiz.
+  const today = useToday() ?? localDay();
+  const allWords = useMemo(() => lessons.flatMap((l) => l.vocab), [lessons]);
+  const summary = useMemo(
+    () => memorySummary(allWords, progress.vocabMemory, today),
+    [allWords, progress.vocabMemory, today],
+  );
+  const toggleStar = (id: string) =>
+    setProgress((p) => ({
+      ...p,
+      masteredVocabIds: p.masteredVocabIds.includes(id)
+        ? p.masteredVocabIds.filter((x) => x !== id)
+        : [...p.masteredVocabIds, id],
+    }));
   return (
     <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-3">
       <GlassPane>
@@ -1325,17 +1335,14 @@ function ProgressView({
         <div className="mt-6 grid grid-cols-2 gap-5">
           <Metric value={progress.completedDays.length} label="days" />
           <Metric
-            value={countMastered(
-              lessons.flatMap((l) => l.vocab),
-              progress.masteredVocabIds,
-              progress.vocabMemory,
-            )}
+            value={countMastered(allWords, progress.masteredVocabIds, progress.vocabMemory)}
             label="mastered"
           />
           <Metric value={progress.totalQuizzesTaken} label="answered" />
           <Metric value={lessons.reduce((n, l) => n + l.vocab.length, 0)} label="words" />
         </div>
         <RhythmChart studyLog={progress.studyLog} />
+        {lessons.length > 0 && <MemoryBlock summary={summary} />}
       </GlassPane>
       <GlassPane className="lg:col-span-2 lg:mt-4">
         {lessons.length === 0 ? (
@@ -1364,57 +1371,14 @@ function ProgressView({
             </div>
           </div>
         ) : (
-          <>
-            <div className="relative">
-              <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search Japanese, reading, or meaning..."
-                className="w-full rounded-xl border border-border/60 bg-glass/60 py-2.5 pl-10 pr-3.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
-              />
-            </div>
-            <div className="mt-4 grid max-h-[520px] gap-2 overflow-y-auto overscroll-contain sm:grid-cols-2 pr-1">
-              {vocab.map((w) => (
-                <div
-                  key={w.id}
-                  className="flex items-center justify-between rounded-md border border-border bg-glass p-3"
-                >
-                  <div>
-                    <p className="font-display">
-                      {w.japanese}{" "}
-                      <span className="text-xs text-muted-foreground">{w.reading}</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">{w.meaning}</p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      setProgress((p) => ({
-                        ...p,
-                        masteredVocabIds: p.masteredVocabIds.includes(w.id)
-                          ? p.masteredVocabIds.filter((id) => id !== w.id)
-                          : [...p.masteredVocabIds, w.id],
-                      }))
-                    }
-                    title={
-                      masteryState(w, progress.masteredVocabIds, progress.vocabMemory) === "earned"
-                        ? "Mastered through review"
-                        : undefined
-                    }
-                    className={`hit-area ${
-                      masteryState(w, progress.masteredVocabIds, progress.vocabMemory) !== "none"
-                        ? "text-primary"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    <Star
-                      className={`size-4 ${progress.masteredVocabIds.includes(w.id) ? "fill-current" : ""}`}
-                    />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </>
+          <WordList
+            words={allWords}
+            vocabMemory={progress.vocabMemory}
+            starredIds={progress.masteredVocabIds}
+            weakIds={progress.weakVocabIds}
+            today={today}
+            onToggleStar={toggleStar}
+          />
         )}
       </GlassPane>
     </div>

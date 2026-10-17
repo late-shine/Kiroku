@@ -2,8 +2,8 @@
 // `progress.studyLog` (Phase 18a). Each bar is stacked: right answers in `primary`, wrong ones in a lighter `primary/35`.
 // The full version (Progress tab) has a caption and tap / hover details; the compact one (lesson workspace) is the bars,
 // the weekday letters and the label. All numbers and wording come from `src/lib/study-log.ts` (pure, checked by a script).
-import { useState, useSyncExternalStore } from "react";
-import { localDay } from "@/lib/word-memory";
+import { useState } from "react";
+import { useToday } from "@/hooks/use-today";
 import {
   chartScale,
   dayCaption,
@@ -18,24 +18,6 @@ import {
 } from "@/lib/study-log";
 
 const DAYS_SHOWN = 7;
-
-// "Today" is read from the device clock, so it is client-only: the server render and the first client render get
-// `null` (an empty placeholder), then it is filled in. It is read again when the tab comes back, so a tab left open
-// past midnight moves on.
-const subscribeToday = (onChange: () => void) => {
-  window.addEventListener("focus", onChange);
-  document.addEventListener("visibilitychange", onChange);
-  return () => {
-    window.removeEventListener("focus", onChange);
-    document.removeEventListener("visibilitychange", onChange);
-  };
-};
-const useToday = (): string | null =>
-  useSyncExternalStore(
-    subscribeToday,
-    () => localDay(),
-    () => null,
-  );
 
 const PLACEHOLDER_DAYS: DayActivity[] = Array.from({ length: DAYS_SHOWN }, () => ({
   day: "",

@@ -36,6 +36,7 @@ import {
   loadAtmosphere,
   saveAtmosphere,
   type AtmospherePrefs,
+  type ParticleDensity,
 } from "@/lib/atmosphere-prefs";
 import { speak } from "@/lib/voice";
 import { VoicePicker } from "@/components/voice/VoicePicker";
@@ -239,6 +240,9 @@ function JapaneseDesk() {
   useEffect(() => {
     if (!mounted || !atmosphere.cycle) return;
     const interval = setInterval(() => {
+      // Phase 21: a hidden tab keeps its scene. Ticking there would only churn (and load) scene
+      // images nobody sees; the scenes simply continue from where the tab was left.
+      if (document.visibilityState === "hidden") return;
       setCycleIndex((i) => ((i ?? pickedIndexRef.current) + 1) % backgrounds.length);
     }, THEME_CYCLE_MS);
     return () => clearInterval(interval);
@@ -356,6 +360,7 @@ function JapaneseDesk() {
           cycling={atmosphere.cycle}
           darkness={atmosphere.darkness}
           motion={progress.bgZoomSpeed}
+          particles={atmosphere.particles}
         />
 
         <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1520px] flex-col p-3 pb-22 md:p-5 md:pb-22">
@@ -480,6 +485,8 @@ function JapaneseDesk() {
                   onToggleCycle={handleToggleCycleThemes}
                   motion={progress.bgZoomSpeed}
                   setMotion={(bgZoomSpeed) => setProgress((p) => ({ ...p, bgZoomSpeed }))}
+                  particles={atmosphere.particles}
+                  setParticles={(particles) => setAtmosphere((a) => ({ ...a, particles }))}
                 />
               </>
             )}
@@ -1430,6 +1437,8 @@ function AtmosphereView({
   onToggleCycle,
   motion,
   setMotion,
+  particles,
+  setParticles,
 }: {
   backgrounds: { name: string; url: string }[];
   active: number;
@@ -1440,6 +1449,8 @@ function AtmosphereView({
   onToggleCycle: (v: boolean) => void;
   motion: UserProgressState["bgZoomSpeed"];
   setMotion: (v: UserProgressState["bgZoomSpeed"]) => void;
+  particles: ParticleDensity;
+  setParticles: (v: ParticleDensity) => void;
 }) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -1522,6 +1533,7 @@ function AtmosphereView({
               <img
                 src={bg.url}
                 alt={bg.name}
+                loading="lazy"
                 className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
               />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/85 via-scrim/40 to-transparent p-3 text-left">
@@ -1559,6 +1571,33 @@ function AtmosphereView({
                   }`}
                 >
                   {speed}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Phase 21: the scene's particle effect. Same segmented control as Scene motion;
+              device-only like the rest of kiroku_atmosphere_v1. */}
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>Particles</span>
+            <div
+              role="radiogroup"
+              aria-label="Particles"
+              className="inline-flex rounded-lg border border-border/60 bg-glass/40 p-0.5"
+            >
+              {(["off", "subtle", "lively"] as const).map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  role="radio"
+                  aria-checked={particles === level}
+                  onClick={() => setParticles(level)}
+                  className={`hit-area rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                    particles === level
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {level}
                 </button>
               ))}
             </div>

@@ -2,10 +2,19 @@
 // reading-contrast layer is. Pure (the storage is passed in), so it can be checked from a plain script
 // (handoffs/phase-16d-atmosphere-check.ts). Device-only, like the voice choice: never synced, never in a backup.
 // (The chosen scene and the motion speed are different: they live in `progress` and do sync.)
+// Phase 21 adds `particles`: the per-scene effect density. Saves from before this phase have no field and
+// load with the default (subtle), the same way a bad field falls back to its default.
 
-export type AtmospherePrefs = { cycle: boolean; darkness: number };
+/** Phase 21: how many particles the scene effect draws. "off" draws nothing. */
+export type ParticleDensity = "off" | "subtle" | "lively";
 
-export const DEFAULT_ATMOSPHERE: AtmospherePrefs = { cycle: false, darkness: 0.34 };
+export type AtmospherePrefs = { cycle: boolean; darkness: number; particles: ParticleDensity };
+
+export const DEFAULT_ATMOSPHERE: AtmospherePrefs = {
+  cycle: false,
+  darkness: 0.34,
+  particles: "subtle",
+};
 
 /** The reading-contrast slider's range. A stored value outside it is pulled back in, so a bad value can't black out the scene. */
 export const DARKNESS_MIN = 0.15;
@@ -18,6 +27,9 @@ type Reader = { getItem(key: string): string | null };
 type Writer = { setItem(key: string, value: string): void };
 
 const clampDarkness = (n: number): number => Math.min(DARKNESS_MAX, Math.max(DARKNESS_MIN, n));
+
+const isParticleDensity = (v: unknown): v is ParticleDensity =>
+  v === "off" || v === "subtle" || v === "lively";
 
 /** The stored text as prefs, or null when it is absent or not a JSON object. A bad field falls back to its default. */
 export function parseAtmosphere(raw: string | null): AtmospherePrefs | null {
@@ -32,12 +44,14 @@ export function parseAtmosphere(raw: string | null): AtmospherePrefs | null {
   const record = value as Record<string, unknown>;
   const cycle = record["cycle"];
   const darkness = record["darkness"];
+  const particles = record["particles"];
   return {
     cycle: typeof cycle === "boolean" ? cycle : DEFAULT_ATMOSPHERE.cycle,
     darkness:
       typeof darkness === "number" && Number.isFinite(darkness)
         ? clampDarkness(darkness)
         : DEFAULT_ATMOSPHERE.darkness,
+    particles: isParticleDensity(particles) ? particles : DEFAULT_ATMOSPHERE.particles,
   };
 }
 
@@ -60,7 +74,11 @@ export function saveAtmosphere(storage: Writer, key: string, prefs: AtmospherePr
   try {
     storage.setItem(
       key,
-      JSON.stringify({ cycle: prefs.cycle, darkness: clampDarkness(prefs.darkness) }),
+      JSON.stringify({
+        cycle: prefs.cycle,
+        darkness: clampDarkness(prefs.darkness),
+        particles: prefs.particles,
+      }),
     );
   } catch {
     /* storage blocked or full: the choice just won't persist past this page */

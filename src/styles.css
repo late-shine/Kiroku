@@ -153,6 +153,96 @@ body {
   }
 }
 
+/* Phase 21: the four scene particle effects (drawn by components/atmosphere/Particles.tsx). Transform and
+   opacity only, so the compositor does the work and the blurred glass above stays cheap. Every loop starts
+   and ends at opacity 0, so the reset is never visible. Per-particle variation arrives as inline CSS
+   variables: --particle-duration / --particle-delay / --particle-peak on all of them, then --wx/--wy
+   (firefly wander), --sway (leaf), --dir/--rise (mist), --drift (pollen). Vertical travel uses lvh, the
+   same large-viewport unit as the scene layer, so the URL bar never changes how far a particle moves.
+   The global reduced-motion rule only freezes these mid-screen, so the component renders NOTHING then. */
+@keyframes firefly {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.7);
+  }
+  18% {
+    opacity: var(--particle-peak, 0.9);
+  }
+  40% {
+    opacity: 0.25;
+    transform: translate3d(var(--wx, 14px), var(--wy, -20px), 0) scale(1);
+  }
+  62% {
+    opacity: var(--particle-peak, 0.9);
+  }
+  84% {
+    opacity: 0.3;
+    transform: translate3d(calc(var(--wx, 14px) * -0.7), calc(var(--wy, -20px) * 0.5), 0)
+      scale(0.85);
+  }
+}
+@keyframes leaf-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -12lvh, 0) rotate(0deg);
+  }
+  8% {
+    opacity: var(--particle-peak, 0.8);
+  }
+  25% {
+    transform: translate3d(var(--sway, 26px), 20lvh, 0) rotate(48deg);
+  }
+  50% {
+    transform: translate3d(calc(var(--sway, 26px) * -0.6), 50lvh, 0) rotate(-30deg);
+  }
+  75% {
+    transform: translate3d(var(--sway, 26px), 80lvh, 0) rotate(42deg);
+  }
+  92% {
+    opacity: var(--particle-peak, 0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--sway, 26px) * -0.5), 110lvh, 0) rotate(-24deg);
+  }
+}
+@keyframes mist-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(calc(-42vw * var(--dir, 1)), 0, 0);
+  }
+  18% {
+    opacity: var(--particle-peak, 0.7);
+  }
+  82% {
+    opacity: var(--particle-peak, 0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(42vw * var(--dir, 1)), var(--rise, -3lvh), 0);
+  }
+}
+@keyframes pollen-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10lvh, 0);
+  }
+  12% {
+    opacity: var(--particle-peak, 0.65);
+  }
+  50% {
+    transform: translate3d(var(--drift, 16px), -40lvh, 0);
+  }
+  88% {
+    opacity: var(--particle-peak, 0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(var(--drift, 16px) * 1.8), -85lvh, 0);
+  }
+}
+
 /* Phase 16e: extends a control's tap target to at least 44 x 44 px WITHOUT changing how it looks or lays out: an
    invisible ::after sized from the element itself. Each side grows only as far as needed (a control already 44 px or
    more wide/tall gets no extension on that axis), so tall pills are not stretched sideways. Needs `position: relative`
@@ -193,6 +283,25 @@ body {
 @utility equalize {
   animation: equalize 0.9s ease-in-out infinite;
   transform-origin: bottom;
+}
+
+/* Phase 21: one animation utility per effect, next to `equalize` as the plan names. The duration and the
+   (negative) delay come from each particle's inline variables, so a field of them never moves in lockstep. */
+@utility particle-firefly {
+  animation: firefly var(--particle-duration, 9s) ease-in-out var(--particle-delay, 0s) infinite;
+}
+@utility particle-leaf {
+  animation: leaf-fall var(--particle-duration, 18s) linear var(--particle-delay, 0s) infinite;
+}
+@utility particle-mist {
+  animation: mist-drift var(--particle-duration, 70s) linear var(--particle-delay, 0s) infinite;
+}
+@utility particle-pollen {
+  animation: pollen-rise var(--particle-duration, 22s) linear var(--particle-delay, 0s) infinite;
+}
+/* The one colour a utility class cannot express from the tokens: the autumn leaf, mixed from two tokens. */
+@utility leaf-tone {
+  background: color-mix(in oklab, var(--primary) 55%, var(--destructive));
 }
 
 @utility glass-panel {

@@ -7,7 +7,14 @@
 //
 // The slow "drift" animation lives on ONE wrapper (not on each of the four images), and the darkness layer
 // and the two vignettes live inside the same container.
-import { memo, type CSSProperties } from "react";
+//
+// Phase 21: only the CURRENT and the NEXT scene image are mounted (cycling always moves forward, so the
+// next one is the only preload that matters), plus the outgoing scene until its 2.8 s fade-out finishes —
+// otherwise a crossfade would cut to the bare background colour. The scene's particle effect
+// (`Particles`) is a SIBLING of the drift wrapper, so it does not inherit the scale animation.
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Particles } from "@/components/atmosphere/Particles";
+import type { ParticleDensity } from "@/lib/atmosphere-prefs";
 
 type Props = {
   backgrounds: { name: string; url: string }[];
@@ -19,10 +26,14 @@ type Props = {
   darkness: number;
   /** Phase 16d: how the picture drifts. "still" = no animation (held at the drift's resting zoom). */
   motion: "slow" | "medium" | "still";
+  /** Phase 21: the scene's particle effect density. "off" draws nothing. */
+  particles: ParticleDensity;
 };
 
 // One drift cycle, in seconds. "slow" is the speed it always had; styles.css reads the variable.
 const DRIFT_SECONDS = { slow: 24, medium: 12 } as const;
+// A touch past the 2800ms opacity transition, so the outgoing scene stays mounted for its whole fade.
+const FADE_OUT_HOLD_MS = 3000;
 
 export const SceneBackdrop = memo(function SceneBackdrop({
   backgrounds,
@@ -30,8 +41,27 @@ export const SceneBackdrop = memo(function SceneBackdrop({
   cycling,
   darkness,
   motion,
+  particles,
 }: Props) {
   const active = backgrounds.length > 0 ? activeIndex % backgrounds.length : 0;
+  const next = backgrounds.length > 0 ? (active + 1) % backgrounds.length : 0;
+  // The scene that just left. Kept mounted (at opacity 0, still transitioning) until its fade-out ends.
+  const [fadingOut, setFadingOut] = useState<number | null>(null);
+  const prevActiveRef = useRef(active);
+  useEffect(() => {
+    if (prevActiveRef.current === active) return;
+    const outgoing = prevActiveRef.current;
+    prevActiveRef.current = active;
+    setFadingOut(outgoing);
+    const timer = window.setTimeout(
+      () => setFadingOut((f) => (f === outgoing ? null : f)),
+      FADE_OUT_HOLD_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [active]);
+  const mountedScenes = new Set<number>([active, next]);
+  if (fadingOut !== null) mountedScenes.add(fadingOut);
+
   return (
     <div
       aria-hidden
@@ -45,17 +75,22 @@ export const SceneBackdrop = memo(function SceneBackdrop({
             : { "--scene-drift-duration": `${DRIFT_SECONDS[motion]}s` }) as CSSProperties
         }
       >
-        {backgrounds.map((bg, index) => (
-          <img
-            key={`${bg.name}-${cycling ? "cycling" : "static"}`}
-            src={bg.url}
-            alt=""
-            className={`absolute inset-0 size-full object-cover transition-opacity duration-[2800ms] ease-in-out ${
-              index === active ? "opacity-100" : "opacity-0"
-            }`}
-          />
-        ))}
+        {backgrounds.map((bg, index) =>
+          mountedScenes.has(index) ? (
+            <img
+              key={`${bg.name}-${cycling ? "cycling" : "static"}`}
+              src={bg.url}
+              alt=""
+              className={`absolute inset-0 size-full object-cover transition-opacity duration-[2800ms] ease-in-out ${
+                index === active ? "opacity-100" : "opacity-0"
+              }`}
+            />
+          ) : null,
+        )}
       </div>
+      {/* A sibling of the drift wrapper (so no inherited scale), UNDER the darkness layer, so the
+          reading-contrast slider dims the particles together with the scene. */}
+      <Particles sceneName={backgrounds[active]?.name ?? ""} density={particles} />
       <div
         className="absolute inset-0 bg-background transition-opacity duration-700"
         style={{ opacity: darkness }}

@@ -96,7 +96,8 @@ export const Route = createFileRoute("/")({
   component: JapaneseDesk,
 });
 
-type MainTab = "lesson" | "quiz" | "progress" | "atmosphere" | "profile";
+// Phase 20: "studio" is a shell mode like the others — the AI Lesson Studio is a page, not an overlay.
+type MainTab = "lesson" | "quiz" | "progress" | "atmosphere" | "profile" | "studio";
 type LessonTab = "overview" | "grammar" | "kanji" | "vocab";
 const backgrounds = [
   { name: "Misty companions", url: cats },
@@ -184,7 +185,21 @@ function JapaneseDesk() {
   }, []);
   const [tab, setTab] = useState<MainTab>("lesson");
   const [lessonTab, setLessonTab] = useState<LessonTab>("overview");
-  const [aiOpen, setAiOpen] = useState(false);
+  // Phase 20: the Studio is the "studio" mode. Once opened it stays MOUNTED (hidden while another
+  // mode shows) so a pasted AI reply, the chosen step and an in-flight Gemini call survive a trip
+  // to Lessons and back. `studioReturnRef` remembers the last non-studio mode, so Back (and the
+  // header bot button, which toggles) returns to wherever the user came from.
+  const [studioVisited, setStudioVisited] = useState(false);
+  const studioReturnRef = useRef<MainTab>("lesson");
+  useEffect(() => {
+    if (tab === "studio") setStudioVisited(true);
+    else studioReturnRef.current = tab;
+    // A mode switch is a page change, so start each mode at the top. The window is the scroller
+    // (the content column grows with its content; see the comment on <main> below).
+    window.scrollTo({ top: 0 });
+  }, [tab]);
+  const openStudio = () => setTab("studio");
+  const closeStudio = () => setTab(studioReturnRef.current);
   const [soundOpen, setSoundOpen] = useState(false);
   // Phase 11b: the header "?" help card and the dismissible per-screen tips.
   const [helpOpen, setHelpOpen] = useState(false);
@@ -330,7 +345,11 @@ function JapaneseDesk() {
       }
       onClearDevice={resetAll}
     >
-      <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
+      {/* Phase 20: `overflow-clip`, not `overflow-hidden` — `hidden` makes this div a scroll
+          container, and a scroll container in the ancestor chain captures `position: sticky`
+          (the Studio's step row), silently breaking it. `clip` keeps the same clipping without
+          becoming a scroll container. Nothing ever scrolled this div programmatically. */}
+      <div className="relative min-h-dvh overflow-clip bg-background text-foreground">
         <SceneBackdrop
           backgrounds={backgrounds}
           activeIndex={visibleIndex}
@@ -357,12 +376,15 @@ function JapaneseDesk() {
             canPrev={prevDay !== null}
             canNext={nextDay !== null}
             quizDue={quizDue}
-            onAI={() => setAiOpen(true)}
+            onAI={() => (tab === "studio" ? closeStudio() : openStudio())}
             onSound={() => setSoundOpen((v) => !v)}
             onHelp={() => setHelpOpen(true)}
             onProfile={() => setTab("profile")}
           />
-          <main className="flex-1 overflow-y-auto py-5 md:py-7">
+          {/* Phase 20: no `overflow-y-auto` here. This column grows with its content
+              (`min-h-dvh`), so main never scrolled itself — the window does. The declaration only
+              made main a scroll container, which would capture the Studio's sticky step row. */}
+          <main className="flex-1 py-5 md:py-7">
             {mounted &&
               tab === "lesson" &&
               (lesson ? (
@@ -380,10 +402,10 @@ function JapaneseDesk() {
                   onDeleteDays={deleteDays}
                 />
               ) : welcomeSkipped ? (
-                <EmptyLessons onAI={() => setAiOpen(true)} onRestore={() => setTab("profile")} />
+                <EmptyLessons onAI={openStudio} onRestore={() => setTab("profile")} />
               ) : (
                 <WelcomePanel
-                  onAI={() => setAiOpen(true)}
+                  onAI={openStudio}
                   onRestore={() => setTab("profile")}
                   onSkip={() => setWelcomeSkipped(true)}
                 />
@@ -399,7 +421,7 @@ function JapaneseDesk() {
                   memory={progress.vocabMemory}
                   setProgress={setProgress}
                   onBack={() => setTab("lesson")}
-                  onOpenStudio={() => setAiOpen(true)}
+                  onOpenStudio={openStudio}
                 />
               </>
             )}
@@ -412,7 +434,7 @@ function JapaneseDesk() {
                   lessons={lessons}
                   progress={progress}
                   setProgress={setProgress}
-                  onAI={() => setAiOpen(true)}
+                  onAI={openStudio}
                   onRestore={() => setTab("profile")}
                 />
               </>
@@ -461,37 +483,43 @@ function JapaneseDesk() {
                 />
               </>
             )}
+            {/* Phase 20: the Studio is a mode like the others. Once opened it stays mounted and is
+                only hidden, so the pasted reply, the step and an in-flight Gemini call survive a
+                trip to another mode and back. `studioVisited` keeps it out of the DOM until the
+                first open. The `studio` tip card stays inside Configure, as before. */}
+            {mounted && studioVisited && (
+              <div className={tab === "studio" ? "" : "hidden"}>
+                <LessonStudio
+                  lessons={lessons}
+                  progress={progress}
+                  showTip={tips.isVisible("studio")}
+                  onDismissTip={() => tips.dismiss("studio")}
+                  onClose={closeStudio}
+                  onImport={(newLesson) => {
+                    // The Studio has already asked before a replacement. A replaced day starts over: its old word
+                    // records, starred/weak ids and "done" mark go, so they cannot attach to new words at the same ids.
+                    const replacing = isReplacement(lessons, newLesson.dayNumber);
+                    setLessons((old) => upsertLesson(old, newLesson));
+                    if (replacing) setProgress((p) => clearDayWordState(p, newLesson.dayNumber));
+                    setDay(newLesson.dayNumber);
+                    setTab("lesson");
+                  }}
+                />
+              </div>
+            )}
           </main>
         </div>
         {helpOpen && (
           <HelpCard
             onOpenStudio={() => {
               setHelpOpen(false);
-              setAiOpen(true);
+              openStudio();
             }}
             onShowTipsAgain={tips.showAgain}
             onClose={() => setHelpOpen(false)}
           />
         )}
         <MusicPanel expanded={soundOpen} onToggleExpanded={() => setSoundOpen((v) => !v)} />
-        {aiOpen && (
-          <LessonStudio
-            lessons={lessons}
-            progress={progress}
-            showTip={tips.isVisible("studio")}
-            onDismissTip={() => tips.dismiss("studio")}
-            onClose={() => setAiOpen(false)}
-            onImport={(newLesson) => {
-              // The Studio has already asked before a replacement. A replaced day starts over: its old word
-              // records, starred/weak ids and "done" mark go, so they cannot attach to new words at the same ids.
-              const replacing = isReplacement(lessons, newLesson.dayNumber);
-              setLessons((old) => upsertLesson(old, newLesson));
-              if (replacing) setProgress((p) => clearDayWordState(p, newLesson.dayNumber));
-              setDay(newLesson.dayNumber);
-              setAiOpen(false);
-            }}
-          />
-        )}
       </div>
     </AccountSyncProvider>
   );
@@ -597,11 +625,18 @@ function Header({
           </div>
         )}
         <HeaderAccount onOpen={onProfile} active={tab === "profile"} />
+        {/* Phase 20: this button now toggles the Studio MODE (a page), so it shows an active
+            state while the Studio is the current mode. */}
         <button
           onClick={onAI}
-          aria-label="AI lesson import"
-          title="AI lesson import"
-          className="hit-area rounded-lg border border-border/80 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
+          aria-label="AI Lesson Studio"
+          aria-pressed={tab === "studio"}
+          title="AI Lesson Studio"
+          className={`hit-area rounded-lg border p-2 transition-colors ${
+            tab === "studio"
+              ? "border-primary/50 bg-primary/15 text-primary"
+              : "border-border/80 text-muted-foreground hover:bg-accent hover:text-primary"
+          }`}
         >
           <Bot className="size-3.5" />
         </button>

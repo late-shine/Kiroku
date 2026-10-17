@@ -1,8 +1,11 @@
 // Phase 16b-3: stop the page behind an overlay from scrolling.
 //
-// Every hand-rolled overlay (Lesson Studio, help card, confirm dialog, sync dialogs) calls `useScrollLock()`.
-// It is reference-counted so stacked overlays work (a sync dialog opens above the Studio): the page is locked
-// while ANY lock is held and unlocked, with its previous `overflow` restored, when the last one releases.
+// Every hand-rolled overlay (help card, confirm dialog, sync dialogs) calls `useScrollLock()`.
+// (The Lesson Studio was the fourth until Phase 20 made it a page — a mode scrolls like any other
+// and needs no lock.)
+// It is reference-counted so stacked overlays work (a sync dialog can open above another overlay):
+// the page is locked while ANY lock is held and unlocked, with its previous `overflow` restored,
+// when the last one releases.
 // No scrollbar-width compensation is needed because `html { scrollbar-gutter: stable }` (styles.css) keeps the
 // gutter in place.
 import { useEffect } from "react";

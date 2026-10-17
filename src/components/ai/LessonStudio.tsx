@@ -41,7 +41,6 @@ import {
 } from "@/lib/gemini-models";
 import { relayGemini } from "@/lib/gemini-relay";
 import { TipCard } from "@/components/tips/TipCard";
-import { useScrollLock } from "@/hooks/use-scroll-lock";
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS, migrateLegacyStorage } from "@/lib/storage";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
@@ -169,10 +168,10 @@ export function LessonStudio({
   /** Phase 11b: whether to show the "Three steps" tip at the top of Configure, and how to dismiss it. */
   showTip: boolean;
   onDismissTip: () => void;
+  /** Phase 20: the Studio is a page (a shell mode); "close" means going Back to the previous mode. */
   onClose: () => void;
   onImport: (lesson: DayLesson) => void;
 }) {
-  useScrollLock();
   const { sync } = useAccountSync();
   const initial = useRef(loadStored()).current;
   const highestDay = Math.max(...lessons.map((l) => l.dayNumber), 0);
@@ -406,6 +405,10 @@ export function LessonStudio({
     // A replaced day is announced to the account too, so its old state does not come back on the next sync.
     if (isReplacement(lessons, lesson.dayNumber)) sync.noteReplaced(lesson.dayNumber);
     onImport(lesson);
+    // Phase 20: the Studio stays mounted after the import (the shell switches to the lesson), so
+    // ready the next visit the way a fresh open used to: the next new day, back at step 1.
+    setDay(Math.max(highestDay, lesson.dayNumber) + 1);
+    setStep("configure");
   };
 
   const steps: { id: Step; label: string }[] = [
@@ -420,135 +423,201 @@ export function LessonStudio({
   );
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-background/75 p-0 backdrop-blur-md sm:p-4">
-      {/* Below `sm` the panel fills the screen (Phase 20 turns the Studio into a page); from `sm` up it is the centred panel. */}
-      <div className="glass-panel-strong flex h-dvh w-full max-w-3xl flex-col overflow-hidden rounded-none shadow-2xl sm:h-auto sm:max-h-[88dvh] sm:rounded-2xl">
-        <div className="flex items-center justify-between border-b border-border/50 p-5">
-          <div>
-            <span className="font-display text-xs font-semibold tracking-wider text-primary">
-              AI LESSON STUDIO
-            </span>
-            <h2 className="mt-1 font-display text-xl font-medium text-foreground">
-              Build Day {day}
-            </h2>
-          </div>
+    // Phase 20: the Studio is a page (the shell's "studio" mode), not an overlay — no fixed shell,
+    // no `max-h` panel, no inner scroller, no scroll lock. The page scrolls like every other mode,
+    // so the 16b-3 scroll-bleed bug cannot recur by construction. The shell keeps this mounted
+    // (hidden) after the first open, so `pasted` and an in-flight Gemini call survive a mode trip.
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <span className="font-display text-xs font-semibold tracking-wider text-primary">
+            AI LESSON STUDIO
+          </span>
+          <h2 className="mt-1 font-display text-xl font-medium text-foreground">Build Day {day}</h2>
+        </div>
+        <button
+          onClick={onClose}
+          className="hit-area flex items-center gap-1 rounded-lg border border-border/80 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ChevronLeft className="size-3.5" />
+          Back
+        </button>
+      </div>
+
+      {/* The step row sticks to the top of the window while the page scrolls. It needs no scroll
+          container above it in the shell — see the overflow notes in routes/index.tsx. Styled like
+          the lesson tab row. */}
+      <div className="glass-panel sticky top-2 z-10 mt-4 flex gap-1 rounded-xl p-1.5">
+        {steps.map((s) => (
           <button
-            onClick={onClose}
-            aria-label="Close"
-            className="hit-area rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            key={s.id}
+            onClick={() => setStep(s.id)}
+            aria-current={step === s.id ? "step" : undefined}
+            className={`hit-area min-w-0 flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-medium transition-all sm:px-3 ${
+              step === s.id
+                ? "bg-primary/20 text-primary shadow-sm"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            }`}
           >
-            <X className="size-4" />
+            {s.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        <div className="flex gap-2 border-b border-border/50 px-5 pt-2.5">
-          {steps.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setStep(s.id)}
-              className={`px-3 py-2 text-xs transition-colors ${
-                step === s.id
-                  ? "border-b-2 border-primary text-primary font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto overscroll-contain p-5">
-          {step === "configure" && (
-            <div className="space-y-5">
-              {showTip && <TipCard id="studio" onDismiss={onDismissTip} />}
-              <div>
-                <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Target day
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setDay((d) => Math.max(1, d - 1))}
-                    aria-label="Previous day"
-                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary"
-                  >
-                    <ChevronLeft className="size-4" />
-                  </button>
-                  <span className="w-20 rounded-md border border-border bg-glass px-3 py-1.5 text-center text-sm font-semibold">
-                    Day {day}
-                  </span>
-                  <button
-                    onClick={() => setDay((d) => Math.min(highestDay + 1, d + 1))}
-                    aria-label="Next day"
-                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary"
-                  >
-                    <ChevronRight className="size-4" />
-                  </button>
-                  <span className="text-xs text-muted-foreground">{dayNotice.hint}</span>
-                </div>
-                {dayNotice.warning && (
-                  <p
-                    role="status"
-                    className="mt-2 rounded-md border border-primary/40 bg-primary/10 p-2 text-xs text-muted-foreground"
-                  >
-                    {dayNotice.warning}
-                  </p>
-                )}
+      <div className="glass-panel pane-in mt-4 rounded-xl p-5">
+        {step === "configure" && (
+          <div className="space-y-5">
+            {showTip && <TipCard id="studio" onDismiss={onDismissTip} />}
+            <div>
+              <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                Target day
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDay((d) => Math.max(1, d - 1))}
+                  aria-label="Previous day"
+                  className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <span className="w-20 rounded-md border border-border bg-glass px-3 py-1.5 text-center text-sm font-semibold">
+                  Day {day}
+                </span>
+                <button
+                  onClick={() => setDay((d) => Math.min(highestDay + 1, d + 1))}
+                  aria-label="Next day"
+                  className="rounded-md border border-border p-1.5 text-muted-foreground hover:text-primary"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+                <span className="text-xs text-muted-foreground">{dayNotice.hint}</span>
               </div>
+              {dayNotice.warning && (
+                <p
+                  role="status"
+                  className="mt-2 rounded-md border border-primary/40 bg-primary/10 p-2 text-xs text-muted-foreground"
+                >
+                  {dayNotice.warning}
+                </p>
+              )}
+            </div>
 
-              <div>
-                <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Save mode
-                </label>
-                <OptionGrid
-                  cols={3}
-                  value={mode}
-                  options={Object.keys(MODE_LABELS) as PromptMode[]}
-                  labels={MODE_LABELS}
-                  onChange={setMode}
-                />
-                <div className="mt-2 space-y-1 rounded-md border border-border bg-glass px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                  <p>
-                    <span className="font-semibold text-foreground">Learn + Save</span>{" "}
-                    (recommended) — {MODE_HINTS["learn-save"]}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-foreground">Learn only</span> —{" "}
-                    {MODE_HINTS["learn-only"]}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-foreground">Save only</span> —{" "}
-                    {MODE_HINTS["save-only"]}
+            <div>
+              <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                Save mode
+              </label>
+              <OptionGrid
+                cols={3}
+                value={mode}
+                options={Object.keys(MODE_LABELS) as PromptMode[]}
+                labels={MODE_LABELS}
+                onChange={setMode}
+              />
+              <div className="mt-2 space-y-1 rounded-md border border-border bg-glass px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                <p>
+                  <span className="font-semibold text-foreground">Learn + Save</span> (recommended)
+                  — {MODE_HINTS["learn-save"]}
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">Learn only</span> —{" "}
+                  {MODE_HINTS["learn-only"]}
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">Save only</span> —{" "}
+                  {MODE_HINTS["save-only"]}
+                </p>
+              </div>
+              {reviewInPrompt > 0 && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  {reviewInPrompt} word{reviewInPrompt === 1 ? "" : "s"} due for review will be
+                  added to this prompt, so your AI uses {reviewInPrompt === 1 ? "it" : "them"} again
+                  in new sentences.
+                </p>
+              )}
+            </div>
+
+            {mode === "save-only" ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Existing lesson text (optional)
+                  </label>
+                  <textarea
+                    value={existingLessonText}
+                    onChange={(e) => setExistingLessonText(e.target.value)}
+                    rows={5}
+                    placeholder="Paste the lesson you already learned here..."
+                    className="w-full resize-none rounded-md border border-border bg-glass p-3 font-mono text-xs outline-none focus:border-primary"
+                  />
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Leave this blank only if you're pasting the prompt into the <em>same</em> chat
+                    that already taught you — it already has the lesson in its own history. Fill it
+                    in if you're using a different or fresh AI chat (including the "Open" links
+                    below, which always start empty), so nothing gets lost — or invented — in
+                    between.
                   </p>
                 </div>
-                {reviewInPrompt > 0 && (
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                    {reviewInPrompt} word{reviewInPrompt === 1 ? "" : "s"} due for review will be
-                    added to this prompt, so your AI uses {reviewInPrompt === 1 ? "it" : "them"}{" "}
-                    again in new sentences.
-                  </p>
-                )}
+                <div>
+                  <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Vocab count
+                  </label>
+                  <OptionGrid
+                    cols={3}
+                    value={vocabCount}
+                    options={VOCAB_COUNTS}
+                    labels={
+                      Object.fromEntries(VOCAB_COUNTS.map((v) => [v, String(v)])) as Record<
+                        VocabCount,
+                        string
+                      >
+                    }
+                    onChange={setVocabCount}
+                  />
+                </div>
               </div>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                    AI sensei tone
+                  </label>
+                  <OptionGrid
+                    value={tone}
+                    options={Object.keys(TONE_LABELS) as Tone[]}
+                    labels={TONE_LABELS}
+                    onChange={setTone}
+                  />
+                </div>
 
-              {mode === "save-only" ? (
-                <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Lesson style
+                  </label>
+                  <OptionGrid
+                    value={style}
+                    options={Object.keys(STYLE_LABELS) as LessonStyle[]}
+                    labels={STYLE_LABELS}
+                    onChange={setStyle}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-5">
                   <div>
                     <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Existing lesson text (optional)
+                      JLPT level
                     </label>
-                    <textarea
-                      value={existingLessonText}
-                      onChange={(e) => setExistingLessonText(e.target.value)}
-                      rows={5}
-                      placeholder="Paste the lesson you already learned here..."
-                      className="w-full resize-none rounded-md border border-border bg-glass p-3 font-mono text-xs outline-none focus:border-primary"
+                    <OptionGrid
+                      cols={3}
+                      value={level}
+                      options={JLPT_LEVELS}
+                      labels={
+                        Object.fromEntries(JLPT_LEVELS.map((l) => [l, l])) as Record<
+                          JlptLevel,
+                          string
+                        >
+                      }
+                      onChange={setLevel}
                     />
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      Leave this blank only if you're pasting the prompt into the <em>same</em> chat
-                      that already taught you — it already has the lesson in its own history. Fill
-                      it in if you're using a different or fresh AI chat (including the "Open" links
-                      below, which always start empty), so nothing gets lost — or invented — in
-                      between.
-                    </p>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -568,302 +637,237 @@ export function LessonStudio({
                     />
                   </div>
                 </div>
-              ) : (
-                <>
+
+                <div className="grid grid-cols-2 gap-5">
                   <div>
                     <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                      AI sensei tone
+                      Kanji per day
                     </label>
                     <OptionGrid
-                      value={tone}
-                      options={Object.keys(TONE_LABELS) as Tone[]}
-                      labels={TONE_LABELS}
-                      onChange={setTone}
+                      cols={3}
+                      value={kanjiCount}
+                      options={KANJI_COUNTS}
+                      labels={
+                        Object.fromEntries(KANJI_COUNTS.map((v) => [v, String(v)])) as Record<
+                          KanjiCount,
+                          string
+                        >
+                      }
+                      onChange={setKanjiCount}
                     />
                   </div>
-
                   <div>
                     <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Lesson style
+                      Grammar points
                     </label>
                     <OptionGrid
-                      value={style}
-                      options={Object.keys(STYLE_LABELS) as LessonStyle[]}
-                      labels={STYLE_LABELS}
-                      onChange={setStyle}
+                      cols={3}
+                      value={grammarCount}
+                      options={GRAMMAR_COUNTS}
+                      labels={
+                        Object.fromEntries(GRAMMAR_COUNTS.map((v) => [v, String(v)])) as Record<
+                          GrammarCount,
+                          string
+                        >
+                      }
+                      onChange={setGrammarCount}
                     />
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-5">
-                    <div>
-                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                        JLPT level
-                      </label>
-                      <OptionGrid
-                        cols={3}
-                        value={level}
-                        options={JLPT_LEVELS}
-                        labels={
-                          Object.fromEntries(JLPT_LEVELS.map((l) => [l, l])) as Record<
-                            JlptLevel,
-                            string
-                          >
-                        }
-                        onChange={setLevel}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Vocab count
-                      </label>
-                      <OptionGrid
-                        cols={3}
-                        value={vocabCount}
-                        options={VOCAB_COUNTS}
-                        labels={
-                          Object.fromEntries(VOCAB_COUNTS.map((v) => [v, String(v)])) as Record<
-                            VocabCount,
-                            string
-                          >
-                        }
-                        onChange={setVocabCount}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-5">
-                    <div>
-                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Kanji per day
-                      </label>
-                      <OptionGrid
-                        cols={3}
-                        value={kanjiCount}
-                        options={KANJI_COUNTS}
-                        labels={
-                          Object.fromEntries(KANJI_COUNTS.map((v) => [v, String(v)])) as Record<
-                            KanjiCount,
-                            string
-                          >
-                        }
-                        onChange={setKanjiCount}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Grammar points
-                      </label>
-                      <OptionGrid
-                        cols={3}
-                        value={grammarCount}
-                        options={GRAMMAR_COUNTS}
-                        labels={
-                          Object.fromEntries(GRAMMAR_COUNTS.map((v) => [v, String(v)])) as Record<
-                            GrammarCount,
-                            string
-                          >
-                        }
-                        onChange={setGrammarCount}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-md border border-border bg-glass px-3 py-2.5">
-                    <span className="text-xs font-semibold text-foreground">Include romaji</span>
-                    <button
-                      onClick={() => setRomaji((v) => !v)}
-                      aria-pressed={romaji}
-                      aria-label="Toggle romaji"
-                      className={`h-5 w-9 rounded-full transition-colors ${romaji ? "bg-primary" : "bg-border"}`}
-                    >
-                      <span
-                        className={`block size-4 rounded-full bg-background transition-transform ${romaji ? "translate-x-4" : "translate-x-0.5"}`}
-                      />
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Custom focus (optional)
-                    </label>
-                    <input
-                      value={customFocus}
-                      onChange={(e) => setCustomFocus(e.target.value)}
-                      placeholder="e.g. ordering food, asking for directions..."
-                      className="w-full rounded-md border border-border bg-glass px-3 py-2 text-sm outline-none focus:border-primary"
+                <div className="flex items-center justify-between rounded-md border border-border bg-glass px-3 py-2.5">
+                  <span className="text-xs font-semibold text-foreground">Include romaji</span>
+                  <button
+                    onClick={() => setRomaji((v) => !v)}
+                    aria-pressed={romaji}
+                    aria-label="Toggle romaji"
+                    className={`h-5 w-9 rounded-full transition-colors ${romaji ? "bg-primary" : "bg-border"}`}
+                  >
+                    <span
+                      className={`block size-4 rounded-full bg-background transition-transform ${romaji ? "translate-x-4" : "translate-x-0.5"}`}
                     />
-                  </div>
-                </>
-              )}
+                  </button>
+                </div>
 
+                <div>
+                  <label className="mb-1.5 block text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Custom focus (optional)
+                  </label>
+                  <input
+                    value={customFocus}
+                    onChange={(e) => setCustomFocus(e.target.value)}
+                    placeholder="e.g. ordering food, asking for directions..."
+                    className="w-full rounded-md border border-border bg-glass px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+              </>
+            )}
+
+            <button
+              onClick={() => setStep("copy")}
+              className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+            >
+              Continue to prompt →
+            </button>
+          </div>
+        )}
+
+        {step === "copy" && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              This preview updates live as you change options in step 1.
+            </p>
+            <pre className="max-h-80 overflow-y-auto overscroll-contain whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">
+              {prompt}
+            </pre>
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => setStep("copy")}
-                className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+                onClick={copyPrompt}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground sm:w-auto sm:justify-start"
               >
-                Continue to prompt →
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied!" : "Copy prompt"}
               </button>
-            </div>
-          )}
-
-          {step === "copy" && (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                This preview updates live as you change options in step 1.
-              </p>
-              <pre className="max-h-80 overflow-y-auto overscroll-contain whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">
-                {prompt}
-              </pre>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={copyPrompt}
-                  className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+              {AI_LINKS.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-primary"
                 >
-                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  {copied ? "Copied!" : "Copy prompt"}
-                </button>
-                {AI_LINKS.map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-primary"
-                  >
-                    Open {link.label} ↗
-                  </a>
-                ))}
-              </div>
-
-              {mode === "save-only" && (
-                <div className="space-y-2 rounded-md border border-border bg-glass p-3">
-                  <p className="text-xs font-semibold text-foreground">
-                    Or let Gemini do the conversion (optional)
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Sends the lesson text you pasted in step 1 straight to Gemini and jumps to the
-                    preview — no copy/paste round trip.
-                  </p>
-                  <GeminiKeyPanel
-                    hasKey={Boolean(geminiKey)}
-                    onSave={saveGeminiKey}
-                    onRemove={removeGeminiKey}
-                  />
-                  <button
-                    onClick={() => void saveWithGemini()}
-                    disabled={geminiBusy || !geminiKey || !existingLessonText.trim()}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
-                  >
-                    {geminiBusy ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-3.5" />
-                    )}
-                    {geminiBusy ? "Asking Gemini…" : "Save with Gemini"}
-                  </button>
-                  {geminiBusy && <GeminiWaiting onCancel={cancelGemini} />}
-                  {!existingLessonText.trim() && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Paste the lesson text in step 1 first — Gemini has no other way to know what
-                      you learned.
-                    </p>
-                  )}
-                  <GeminiStatus error={geminiError} trail={geminiTrail} retry={retry} />
-                </div>
-              )}
-
-              <button
-                onClick={() => setStep("import")}
-                className="w-full rounded-md border border-border py-2.5 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
-              >
-                Continue to import →
-              </button>
+                  Open {link.label} ↗
+                </a>
+              ))}
             </div>
-          )}
 
-          {step === "import" && (
-            <div className="space-y-3">
-              <label className="block text-xs text-muted-foreground">
-                Paste the AI's full reply below (the JSON code block can be anywhere in it).
-              </label>
-              <textarea
-                value={pasted}
-                onChange={(e) => {
-                  setPasted(e.target.value);
-                  setImportResult(null);
-                  setFromGemini(false);
-                }}
-                rows={8}
-                placeholder="Paste the AI response here..."
-                className="w-full resize-none rounded-md border border-border bg-background/30 p-3 font-mono text-xs outline-none focus:border-primary"
-              />
-              <button
-                onClick={runExtract}
-                disabled={!pasted.trim()}
-                className="w-full rounded-md border border-border py-2.5 text-sm font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
-              >
-                Extract & preview
-              </button>
-
-              {importResult && !importResult.success && (
-                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-                  <p className="font-semibold">Couldn't validate this lesson:</p>
-                  <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
-                    {importResult.errors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {importResult && !importResult.success && (
-                <div className="space-y-2 rounded-md border border-border bg-glass p-3">
-                  <p className="text-xs font-semibold text-foreground">
-                    Stuck? Let Gemini try to fix it (optional)
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Sends the text above and the errors to Gemini, using Day {repairDay}
-                    {detectDayNumber(pasted)
-                      ? " (the day found in your pasted text)"
-                      : " (from step 1)"}{" "}
-                    and {vocabCount} vocab words from step 1. You still preview the result before
-                    anything is saved.
-                  </p>
-                  <GeminiKeyPanel
-                    hasKey={Boolean(geminiKey)}
-                    onSave={saveGeminiKey}
-                    onRemove={removeGeminiKey}
-                  />
-                  <button
-                    onClick={() => void fixWithGemini()}
-                    disabled={geminiBusy || !geminiKey}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
-                  >
-                    {geminiBusy ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-3.5" />
-                    )}
-                    {geminiBusy ? "Asking Gemini…" : "Fix with Gemini"}
-                  </button>
-                  {geminiBusy && <GeminiWaiting onCancel={cancelGemini} />}
-                </div>
-              )}
-
-              <GeminiStatus error={geminiError} trail={geminiTrail} retry={retry} />
-
-              {importResult?.success && importResult.lesson && (
-                <ImportPreviewCard
-                  lesson={importResult.lesson}
-                  alreadyExists={lessons.some(
-                    (l) => l.dayNumber === importResult.lesson!.dayNumber,
-                  )}
-                  fromGemini={fromGemini}
-                  onConfirm={confirmImport}
+            {mode === "save-only" && (
+              <div className="space-y-2 rounded-md border border-border bg-glass p-3">
+                <p className="text-xs font-semibold text-foreground">
+                  Or let Gemini do the conversion (optional)
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Sends the lesson text you pasted in step 1 straight to Gemini and jumps to the
+                  preview — no copy/paste round trip.
+                </p>
+                <GeminiKeyPanel
+                  hasKey={Boolean(geminiKey)}
+                  onSave={saveGeminiKey}
+                  onRemove={removeGeminiKey}
                 />
-              )}
-            </div>
-          )}
-        </div>
+                <button
+                  onClick={() => void saveWithGemini()}
+                  disabled={geminiBusy || !geminiKey || !existingLessonText.trim()}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
+                >
+                  {geminiBusy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3.5" />
+                  )}
+                  {geminiBusy ? "Asking Gemini…" : "Save with Gemini"}
+                </button>
+                {geminiBusy && <GeminiWaiting onCancel={cancelGemini} />}
+                {!existingLessonText.trim() && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Paste the lesson text in step 1 first — Gemini has no other way to know what you
+                    learned.
+                  </p>
+                )}
+                <GeminiStatus error={geminiError} trail={geminiTrail} retry={retry} />
+              </div>
+            )}
+
+            <button
+              onClick={() => setStep("import")}
+              className="w-full rounded-md border border-border py-2.5 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+            >
+              Continue to import →
+            </button>
+          </div>
+        )}
+
+        {step === "import" && (
+          <div className="space-y-3">
+            <label className="block text-xs text-muted-foreground">
+              Paste the AI's full reply below (the JSON code block can be anywhere in it).
+            </label>
+            <textarea
+              value={pasted}
+              onChange={(e) => {
+                setPasted(e.target.value);
+                setImportResult(null);
+                setFromGemini(false);
+              }}
+              rows={8}
+              placeholder="Paste the AI response here..."
+              className="w-full resize-none rounded-md border border-border bg-background/30 p-3 font-mono text-xs outline-none focus:border-primary"
+            />
+            <button
+              onClick={runExtract}
+              disabled={!pasted.trim()}
+              className="w-full rounded-md border border-border py-2.5 text-sm font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
+            >
+              Extract & preview
+            </button>
+
+            {importResult && !importResult.success && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                <p className="font-semibold">Couldn't validate this lesson:</p>
+                <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
+                  {importResult.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {importResult && !importResult.success && (
+              <div className="space-y-2 rounded-md border border-border bg-glass p-3">
+                <p className="text-xs font-semibold text-foreground">
+                  Stuck? Let Gemini try to fix it (optional)
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Sends the text above and the errors to Gemini, using Day {repairDay}
+                  {detectDayNumber(pasted)
+                    ? " (the day found in your pasted text)"
+                    : " (from step 1)"}{" "}
+                  and {vocabCount} vocab words from step 1. You still preview the result before
+                  anything is saved.
+                </p>
+                <GeminiKeyPanel
+                  hasKey={Boolean(geminiKey)}
+                  onSave={saveGeminiKey}
+                  onRemove={removeGeminiKey}
+                />
+                <button
+                  onClick={() => void fixWithGemini()}
+                  disabled={geminiBusy || !geminiKey}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-2 text-xs font-semibold text-foreground hover:border-primary hover:text-primary disabled:opacity-40"
+                >
+                  {geminiBusy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3.5" />
+                  )}
+                  {geminiBusy ? "Asking Gemini…" : "Fix with Gemini"}
+                </button>
+                {geminiBusy && <GeminiWaiting onCancel={cancelGemini} />}
+              </div>
+            )}
+
+            <GeminiStatus error={geminiError} trail={geminiTrail} retry={retry} />
+
+            {importResult?.success && importResult.lesson && (
+              <ImportPreviewCard
+                lesson={importResult.lesson}
+                alreadyExists={lessons.some((l) => l.dayNumber === importResult.lesson!.dayNumber)}
+                fromGemini={fromGemini}
+                onConfirm={confirmImport}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

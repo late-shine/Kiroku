@@ -220,8 +220,15 @@ function JapaneseDesk() {
   const [cycleIndex, setCycleIndex] = useState<number | null>(null);
   const pickedIndexRef = useRef(progress.backgroundIndex);
   useEffect(() => {
+    const changedOutsideCycle = pickedIndexRef.current !== progress.backgroundIndex;
     pickedIndexRef.current = progress.backgroundIndex;
-  }, [progress.backgroundIndex]);
+    // Phase 16d fix: a restored backup can replace the saved scene while cycling still has a
+    // transient display index. Drop that transient value so the restored scene appears now,
+    // rather than staying hidden until the next 24-second cycle tick. A normal scene pick is
+    // also safe: it writes the same value to both places, so clearing the transient value does
+    // not change what is visible.
+    if (atmosphere.cycle && changedOutsideCycle) setCycleIndex(null);
+  }, [atmosphere.cycle, progress.backgroundIndex]);
   const visibleIndex = (atmosphere.cycle ? cycleIndex : null) ?? progress.backgroundIndex;
 
   const handleToggleCycleThemes = (enabled: boolean) => {

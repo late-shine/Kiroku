@@ -48,8 +48,8 @@ The difference from Astra-chan, in one line: Astra drills cards. Kiroku feeds th
 
 ### The loop: build a prompt, learn, paste it back
 
-1. **Build a prompt** in the AI Lesson Studio (the robot button in the header). Pick the day, a tone (Gentle & Cozy, Strict Sensei, Casual Japanese Friend, Anime / Manga Companion), a JLPT level (N5, N4 or N3), how many vocab words (5, 10 or 15), a lesson focus, romaji on or off, and an optional custom focus.
-2. **Paste it into any AI** — ChatGPT, Claude, Gemini, whichever you like. The prompt already carries everything you've saved (grammar, kanji, vocab, the words you found hard), so the AI can't repeat itself or assume something you haven't learned.
+1. **Build a prompt** in the AI Lesson Studio (the robot button in the header; it's a full page, and it keeps your pasted reply if you leave and come back). Pick the day, a tone (Gentle & Cozy, Strict Sensei, Casual Japanese Friend, Anime / Manga Companion), a JLPT level (N5, N4 or N3), how many vocab words (5, 10 or 15), how many kanji (1, 3 or 5) and grammar points (1, 2 or 3) per day, a lesson focus, romaji on or off, and an optional custom focus.
+2. **Paste it into any AI** — ChatGPT, Claude, Gemini, whichever you like. The prompt already carries everything you've saved (grammar, kanji, vocab, the words you found hard), so the AI can't repeat itself or assume something you haven't learned. From Day 2 on, the prompt opens by asking the AI to check what you already know and confirm that none of today's grammar points or kanji repeat before it starts teaching.
 3. **Paste the reply back.** Kiroku finds the structured block in it, checks it, shows you a preview, and saves it as a new day. Nothing is saved until you confirm.
 
 There are three modes:
@@ -60,15 +60,15 @@ There are three modes:
 
 No account or API key is required for any of this. Manual copy and paste is the permanent default.
 
-**Optional accounts and sync.** Kiroku is local-first, but you can optionally sign in with Google and sync across devices when Firebase is configured. The first sync offers **Merge**, **Use my account's data** or **Use this device's data**; after that, automatic sync runs on app start, when the tab regains focus, when the connection returns and after local changes. **Sync now** and **Choose how to sync…** remain available. Sync includes lessons, completed days, stars and weak-word state, review memory, quiz counters, and selected display preferences. The Gemini key, music, active quiz state and voice choice stay on the device. Restoring a backup adds to the account; it does not delete account-only days.
+**Optional accounts and sync.** Kiroku is local-first, but you can optionally sign in with Google and sync across devices when Firebase is configured. The first sync offers **Merge**, **Use my account's data** or **Use this device's data**; after that, automatic sync runs on app start, when the tab regains focus, when the connection returns and after local changes. **Sync now** and **Choose how to sync…** remain available. Sync includes lessons, completed days, stars and weak-word state, review memory, quiz counters, the 7-day study log, your name and avatar, and selected display preferences. The Gemini key, music, active quiz state, voice choice and particle setting stay on the device. Deleting or replacing a day is announced to your other devices, so old state can't sneak back in. Restoring a backup adds to the account; it does not delete account-only days.
 
 **Optional Gemini help.** If you add your own Gemini API key, two buttons appear: *Fix with Gemini* repairs a reply that failed the check, and *Save with Gemini* does the Save-only step for you from pasted lesson text. Free-tier models are often busy, so Kiroku tries a chain of five in turn (45 seconds each) and shows you the trail. The result still goes through the same preview before anything is saved.
 
 ### Lessons
 
-Each day has six parts — grammar, kanji, vocab, a natural phrase, a pattern and a culture corner — shown across Overview, Grammar, Kanji and Vocab tabs. There's a furigana toggle, on'yomi and kun'yomi on every kanji, a Listen button, and "Mark done" for finished days.
+Each day has grammar, kanji, vocab, a natural phrase, a pattern and a culture corner — shown across Overview, Grammar, Kanji and Vocab tabs. A day can hold up to 3 grammar points and 5 kanji; when it has several, a row of chips switches between them. There's a furigana toggle, on'yomi and kun'yomi on every kanji, speaker buttons on kanji compounds, grammar examples and the natural phrase, and "Mark done" for finished days. On a phone, a small day stepper sits at the top of the lesson.
 
-You can delete a day, select several and delete them together, or reset everything (you type "reset" to confirm). A new visitor starts empty and sees a welcome panel that explains the loop, not a sample course.
+You can delete a day or select several and delete them together. Day numbers never shift: delete Day 14 and the list reads 13, 15, the arrows skip the gap, and the stepper says things like "Day 15 · lesson 14 of 16". The dialog tells you that the day's review words go with it. If you rebuild a day that already exists, Kiroku asks first and clears that day's review and mastery records, so old progress can't attach to different words. If you pick a deleted day in the Studio, it warns you that the original lesson can't be recovered without a backup. A new visitor starts empty and sees a welcome panel that explains the loop, not a sample course.
 
 ### Quiz and review
 
@@ -76,32 +76,38 @@ A quiz is a **round** — 10 words, 20, or all of them — and it ends with a sc
 
 Every answer updates a small record for that word. It's a Leitner system: five boxes, with gaps of 1, 3, 7, 14 and 30 days. A wrong answer sends the word back to box 1. A right answer only moves it up a box if the word was actually due, so quizzing "All days" can't rush words up the ladder. A word in the top box counts as mastered, and your own star ("I already know this") works as a manual override.
 
-**Nothing is due until you say so.** A word enters review when you add it (the + on a word, or *Add this day's words to review* on the Vocab tab), answer it in any quiz, or miss it. Restoring a backup doesn't dump a wall of cards on you. The Quiz tab shows a small due badge, and a Due today round asks the most overdue words first.
+**Nothing is due until you say so.** A word enters review when you add it (the + on a word, or *Add this day's words to review* on the Vocab tab), answer it in any quiz, or miss it. A wrong answer says so ("Added to review — back tomorrow."). Restoring a backup doesn't dump a wall of cards on you. The Quiz tab shows a small due badge, and a Due today round asks the most overdue words first.
 
 **Questions get harder as a word climbs.** Boxes 1–2 ask you to pick the meaning, box 3 asks you to choose the Japanese word, and boxes 4–5 ask you to type the reading in kana (katakana is accepted for hiragana; romaji isn't). A *Question style* row lets you force one style in any scope — "Choose the word" is the way out if you don't have a Japanese keyboard.
 
 **The review reaches into your next lesson.** When you build the next Learn prompt, up to 10 due words from earlier days (most overdue first) go in with a note asking the AI to use them again in the new lesson's example sentences and phrases. The spaced repetition happens inside real lessons, which a flashcard deck can't do. (Save only never gets this section.)
 
-### Progress and backup
+### Progress
 
-The Progress tab shows your days, mastered words, quizzes and a searchable word list. **Export** saves `kiroku-backup.json` — versioned (currently v2), with your lessons, progress and review records. **Restore** checks the file first, tells you what's in it, and asks before replacing anything; a damaged or too-new file is refused and changes nothing. Older backups from before versions still restore. Music settings, the voice choice and your Gemini key are never in the file.
+The Progress tab shows your days, mastered words, answers and word count, plus a **7-day rhythm chart** drawn from a real per-day study log (right and wrong answers, today last; it starts filling from the first answer after it was added, because earlier days can't be reconstructed). Below it, a **Memory block** shows how many words sit in each of the five boxes and when the words in review come due: today, tomorrow, in 2–7 days, later. The word list has a search box and filters (All, Due, Weak, Mastered, Not in review) with counts, and each word shows its box and any Due or Weak mark.
+
+### Profile and backup
+
+The avatar button in the header opens your Profile page: a name, an avatar (a Google photo, one of eight kanji glyphs — 記 猫 月 葉 花 星 蛍 苔 — or a picture you upload, shrunk to a tiny square in your browser first), an at-a-glance line (streak, due today, mastered), the account and sync controls, your data, preferences and a danger zone.
+
+**Export** saves `kiroku-backup.json` — versioned (currently v4), with your lessons, progress, review records and study log. **Restore** checks the file first, tells you what's in it, and asks before replacing anything; a damaged or too-new file is refused and changes nothing. Older backups from before versions still restore. Music settings, the voice choice, the particle setting and your Gemini key are never in the file. Resetting everything (you type "reset" to confirm) is in the Danger zone.
 
 ### Atmosphere, music and voice
 
-- **Atmosphere:** four background scenes with a reading-contrast slider.
+- **Atmosphere:** four background scenes with a reading-contrast slider, a Slow / Medium / Still setting for the gentle drift, an optional theme cycle that crossfades to the next scene every 24 seconds, and a quiet particle effect per scene — fireflies, falling leaves, mist and pollen — set to Off, Subtle or Lively. With reduced motion turned on in your system there are no particles at all. These settings are per device.
 - **Music:** an 8-song player in the corner. Every song comes in slowed, normal and sped-up versions, switching speed keeps your place, and shuffle randomizes the speed as well as the song. It has its own volume and loop.
 - **Voice:** pick which Japanese voice your browser uses for the Listen buttons, with a short sample when you tap one. The list comes from your browser and operating system, so it differs from device to device.
 
 ### Help when you're new
 
-Besides the welcome panel, there are small dismissible tip cards on the Quiz, Progress and Atmosphere tabs and inside the Lesson Studio, and a **?** button in the header that explains the Studio flow any time. "Show tips again" brings them back.
+Besides the welcome panel, there are small dismissible tip cards on the Quiz, Progress, Atmosphere and Profile pages and inside the Lesson Studio, and a **?** button in the header that explains the Studio flow any time. "Show tips again" brings them back.
 
 ---
 
 ## Your data and your key
 
 - **Local-first by default.** Without Firebase configuration, lessons and progress live in your browser's `localStorage`. Clear your browser data and they're gone, so export a backup now and then.
-- **Optional Firebase sync.** A signed-in account can sync lessons, progress and selected display preferences between devices. The Firebase web configuration is public by design; access is protected by `firebase/database.rules.json`, which must be published in the Firebase console.
+- **Optional Firebase sync.** A signed-in account can sync lessons, progress, review memory, the 7-day study log, your name and avatar, and selected display preferences between devices. The Firebase web configuration is public by design; access is protected by `firebase/database.rules.json`, which must be published in the Firebase console.
 - **Your Gemini key (optional) stays in your browser.** The app's one server function relays each request to Google and is built not to store or log the key. The key is never part of a backup, and it's never in the code.
 
 ## Known limits
@@ -109,6 +115,10 @@ Besides the welcome panel, there are small dismissible tip cards on the Quiz, Pr
 - Without a configured, signed-in account, everything is per browser. Sync is not a live realtime feed: another device's changes arrive on app start, tab focus, reconnect, or the next local change.
 - Voices depend on what your browser and OS provide, and the selected voice is intentionally per device. Typing readings needs a Japanese keyboard (or switch the Question style to "Choose the word").
 - Free-tier Gemini models get busy and have daily limits; the fallback chain helps but can't promise an answer.
+- Kiroku doesn't teach, so it can't enforce what the AI teaches. The prompt asks for the level you picked, but an AI can still drift (I once got an N4 kanji in an N5 lesson). Reading the Check section at the top of a reply is the cheap guard.
+- The prompt grows with your history. A very long course makes a very long prompt to copy, which may be awkward on a phone. There's no chunked or downloadable prompt yet.
+- Rebuilding an older day gives the AI only the lessons before it, not the ones after, so it can repeat something you've since learned.
+- The study log began with the 7-day chart, so earlier answers don't appear in it.
 
 ---
 
@@ -143,7 +153,23 @@ A few of those moments, because they're the actual work:
 - **A visual polish pass.** Glass panels, typography, navigation, vocabulary, quiz, welcome and music controls were refined without changing the lesson, review or sync model. The optional Ethereal Theme Cycle gives each scene one gentle zoom cycle before the next 24-second crossfade.
 - **A safer startup pass.** Local lessons, progress and music preferences now restore after client mount, while account cleanup waits for a real sign-out. This avoids SSR hydration mismatches, protects local data during startup and keeps Firebase optional when it is not configured.
 
-The work is split into numbered phases. Each has a written spec in `PLAN.md`, a narrow set of files, and a handoff note saying exactly what changed (kept outside this repo; see Checks). One AI session builds a phase and another checks it against the spec and runs the checks. Then I test it in the running app, with screenshots, before it goes into the real project. `context.md` holds the rules every new session must read first, because a chat isn't memory but files are. Until Phase 15 there was no git, so I kept every phase as a zip plus a recovery copy.
+### How I work with AI
+
+The work is split into numbered phases. Each starts as a written plan with a narrow scope: what to build, which files to touch, what must not change. The plans come first. For the polish pass (Phases 16–21) several models each drafted their own plan — Sonnet 5.5 (Claude), Opus 4.6 (through Google Antigravity), Grok and GPT 6 Sol (through Lovable), among others — and Sonnet 5.5 merged them into the single plan the later phases followed.
+
+A builder AI works from that plan and a standing context file (the rules every new session reads first, because a chat isn't memory but files are), and ends with a handoff note: what changed, what was and wasn't checked, what it left alone. A different AI then verifies the phase against the plan and the code. It can update the plan and context, but it asks me before fixing a bug. I test the result in the running app, with screenshots, before it goes into the real project. None of these documents are part of the app, so they live outside this repo. Until Phase 15 there was no git, so I kept every phase as a zip plus a recovery copy.
+
+Two rules do most of the work. Builders can't claim what they couldn't see: every handoff lists the checks that ran and the ones that didn't. And when a builder does more than the plan says, it has to say so, under "Where I went beyond the plan", so I can undo it.
+
+**A bug, start to finish: deleting Day 14.** While studying I noticed the AI had taught me an N4 kanji in an N5 lesson, so I deleted that day. The day list now read 13, then 15, and clicking 14 opened Day 1's lesson. I reported it like any bug: what I did, what I saw, what I didn't know (would its review words come back? what happens to the progress bar?) and where we were in the plan.
+
+- **The verifier read the code first.** Deleting a day removes its lesson and review words on purpose, and quiz totals stay. The real bug was navigation assuming day numbers never have gaps. It wrote the finding into the plan and changed no code until I said so.
+- **A builder fixed it.** Arrows walk the days that exist, a missing day never falls back to Day 1, and the stepper reads "Day 15 · lesson 14 of 16". A 33-case check covers a deleted middle day.
+- **The audit found two things I hadn't.** The Studio would rebuild a missing day from only the lessons that remained. Replacing an existing day also left the old words' review state attached to the new ones.
+- **Then a call that was mine.** I was worried about making Kiroku complex for new people. I said: fix it properly, extra manual rules are fine, and if it gets too complex I'll plan a simplification later. The fix added a small "replaced day" record to sync, so a replaced day stays replaced on every device, and a warning in the Studio for missing days.
+- **One other thing I'd raised was parked on purpose:** keeping the AI to the chosen JLPT level. It was written down so it didn't get lost.
+
+**What the AI can't see: the crossfade that wasn't.** Phase 21, built by Kimi K3, added particles to each background scene and made the images load lighter. Every automated check passed, and the builder said plainly it couldn't see the app. In my browser the old picture vanished and the new one faded in from the plain background. The outgoing image was being remembered one render too late, so it was removed before it could fade. The fix was small, and the check that came with it fails on the old code and passes on the new. A clean build can't tell you the screen looks right.
 
 ### Timeline
 
@@ -162,18 +188,28 @@ The dates come from my local handoff notes.
 | Oct 3 | Review memory, calm intake, review words in the prompt, harder questions (14b–14d) |
 | Oct 4 | Left Lovable; moved to GitHub and Vercel (15) |
 | Oct 4–6 | Google sign-in, manual sync, then automatic cross-device sync (9a–9c) |
-| Oct 7 | Visual polish, synchronized ethereal theme cycle, and hydration/account cleanup fixes |
+| Oct 7 | Visual polish (glass panels, typography, navigation), the 24-second ethereal theme cycle, and hydration/account cleanup fixes |
+| Oct 10 | The merged polish plan for Phases 16–21 |
+| Oct 11 | Styling foundation; steadier phone background, music-pill clearance and scroll locking (16a, 16b) |
+| Oct 12 | "Added to review" feedback and speaker buttons, settings that stick, 44 px touch targets, several kanji and grammar points per day with the Check prompt (16c–16e, 17) |
+| Oct 13–14 | The per-day study log and the real 7-day chart (18a, 18b) |
+| Oct 15 | Profile page with a synced name and avatar, then picture upload (19a) |
+| Oct 16 | The deleted-day navigation fix |
+| Oct 17 | Studio warning for missing days, safe day replacement on one device and across devices, the Progress Memory block and word filters (19b) |
+| Oct 18 | The Lesson Studio as a page, scene particles and lighter image loading, the crossfade fix (20, 21, 21a) |
 
 ### AI tools used
 
 | Tool | Role |
 |---|---|
 | **ChatGPT** | My actual Japanese tutor, and one of the AIs I run Kiroku's prompts through |
-| **Grok** | The very first `.md` export — the idea that started all of this |
-| **Claude** | Built the first rough version; since then the main builder and verifier, in separate sessions per phase because of daily message limits |
+| **Grok** | The very first `.md` export — the idea that started all of this. Later one of the planners for the polish pass, and the builder of the deleted-day navigation fix |
+| **Claude** | Built the first rough version; since then a builder and verifier in separate sessions per phase because of daily message limits. Sonnet 5.5 drafted one of the polish plans and merged all of them into the current plan |
+| **Kimi K3** | Builder for Phases 20 and 21 (the Studio as a page, scene particles and lighter image loading) and for the 21a crossfade fix |
 | **Google AI Studio + Gemini** | Rebuilt the first version with more features and structure; Gemini is also the optional API behind Fix / Save with Gemini |
 | **OpenAI Codex (GPT-5)** | Independent verifier: compared phase changes with the project context and handoffs, reviewed diffs, and ran targeted typecheck, lint and production-build checks before changes were applied |
-| **Lovable** | Two full redesigns — the second one is the current visual style. Kiroku no longer depends on it. |
+| **Google Antigravity (Opus 4.6)** | Drafted one of the plans that were merged into the polish plan |
+| **Lovable** | Two full redesigns — the second one is the current visual style. GPT 6 Sol, through Lovable, drafted one of the polish plans. Kiroku no longer depends on it. |
 
 ---
 
@@ -213,7 +249,7 @@ npm run build
 npm run lint
 ```
 
-`PLAN.md`, `context.md`, and the phase-specific `handoffs/` verifier scripts are working files kept outside this repository, so they are not present in a normal clone. The latest sync verification was run in that separate testing copy with the Phase 9b and 9c pure sync checks and the Phase 9c Vitest/jsdom UI check. The UI check needs temporary packages; its script header has the exact `npm install --no-save --no-package-lock` command. The 9c UI check includes the earlier 9b cases, while the two plain `tsx` checks cover the pure sync rules and Firebase rules shape.
+The planning documents, the handoff notes and the small check scripts that go with each phase are working files kept outside this repository, so they are not in a normal clone. Most of the checks are plain `tsx` scripts over the pure logic (sync and the Firebase rules shape, backup, the quiz, the prompt, day navigation and replacement, the study log), and a few UI checks run under Vitest and jsdom with temporary packages. None of them can see the app, which is why I still test every phase in the running one.
 
 `npm run lint` mostly reports Prettier formatting findings, because the dense files were never auto-formatted and I don't run `--fix` in the middle of feature work. It rewrites whole files.
 
@@ -221,7 +257,7 @@ npm run lint
 
 Push to GitHub and connect the repo to Vercel. `npm run build` uses Nitro's `vercel` preset, which writes the whole Vercel output itself, so there's no `vercel.json`. The Gemini relay runs as a Vercel Function; its worst case, five models in a row, is about 225 seconds, and Vercel's Hobby plan allows 300.
 
-For accounts and sync, add the same six `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's Environment Variables (Production, and Preview if wanted) before redeploying; Vite bakes them into the client build. Add the production domain to Firebase Authentication's authorized domains and publish the current `firebase/database.rules.json` in Realtime Database → Rules. Random Vercel preview URLs are not automatically authorized for Google sign-in.
+For accounts and sync, add the same six `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's Environment Variables (Production, and Preview if wanted) before redeploying; Vite bakes them into the client build. Add the production domain to Firebase Authentication's authorized domains and publish the current `firebase/database.rules.json` in Realtime Database → Rules. Random Vercel preview URLs are not automatically authorized for Google sign-in. When a release changes `firebase/database.rules.json`, publish the new rules before any device runs the new build, then hard-refresh open tabs so an old cached one can't sync without the new fields.
 
 Vercel refuses to build versions of TanStack Start that have a known security advisory. Phase 15 hit exactly that. The fix is to upgrade `@tanstack/react-start`, `@tanstack/react-router` and `@tanstack/router-plugin` together, then re-run the checks.
 
@@ -241,9 +277,16 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 - [x] Leave Lovable; GitHub and Vercel
 - [ ] Quiz more than vocab — kanji, grammar points and phrases
 - [x] Atmosphere: optional 24-second automatic theme cycling
-- [ ] Atmosphere: a few gentle particles
+- [x] Atmosphere: a few gentle particles, one effect per scene
 - [ ] A friendlier guided tour for the Lesson Studio (Next / Skip all)
 - [x] Accounts: Google sign-in and automatic cross-device sync
+- [x] Several kanji and grammar points per day, with a Check step at the top of the prompt
+- [x] A real 7-day study chart and a Memory block with word filters in Progress
+- [x] Profile page with a synced name, avatar and uploaded picture
+- [x] Safe day deletion and replacement, on one device and across devices
+- [x] The Lesson Studio as a full page
+- [ ] Prompt that keeps the AI to the chosen JLPT level and says so when that level is already covered
+- [ ] Downloadable or chunked prompts for very long histories
 - [ ] A bridge between Kiroku and Astra-chan, so each can suggest the other
 
 ---

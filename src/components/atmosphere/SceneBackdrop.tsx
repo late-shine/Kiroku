@@ -12,7 +12,7 @@
 // next one is the only preload that matters), plus the outgoing scene until its 2.8 s fade-out finishes —
 // otherwise a crossfade would cut to the bare background colour. The scene's particle effect
 // (`Particles`) is a SIBLING of the drift wrapper, so it does not inherit the scale animation.
-import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useState, type CSSProperties } from "react";
 import { Particles } from "@/components/atmosphere/Particles";
 import type { ParticleDensity } from "@/lib/atmosphere-prefs";
 
@@ -45,20 +45,28 @@ export const SceneBackdrop = memo(function SceneBackdrop({
 }: Props) {
   const active = backgrounds.length > 0 ? activeIndex % backgrounds.length : 0;
   const next = backgrounds.length > 0 ? (active + 1) % backgrounds.length : 0;
-  // The scene that just left. Kept mounted (at opacity 0, still transitioning) until its fade-out ends.
+  // The scene that is leaving, or null. It is recorded DURING RENDER, not in an effect: the old image
+  // must stay mounted in the very commit that introduces the new scene. An effect runs after the
+  // commit, so with an effect-only flag the old image is already unmounted and its half of the
+  // crossfade never paints. Setting state during render is the documented "adjust state when a prop
+  // changes" pattern: React re-renders immediately, before anything reaches the screen.
+  const [prevActive, setPrevActive] = useState(active);
   const [fadingOut, setFadingOut] = useState<number | null>(null);
-  const prevActiveRef = useRef(active);
+  if (prevActive !== active) {
+    setPrevActive(active);
+    setFadingOut(prevActive);
+  }
+  // The outgoing image unmounts a touch past the 2800ms transition. A rapid second change re-arms the
+  // timer for the newer outgoing scene; the older one was already (mostly) transparent.
   useEffect(() => {
-    if (prevActiveRef.current === active) return;
-    const outgoing = prevActiveRef.current;
-    prevActiveRef.current = active;
-    setFadingOut(outgoing);
+    if (fadingOut === null) return;
+    const outgoing = fadingOut;
     const timer = window.setTimeout(
       () => setFadingOut((f) => (f === outgoing ? null : f)),
       FADE_OUT_HOLD_MS,
     );
     return () => window.clearTimeout(timer);
-  }, [active]);
+  }, [fadingOut]);
   const mountedScenes = new Set<number>([active, next]);
   if (fadingOut !== null) mountedScenes.add(fadingOut);
 

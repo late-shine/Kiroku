@@ -97,6 +97,26 @@ export const TRACKS: Track[] = [
       "sped-up": "/audio/yume-to-hazakura-sped-up.mp3",
     },
   },
+  {
+    id: "somewhere-only-we-know",
+    title: "Somewhere Only We Know",
+    artist: "Keane",
+    versions: {
+      slowed: "/audio/somewhere-only-we-know-slowed.mp3",
+      normal: "/audio/somewhere-only-we-know-normal.mp3",
+      "sped-up": "/audio/somewhere-only-we-know-sped-up.mp3",
+    },
+  },
+  {
+    id: "love-me-like-you-do",
+    title: "Love Me Like You Do",
+    artist: "Ellie Goulding",
+    versions: {
+      slowed: "/audio/love-me-like-you-do-slowed.mp3",
+      normal: "/audio/love-me-like-you-do-normal.mp3",
+      "sped-up": "/audio/love-me-like-you-do-sped-up.mp3",
+    },
+  },
 ];
 
 export function hasVersion(track: Track, mode: SpeedMode): boolean {

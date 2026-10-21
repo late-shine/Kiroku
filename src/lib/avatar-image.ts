@@ -1,11 +1,12 @@
 /**
  * Phase 19a-2 — turns a picture the person chose into the tiny square stored as `prefs.photo`: decoded in the browser
- * (EXIF rotation respected), cropped to a centred square, scaled to `AVATAR_PIXELS`, and re-encoded as WebP (JPEG where
+ * (EXIF rotation respected), cropped to a square (centred, or the window the person picked in the Phase 22 crop panel,
+ * see `src/lib/avatar-crop.ts`), scaled to `AVATAR_PIXELS`, and re-encoded as WebP (JPEG where
  * the browser cannot write WebP), trying smaller sizes and lower quality until it fits `MAX_PHOTO_LENGTH`.
  * The picture never leaves the device except inside the person's own synced prefs; nothing is uploaded to a file store.
  *
- * `squareCrop` and `shrinkToLimit` are pure (checked by handoffs/phase-19a-profile-check.ts). `fileToAvatarDataUrl` needs
- * a real browser (canvas, createImageBitmap), so it is the one part no script check can run.
+ * `squareCrop` and `shrinkToLimit` are pure (checked by handoffs/phase-19a-profile-check.ts). `loadAvatarSource`,
+ * `renderAvatar` and `fileToAvatarDataUrl` need a real browser (canvas, createImageBitmap), so no script check can run them.
  */
 import { AVATAR_PIXELS, isAvatarDataUrl } from "@/lib/profile";
 
@@ -48,7 +49,15 @@ export function shrinkToLimit(encode: (pixels: number, quality: number) => strin
   return null;
 }
 
-type Decoded = { source: CanvasImageSource; width: number; height: number; close: () => void };
+/** A decoded picture, ready to draw from. Call `close()` when finished (it frees the bitmap; a no-op for an <img>). */
+export type AvatarSource = {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close: () => void;
+};
+
+type Decoded = AvatarSource;
 
 async function decode(file: File): Promise<Decoded> {
   if (typeof createImageBitmap === "function") {
@@ -81,8 +90,8 @@ async function decode(file: File): Promise<Decoded> {
   }
 }
 
-/** Reads a picture file and returns the small `data:` address to store. Throws `AvatarImageError` with a plain message. */
-export async function fileToAvatarDataUrl(file: File): Promise<string> {
+/** Checks and decodes a picture file. Throws `AvatarImageError` with a plain message. The caller must `close()` the result. */
+export async function loadAvatarSource(file: File): Promise<AvatarSource> {
   if (!file.type.startsWith("image/") || file.type === "image/svg+xml") {
     throw new AvatarImageError("Choose a JPEG, PNG or WebP picture.");
   }
@@ -95,27 +104,51 @@ export async function fileToAvatarDataUrl(file: File): Promise<string> {
   } catch {
     throw new AvatarImageError("Couldn't read that picture. Try a different one.");
   }
+  if (decoded.width < 1 || decoded.height < 1) {
+    decoded.close();
+    throw new AvatarImageError("Couldn't read that picture. Try a different one.");
+  }
+  return decoded;
+}
+
+/** Draws the square window `rect` of a decoded picture onto `context` (a square canvas `pixels` wide). Shared by the preview and the saved result. */
+export function drawAvatarSquare(
+  context: CanvasRenderingContext2D,
+  decoded: AvatarSource,
+  rect: { sx: number; sy: number; side: number },
+  pixels: number,
+): void {
+  context.fillStyle = "#161616"; // a see-through PNG becomes this colour, not black-on-nothing
+  context.fillRect(0, 0, pixels, pixels);
+  context.imageSmoothingQuality = "high";
+  context.drawImage(decoded.source, rect.sx, rect.sy, rect.side, rect.side, 0, 0, pixels, pixels);
+}
+
+/** Crops `rect` out of a decoded picture and returns the small `data:` address to store. Throws `AvatarImageError`. */
+export function renderAvatar(
+  decoded: AvatarSource,
+  rect: { sx: number; sy: number; side: number },
+): string {
+  const result = shrinkToLimit((pixels, quality) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = pixels;
+    canvas.height = pixels;
+    const context = canvas.getContext("2d");
+    if (!context) return "";
+    drawAvatarSquare(context, decoded, rect, pixels);
+    const webp = canvas.toDataURL("image/webp", quality);
+    return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", quality);
+  });
+  if (!result)
+    throw new AvatarImageError("Couldn't make that picture small enough. Try a different one.");
+  return result;
+}
+
+/** The one-step path: a file in, the centred-square `data:` address out. (The Profile page now goes through the crop panel instead.) */
+export async function fileToAvatarDataUrl(file: File): Promise<string> {
+  const decoded = await loadAvatarSource(file);
   try {
-    if (decoded.width < 1 || decoded.height < 1) {
-      throw new AvatarImageError("Couldn't read that picture. Try a different one.");
-    }
-    const { sx, sy, side } = squareCrop(decoded.width, decoded.height);
-    const result = shrinkToLimit((pixels, quality) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = pixels;
-      canvas.height = pixels;
-      const context = canvas.getContext("2d");
-      if (!context) return "";
-      context.fillStyle = "#161616"; // a see-through PNG becomes this colour, not black-on-nothing
-      context.fillRect(0, 0, pixels, pixels);
-      context.imageSmoothingQuality = "high";
-      context.drawImage(decoded.source, sx, sy, side, side, 0, 0, pixels, pixels);
-      const webp = canvas.toDataURL("image/webp", quality);
-      return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", quality);
-    });
-    if (!result)
-      throw new AvatarImageError("Couldn't make that picture small enough. Try a different one.");
-    return result;
+    return renderAvatar(decoded, squareCrop(decoded.width, decoded.height));
   } finally {
     decoded.close();
   }

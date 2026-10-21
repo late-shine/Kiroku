@@ -15,10 +15,11 @@ import {
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { AccountCard } from "@/components/account/AccountCard";
 import { Avatar } from "@/components/profile/Avatar";
+import { AvatarCropper } from "@/components/profile/AvatarCropper";
 import { BackupControls } from "@/components/profile/BackupControls";
 import { ResetControl } from "@/components/profile/ResetControl";
 import { useProfile } from "@/components/profile/useProfile";
-import { AvatarImageError, fileToAvatarDataUrl } from "@/lib/avatar-image";
+import { AvatarImageError, loadAvatarSource, type AvatarSource } from "@/lib/avatar-image";
 import {
   GLYPH_AUTO,
   GLYPH_UPLOAD,
@@ -140,6 +141,15 @@ export function ProfilePage({
   const fileInput = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // Phase 22: a chosen file is decoded first and shown in the crop panel; only "Use this picture" stores anything.
+  // The decoded bitmap is freed whenever it is replaced, dismissed or the page goes away.
+  const [cropSource, setCropSource] = useState<AvatarSource | null>(null);
+  useEffect(
+    () => () => {
+      cropSource?.close();
+    },
+    [cropSource],
+  );
   const uploadedAvatar = avatarFor({ ...profile, glyph: GLYPH_UPLOAD }, null);
   const onPickPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -148,7 +158,7 @@ export function ProfilePage({
     setPhotoError(null);
     setPhotoBusy(true);
     try {
-      setPhoto(await fileToAvatarDataUrl(file));
+      setCropSource(await loadAvatarSource(file));
     } catch (error) {
       setPhotoError(
         error instanceof AvatarImageError
@@ -254,35 +264,46 @@ export function ProfilePage({
             </button>
           ))}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(e) => void onPickPhoto(e)}
-            className="hidden"
+        {cropSource ? (
+          <AvatarCropper
+            source={cropSource}
+            onSave={(url) => {
+              setPhoto(url);
+              setCropSource(null);
+            }}
+            onCancel={() => setCropSource(null)}
           />
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            disabled={photoBusy}
-            className="hit-area rounded-md border border-border px-3 py-2 text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {photoBusy ? "Preparing…" : profile.photo ? "Change picture" : "Upload a picture"}
-          </button>
-          {profile.photo && (
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => void onPickPhoto(e)}
+              className="hidden"
+            />
             <button
               type="button"
-              onClick={() => {
-                setPhotoError(null);
-                removePhoto();
-              }}
-              className="hit-area rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => fileInput.current?.click()}
+              disabled={photoBusy}
+              className="hit-area rounded-md border border-border px-3 py-2 text-xs hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Remove picture
+              {photoBusy ? "Preparing…" : profile.photo ? "Change picture" : "Upload a picture"}
             </button>
-          )}
-        </div>
+            {profile.photo && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoError(null);
+                  removePhoto();
+                }}
+                className="hit-area rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                Remove picture
+              </button>
+            )}
+          </div>
+        )}
         {photoError && (
           <p role="alert" className="mt-2 text-[11px] text-destructive">
             {photoError}
@@ -290,8 +311,8 @@ export function ProfilePage({
         )}
         <p className="mt-3 text-[11px] text-muted-foreground">
           {account.configured
-            ? "Your name, avatar and uploaded picture sync with your Kiroku account (not Google). Pictures are shrunk to a small square first."
-            : "Pictures are shrunk to a small square and kept on this device."}
+            ? "Your name, avatar and uploaded picture sync with your Kiroku account (not Google). You choose which part to keep, then it is shrunk to a small square."
+            : "You choose which part of a picture to keep, then it is shrunk to a small square and kept on this device."}
         </p>
       </Section>
 

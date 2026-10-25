@@ -4,7 +4,7 @@
  * Pure functions only (no React, no localStorage, no DOM) so they can be tested without a browser.
  * `ProgressView`'s Export / Restore controls in `src/routes/index.tsx` are the only callers.
  *
- * Format (version 4):  { app: "kiroku", version: 4, exportedAt: <ISO string>, lessons, progress }
+ * Format (version 5):  { app: "kiroku", version: 5, exportedAt: <ISO string>, lessons, progress }
  *
  * What is deliberately NOT in a backup:
  * - The Gemini API key (BYOK rule — backup files get shared and emailed). `buildBackup` only accepts
@@ -29,7 +29,7 @@ import { vocabMemorySchema } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 export const BACKUP_APP = "kiroku";
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 
 export interface BackupFile {
   app: typeof BACKUP_APP;
@@ -149,6 +149,10 @@ type RawFile = Record<string, unknown>;
  * hand-edited v3 file with a single object still loads.)
  * v3 → v4 (Phase 18a): progress gains `studyLog` (quiz activity per local day, for the 7-day graph). Older files have
  * none, so they restore with an empty log: there is no honest way to rebuild earlier days.
+ * v4 → v5 (Reinforcement Phase 2): a word record in `progress.vocabMemory` may carry an optional `streak` (its miss
+ * streak). A record without one means 0, so older files need no rewriting and this step changes nothing. The version
+ * is bumped anyway, on purpose: an older Kiroku (which only knows up to v4) REFUSES a v5 file with its "made by a newer
+ * Kiroku" message, instead of restoring it and silently dropping every streak.
  */
 const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
   (file) => file,
@@ -167,6 +171,8 @@ const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
     if (!isRecord(progress) || "studyLog" in progress) return file;
     return { ...file, progress: { ...progress, studyLog: {} } };
   },
+  // v4 → v5: nothing to convert (a missing `streak` already means 0); see the note above.
+  (file) => file,
 ];
 
 // ---------------------------------------------------------------------------------------------

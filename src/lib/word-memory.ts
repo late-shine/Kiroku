@@ -12,6 +12,10 @@
 //    due yet still counts in right/lastAnswered but leaves box and due date alone, so quizzing "All days"
 //    can't push words up the boxes faster than the schedule allows.
 //  - the top box (5) counts as "mastered"; the user's star is a manual override on top of it.
+//  - Reinforcement Phase 2: a record may carry a MISS STREAK (`streak`), the number of LOCAL days in a row whose
+//    first real answer was a miss. Only the first real answer of a local day changes it (a miss adds 1, a right
+//    answer resets it), so a same-day retry never does; "Add to review" never makes one; a missing `streak` means 0.
+//    It is read by nothing yet: Phase 3 will build the AI reinforcement list from it. The Leitner rules above are untouched.
 import { z } from "zod";
 import type { VocabWord, WordMemory } from "@/types/japanese";
 
@@ -57,8 +61,8 @@ export function addDays(day: string, n: number): string {
 
 const ID_RE = /^d\d+-\d+$/;
 
-/** The one definition of a valid record; the backup schema and the localStorage reader both use it. */
-export const wordMemorySchema = z.object({
+/** A record as stored. `streak` is optional (Reinforcement Phase 2): old records, old backups and old accounts have none. */
+const storedRecordSchema = z.object({
   japanese: z.string(),
   box: z.number().int().min(1).max(TOP_BOX),
   due: z.string().refine(isValidDay, "due must be a real date like 2026-10-02"),
@@ -67,20 +71,43 @@ export const wordMemorySchema = z.object({
   lastAnswered: z
     .string()
     .refine((s) => !Number.isNaN(Date.parse(s)), "lastAnswered must be a date"),
+  streak: z.number().int().nonnegative().optional(),
 });
+
+/**
+ * The one definition of a valid record; the backup schema, the localStorage reader and the cloud decoder all use it.
+ * Its output is always in CANONICAL form: `streak` is present only when it is 1 or more, and is never `undefined`
+ * (the Firebase SDK throws on an undefined value, and `exactOptionalPropertyTypes` forbids it). A stored `streak: 0`
+ * therefore reads back as "no streak", which is what keeps `snapshotsEqual` and the sync fingerprint stable.
+ */
+export const wordMemorySchema = storedRecordSchema.transform(
+  ({ streak, ...rest }): WordMemory =>
+    streak !== undefined && streak > 0 ? { ...rest, streak } : rest,
+);
 export const vocabMemorySchema = z.record(
   z.string().regex(ID_RE, "word ids look like d14-3"),
   wordMemorySchema,
 );
 
-/** Lenient read for localStorage: anything that isn't a valid record is dropped; never throws. */
+/**
+ * Lenient read for localStorage and the account: anything that isn't a valid record is dropped; never throws.
+ * The one exception to "invalid means dropped" is a damaged `streak` on an otherwise valid record: that is read as
+ * "no streak" instead, so a bad optional field can't cost a word its box and dates.
+ */
 export function parseStoredMemory(raw: unknown): VocabMemory {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
   const out: VocabMemory = {};
   for (const [id, value] of Object.entries(raw)) {
     if (!ID_RE.test(id)) continue;
     const result = wordMemorySchema.safeParse(value);
-    if (result.success) out[id] = result.data;
+    if (result.success) {
+      out[id] = result.data;
+    } else if (typeof value === "object" && value !== null && "streak" in value) {
+      const withoutStreak: Record<string, unknown> = { ...value };
+      delete withoutStreak["streak"];
+      const retry = wordMemorySchema.safeParse(withoutStreak);
+      if (retry.success) out[id] = retry.data;
+    }
   }
   return out;
 }
@@ -120,6 +147,44 @@ export const badgeText = (n: number): string => (n > 99 ? "99+" : String(n));
 
 const gapFor = (box: number): number => BOX_GAPS[box - 1] ?? 30;
 
+// ---- miss streak (Reinforcement Phase 2) ------------------------------------------------------
+
+/** The record's miss streak: 0 when it has none (old data) or the stored value isn't a whole number of 1 or more. */
+export function missStreakOf(rec: WordMemory | undefined): number {
+  const s = rec?.streak;
+  return typeof s === "number" && Number.isInteger(s) && s > 0 ? s : 0;
+}
+
+/**
+ * True once the user has really answered the word in a quiz (right + wrong > 0). A word that was only "added to
+ * review" has a record whose `lastAnswered` is the time it was added, but it has not been answered.
+ */
+export const hasRealAnswer = (rec: WordMemory | undefined): boolean =>
+  rec !== undefined && rec.right + rec.wrong > 0;
+
+/**
+ * The LOCAL calendar day of the word's last REAL answer, or null when it has none (never answered, only added to
+ * review) or `lastAnswered` can't be read. Converted on the device that asks, like every other local day here.
+ */
+export function lastAnswerDay(rec: WordMemory | undefined): string | null {
+  if (rec === undefined || !hasRealAnswer(rec)) return null;
+  const at = Date.parse(rec.lastAnswered);
+  return Number.isNaN(at) ? null : localDay(new Date(at));
+}
+
+/**
+ * The streak after one more answer on local day `today`. Only the FIRST real answer of a local day counts:
+ * if the last real answer was on `today` (or, with a clock that went backwards, on a later day) this answer is a
+ * same-day retry and the streak stays as it was. Otherwise a miss adds 1 and a right answer resets it to 0.
+ * A word with no real answer yet (new, or only added to review) is treated as having a first answer now.
+ */
+function nextMissStreak(prev: WordMemory | undefined, correct: boolean, today: string): number {
+  const before = missStreakOf(prev);
+  const last = lastAnswerDay(prev);
+  if (last !== null && last >= today) return before;
+  return correct ? 0 : before + 1;
+}
+
 export function applyAnswer(
   word: VocabWord,
   prev: WordMemory | undefined,
@@ -138,7 +203,8 @@ export function applyAnswer(
     box = Math.min(TOP_BOX, box + 1);
     due = addDays(today, gapFor(box));
   }
-  return {
+  const streak = nextMissStreak(prev, correct, today);
+  const next: WordMemory = {
     japanese: word.japanese,
     box,
     due,
@@ -146,6 +212,8 @@ export function applyAnswer(
     wrong: (prev?.wrong ?? 0) + (correct ? 0 : 1),
     lastAnswered: now.toISOString(),
   };
+  // Canonical form: no `streak` key at all while it is 0 (see `wordMemorySchema`).
+  return streak > 0 ? { ...next, streak } : next;
 }
 
 /** The memory after one answer (a new object; the input is never changed). */

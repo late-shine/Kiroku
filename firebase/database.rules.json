@@ -71,6 +71,9 @@
             "lastAnswered": {
               ".validate": "newData.isString() && newData.val().length <= 40"
             },
+            "streak": {
+              ".validate": "newData.isNumber() && newData.val() >= 0"
+            },
             "$other": { ".validate": false }
           }
         },

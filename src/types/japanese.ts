@@ -100,6 +100,13 @@ export interface WordMemory {
   right: number;
   wrong: number;
   lastAnswered: string;
+  /**
+   * Reinforcement Phase 2 — the miss streak: on how many LOCAL days in a row the word's first real answer of
+   * the day was a miss. OPTIONAL and omitted while 0 (never stored as `undefined` or 0), so a record with no
+   * `streak` — every record written before Phase 2, every old backup — means 0. Not to be confused with
+   * `streak()` in `study-log.ts`, which counts consecutive STUDY days. See `applyAnswer` in `word-memory.ts`.
+   */
+  streak?: number;
 }
 
 /** Phase 18a: what was answered on one local calendar day (`correct` never exceeds `answered`). */

@@ -19,13 +19,14 @@
  *   progress/masteredVocabIds, weakVocabIds  { "d14-3": true }
  *   progress/totalQuizzesTaken, totalCorrectAnswers  numbers
  *   progress/studyLog/<YYYY-MM-DD>  { a: answered, c: correct }   (18a; a map keyed by local day, at most ~120 days)
- *   memory/<vocabId>       one record per word: japanese, box, due, right, wrong, lastAnswered
+ *   memory/<vocabId>       one record per word: japanese, box, due, right, wrong, lastAnswered, and (Reinforcement Phase 2)
+ *                          an optional `streak` (whole number, 1 or more; absent = 0)
  *   prefs                  backgroundIndex, bgZoomSpeed, showFurigana, tips { "quiz": true }   (9c)
  *                          name (a string, <= 24 characters, "" allowed), glyph (an avatar id)     (19a)
  *                          photo (a small data: address of a JPEG/WebP, or "")                  (19a-2)
  *   deleted/d5             "2026-10-05T10:00:00.000Z": a day was deleted at that time (9c, see below)
  *   replaced/d5            "2026-10-17T10:00:00.000Z": a day was replaced at that time (see REPLACED DAYS)
- *   meta                   { schema: 1, updatedAt }
+ *   meta                   { schema: 2, updatedAt }   (`SYNC_SCHEMA`; see below for why Phase 2 raised it from 1)
  * An empty account reads back as `null`; a missing node always means "empty", never "deleted". A deletion is only
  * ever expressed by a `deleted/dN` tombstone.
  *
@@ -59,10 +60,23 @@
 import { restoredLessonSchema } from "@/lib/backup";
 import { MAX_NAME_LENGTH, isGlyphId, isPhotoValue } from "@/lib/profile";
 import { mergeLogs, pruneLog, type StudyLog } from "@/lib/study-log";
-import { isValidDay, localDay, parseStoredMemory, type VocabMemory } from "@/lib/word-memory";
+import {
+  isValidDay,
+  localDay,
+  missStreakOf,
+  parseStoredMemory,
+  type VocabMemory,
+} from "@/lib/word-memory";
 import type { DayLesson, UserProgressState, WordMemory } from "@/types/japanese";
 
-export const SYNC_SCHEMA = 1;
+/**
+ * What `meta.schema` holds, and the highest value this build can read (`decodeCloud` refuses an account above it).
+ * 2 (Reinforcement Phase 2): word records may carry `streak`. A build that only knows 1 reads an account at 2 as
+ * "saved by a newer Kiroku" and stops WITHOUT writing, instead of decoding the records, losing `streak` (its schema
+ * strips unknown fields) and writing them back without it. This build still reads accounts at 1, which have none.
+ * Rolling a deployment back to a build that knows 1 therefore leaves it unable to sync until it is updated again.
+ */
+export const SYNC_SCHEMA = 2;
 
 /** Keys the rules accept: `d13` for a day, `d13-4` for a word, `quiz` for a tip. */
 export const DAY_KEY_RE = /^d[0-9]{1,5}$/;
@@ -261,13 +275,32 @@ function normalizeLesson(lesson: DayLesson): DayLesson {
 const sameLesson = (a: DayLesson, b: DayLesson) =>
   canonical(normalizeLesson(a)) === canonical(normalizeLesson(b));
 
+/**
+ * A word record in the one form the account stores and `decodeCloud` returns: `streak` only when it is a whole number
+ * of 1 or more (`missStreakOf`), otherwise no `streak` key at all. Two reasons. The rules refuse a bad `streak`, and
+ * one refused value rejects the WHOLE write, so it is left out here instead. And `streak: 0` and "no streak" mean the
+ * same thing, so they must not make two snapshots look different (that would write to the account on every sync).
+ */
+function canonicalRecord(rec: WordMemory): WordMemory {
+  const out: WordMemory = { ...rec };
+  delete out.streak;
+  const streak = missStreakOf(rec);
+  return streak > 0 ? { ...out, streak } : out;
+}
+
+function canonicalMemory(memory: VocabMemory): VocabMemory {
+  const out: VocabMemory = {};
+  for (const [id, rec] of Object.entries(memory)) out[id] = canonicalRecord(rec);
+  return out;
+}
+
 function canonicalSnapshot(s: SyncSnapshot): string {
   return canonical({
     lessons: s.lessons.map(normalizeLesson).sort((a, b) => a.dayNumber - b.dayNumber),
     completedDays: [...s.progress.completedDays].sort(byNumber),
     mastered: [...s.progress.masteredVocabIds].sort(),
     weak: [...s.progress.weakVocabIds].sort(),
-    memory: s.progress.vocabMemory,
+    memory: canonicalMemory(s.progress.vocabMemory),
     quizzes: s.progress.totalQuizzesTaken,
     correct: s.progress.totalCorrectAnswers,
     studyLog: s.progress.studyLog,
@@ -344,7 +377,8 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
 
   const memory: Record<string, WordMemory> = {};
   for (const [id, rec] of Object.entries(p.vocabMemory)) {
-    if (WORD_ID_RE.test(id) && rec.japanese.length <= MAX_WORD_TEXT) memory[id] = { ...rec };
+    if (WORD_ID_RE.test(id) && rec.japanese.length <= MAX_WORD_TEXT)
+      memory[id] = canonicalRecord(rec);
   }
 
   const prefs: Record<string, unknown> = {};
@@ -564,6 +598,8 @@ export function stampOf(raw: unknown): string | null {
  *  2. a record that was never answered (right + wrong = 0, only "added to review") loses to one that was, however
  *     new it is, because "Add to review" must not erase another device's answers.
  * A real tie goes to this device.
+ * The whole record travels, `streak` included: there is no field-by-field merge. If two devices answer the same
+ * word without syncing in between, the newer answer's record (and so its streak) wins and the other's is lost.
  */
 function pickRecord(
   device: WordMemory,

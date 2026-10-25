@@ -1,5 +1,4 @@
 import type { DayLesson, UserProgressState, VocabWord } from "@/types/japanese";
-import { dueWordsInOrder, localDay } from "@/lib/word-memory";
 
 export type Tone = "gentle" | "strict" | "casual" | "anime";
 export type LessonStyle = "balanced" | "grammar-heavy" | "kanji-deep" | "conversational";
@@ -74,46 +73,81 @@ export interface PromptOptions {
   romaji: boolean;
   customFocus: string;
   lessons: DayLesson[];
-  progress: UserProgressState;
   mode: PromptMode;
   /** Only read when mode is "save-only" — see buildSaveOnlyPrompt. */
   existingLessonText: string;
-  /** Phase 14c: today's date as YYYY-MM-DD, used to decide which words are due. Defaults to the real local day; tests pass a fixed one. */
+  /**
+   * Reinforcement plan, Phase 1: the progress tracker no longer reads `progress` (the one-miss weak paragraph and the
+   * Phase 14c due-review block are gone). The field stays because every caller passes it and the planned Phase 3
+   * reinforcement block (streak-based, from `progress.vocabMemory`) will read it again. Nothing reads it today.
+   */
+  progress: UserProgressState;
+  /**
+   * Reserved for the planned Phase 3 reinforcement block (expiry window is measured against today's local day,
+   * "YYYY-MM-DD"). Nothing reads it in Phase 1.
+   */
   today?: string;
 }
 
-/** Phase 14c: the most review words one prompt will carry. Most overdue first, so the longest-waiting words win. */
-export const REVIEW_PROMPT_CAP = 10;
+// ---- Reinforcement plan, Phase 1: the earlier-lessons tracker -----------------------------------------------------
+
+/** The key two vocabulary entries must share to count as the same word: Japanese text AND reading (so homographs stay apart). */
+const vocabKey = (v: VocabWord): string =>
+  `${v.japanese.normalize("NFC").trim()}\u0000${v.reading.normalize("NFC").trim()}`;
 
 /**
- * Phase 14c: the words the Learn prompt asks the AI to use again — words from EARLIER days that are due for review
- * (most overdue first, at most REVIEW_PROMPT_CAP). Words already named in the "still finds difficult" list are left out
- * so no word is listed twice, and so is a word whose Japanese is already in the list (the same word can be taught on two
- * different days under two ids). Pure and deterministic. The Lesson Studio calls this too, to tell the user how many go in.
+ * One entry per distinct word, in the order first seen. Two entries are the same word only when BOTH the Japanese text and
+ * the reading match (after trimming and NFC normalisation); an entry with no Japanese text is skipped. Pure.
  */
-export function reviewWordsForPrompt(
-  day: number,
-  lessons: DayLesson[],
-  progress: UserProgressState,
-  today: string = localDay(),
-): VocabWord[] {
-  const prior = lessons.filter((l) => l.dayNumber < day).sort((a, b) => a.dayNumber - b.dayNumber);
-  const priorVocab: VocabWord[] = prior.flatMap((l) => l.vocab);
+export function dedupeVocab(words: readonly VocabWord[]): VocabWord[] {
   const seen = new Set<string>();
-  return dueWordsInOrder(priorVocab, progress.vocabMemory, today)
-    .filter((v) => !progress.weakVocabIds.includes(v.id))
-    .filter((v) => (seen.has(v.japanese) ? false : (seen.add(v.japanese), true)))
-    .slice(0, REVIEW_PROMPT_CAP);
+  const out: VocabWord[] = [];
+  for (const v of words) {
+    if (v.japanese.normalize("NFC").trim() === "") continue;
+    const key = vocabKey(v);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+  }
+  return out;
 }
 
-function priorKnowledgeBlock(day: number, lessons: DayLesson[], progress: UserProgressState, today: string): string {
+/**
+ * The real day numbers as a short label, gaps included: [1,2,3,5,6,8] -> "Days 1-3, 5-6, 8"; [4] -> "Day 4".
+ * Sorted and de-duplicated first, so the label never claims a day that is not there (a deleted Day 6 is a gap, not "1 to 7"). Pure.
+ */
+export function describeDays(days: readonly number[]): string {
+  const sorted = [...new Set(days)].sort((a, b) => a - b);
+  if (sorted.length === 0) return "none";
+  const parts: string[] = [];
+  let from = sorted[0] as number;
+  let prev = from;
+  for (const d of sorted.slice(1)) {
+    if (d === prev + 1) {
+      prev = d;
+      continue;
+    }
+    parts.push(from === prev ? String(from) : `${from}-${prev}`);
+    from = d;
+    prev = d;
+  }
+  parts.push(from === prev ? String(from) : `${from}-${prev}`);
+  return `${sorted.length === 1 ? "Day" : "Days"} ${parts.join(", ")}`;
+}
+
+/**
+ * The progress tracker the AI reads before teaching. It covers every STORED earlier lesson (`dayNumber < day`), not only the
+ * days marked Done: Done is a manual toggle, and an unticked day would otherwise be taught again. Vocabulary is Japanese only
+ * (no reading, no meaning, no romaji) and de-duplicated by Japanese + reading; grammar and kanji are listed in full.
+ * There is deliberately no weak-word or due-review text here any more (see kiroku-ai-reinforcement-plan.md). Pure.
+ */
+function priorKnowledgeBlock(day: number, lessons: DayLesson[]): string {
   const prior = lessons.filter((l) => l.dayNumber < day).sort((a, b) => a.dayNumber - b.dayNumber);
 
   if (day <= 1 || prior.length === 0) {
     return `This is the learner's very first lesson. Assume ZERO prior Japanese knowledge — no hiragana, no katakana, no grammar, nothing. As part of today's material, briefly introduce hiragana and katakana just enough for the learner to read what you teach, and make です (polite copula, "is/am/are") and だ (its plain-form counterpart) the core grammar point of the day.`;
   }
 
-  const highestPriorDay = Math.max(...prior.map((l) => l.dayNumber));
   // Phase 17: a day can teach several grammar points / kanji — every one is listed (one grammar line per point).
   const grammarSummary = prior
     .flatMap((l) => l.grammar.map((g) => `Day ${l.dayNumber}: ${g.title} (${g.structure})`))
@@ -122,34 +156,21 @@ function priorKnowledgeBlock(day: number, lessons: DayLesson[], progress: UserPr
     .flatMap((l) => l.kanji)
     .map((k) => `${k.character} (${k.meaning} — On: ${k.onyomi.join("/") || "—"} / Kun: ${k.kunyomi.join("/") || "—"})`)
     .join(", ");
-  const allVocab: VocabWord[] = prior.flatMap((l) => l.vocab);
-  const vocabSummary = allVocab.map((v) => `${v.japanese} (${v.reading}) — ${v.meaning}`).join(", ");
-  const weakVocab = allVocab.filter((v) => progress.weakVocabIds.includes(v.id));
-  const weakSummary = weakVocab.length
-    ? `\n\nWords the learner still finds difficult — weave a light, natural review of these into today's examples or natural phrase where it genuinely fits, without turning today into a review lesson: ${weakVocab
-        .map((v) => `${v.japanese} (${v.meaning})`)
-        .join(", ")}.`
-    : "";
-
-  // Phase 14c — wording approved by the user (2026-10-03). The only place this sentence lives.
-  const reviewWords = reviewWordsForPrompt(day, lessons, progress, today);
-  const reviewSummary = reviewWords.length
-    ? `\n\nWords due for review — the learner's own review schedule says these are ready to be seen again. Use them again in new example sentences and phrases today (not sentences from earlier lessons), wherever they genuinely fit. They are NOT new vocabulary: keep today's vocabulary list entirely new words, and do not re-teach them or turn today into a review lesson: ${reviewWords
-        .map((v) => `${v.japanese} (${v.meaning})`)
-        .join(", ")}.`
-    : "";
+  const knownVocab = dedupeVocab(prior.flatMap((l) => l.vocab));
+  const vocabSummary = knownVocab.map((v) => v.japanese.trim()).join(", ");
+  const vocabLabel = `Known vocabulary (${knownVocab.length} word${knownVocab.length === 1 ? "" : "s"}, Japanese only)`;
 
   return `To ensure you never assume grammar or vocabulary the learner hasn't been taught yet, here is their exact progress tracker so far:
 
-=== COMPLETED LESSONS (Days 1 to ${highestPriorDay}) ===
+=== LESSONS SO FAR (${describeDays(prior.map((l) => l.dayNumber))}) ===
 Grammar covered:
 ${grammarSummary}
 
 Kanji taught:
 ${kanjiSummary}
 
-Known vocabulary:
-${vocabSummary || "(none recorded)"}${weakSummary}${reviewSummary}
+${vocabLabel}:
+${vocabSummary || "(none recorded)"}
 
 IMPORTANT: Do NOT skip ahead or assume any grammatical form or vocabulary beyond what's listed above.`;
 }
@@ -246,10 +267,13 @@ Keep everything beginner-appropriate for someone who only knows what's listed ab
  * the AI read the progress tracker and show its working before it teaches. `extractJsonBlock` ignores prose around the
  * JSON, so the Check section never affects an import. Only Learn + Save and Learn only carry it, and only when there IS
  * a tracker above it (Day 1 / an empty curriculum has nothing to check against).
+ *
+ * Reinforcement plan, Phase 1: the grammar part of the wording was softened (exact repeats are still avoided; a meaningful revisit
+ * is allowed if it is named as one). DRAFT WORDING, awaiting the user's approval; see handoffs/reinforcement-phase-1.md.
  */
 function analysisFirstBlock(grammarCount: number, kanjiCount: number): string {
   const grammar = `${grammarCount} grammar point${grammarCount === 1 ? "" : "s"}`;
-  return `BEFORE YOU WRITE ANYTHING — start your reply with a short "Check" section (at most 8 lines, plain text, no JSON): (1) the highest day completed; (2) how many grammar points, kanji and vocabulary words are already known, and the titles of the five most recent grammar points; (3) today's ${grammar} and ${kanjiCount} kanji, named. State that none of them appear in the lists above (including other readings of the same kanji). If one would repeat, choose a different one first. If the progress tracker above looks missing or cut off, stop and ask me to paste it instead of guessing. Only then start the lesson.`;
+  return `BEFORE YOU WRITE ANYTHING — start your reply with a short "Check" section (at most 8 lines, plain text, no JSON): (1) the highest earlier day listed above; (2) how many grammar points, kanji and vocabulary words are already known, and the titles of the five most recent grammar points; (3) today's ${grammar} and ${kanjiCount} kanji, named. State that none of the kanji appear in the lists above (including other readings of the same kanji) and that no grammar point repeats an earlier one exactly. A grammar form or particle may be revisited only when today's use adds a new function, nuance or contrast: if so, name it as a revisit and say what is new. If a kanji would repeat, or a grammar point would repeat with nothing new, choose a different one first. If the progress tracker above looks missing or cut off, stop and ask me to paste it instead of guessing. Only then start the lesson.`;
 }
 
 // The bridge from "done teaching" into the data block — only used by mode: "learn-save".
@@ -320,8 +344,7 @@ ${schemaAndExampleBlock(day, vocabCount, null)}`;
 
 /** Pure function: builds the full copy-paste prompt for a given day and set of options. */
 export function buildLessonPrompt(opts: PromptOptions): string {
-  const { day, tone, style, level, vocabCount, kanjiCount, grammarCount, romaji, customFocus, lessons, progress, mode, existingLessonText } =
-    opts;
+  const { day, tone, style, level, vocabCount, kanjiCount, grammarCount, romaji, customFocus, lessons, mode, existingLessonText } = opts;
 
   if (mode === "save-only") {
     return buildSaveOnlyPrompt(day, vocabCount, existingLessonText);
@@ -349,7 +372,7 @@ Role & tone: You are my Japanese tutor for Day ${day}. Target level: JLPT ${leve
 ${STYLE_INSTRUCTIONS[style].replace("{vocabCount}", String(vocabCount))}
 ${romajiLine}
 ${focusLine ? focusLine + "\n" : ""}
-${priorKnowledgeBlock(day, lessons, progress, opts.today ?? localDay())}${checkBlock}
+${priorKnowledgeBlock(day, lessons)}${checkBlock}
 
 === TODAY'S LESSON REQUEST: DAY ${day} ===
 ${requestBody}`;

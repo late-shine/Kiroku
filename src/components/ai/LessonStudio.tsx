@@ -21,7 +21,6 @@ import {
   buildLessonPrompt,
   buildRepairPrompt,
   buildSaveOnlyPrompt,
-  reviewWordsForPrompt,
   type GrammarCount,
   type JlptLevel,
   type KanjiCount,
@@ -257,12 +256,6 @@ export function LessonStudio({
       mode,
       existingLessonText,
     ],
-  );
-
-  // Phase 14c: how many due-for-review words this prompt carries (Save only never includes them).
-  const reviewInPrompt = useMemo(
-    () => (mode === "save-only" ? 0 : reviewWordsForPrompt(day, lessons, progress).length),
-    [mode, day, lessons, progress],
   );
 
   const copyPrompt = () => {
@@ -527,13 +520,6 @@ export function LessonStudio({
                   {MODE_HINTS["save-only"]}
                 </p>
               </div>
-              {reviewInPrompt > 0 && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                  {reviewInPrompt} word{reviewInPrompt === 1 ? "" : "s"} due for review will be
-                  added to this prompt, so your AI uses {reviewInPrompt === 1 ? "it" : "them"} again
-                  in new sentences.
-                </p>
-              )}
             </div>
 
             {mode === "save-only" ? (

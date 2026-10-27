@@ -4,7 +4,7 @@
 
 **GitHub →** [github.com/late-shine/Kiroku](https://github.com/late-shine/Kiroku) · **Live app →** [usekiroku.vercel.app](https://usekiroku.vercel.app/)
 
-**Status:** Active personal project. Everything under [What it does](#what-it-does) is built and has been tried in the real running app. What isn't built yet is in the [Roadmap](#roadmap).
+**Status:** Active personal project. Everything under [What it does](#what-it-does) is built. Most of it has been tried in the real running app; the newest piece, targeted reinforcement, is still being observed through normal daily study. What isn't built yet is in the [Roadmap](#roadmap).
 
 ![A saved Kiroku lesson: grammar point, progress ring and the curriculum list](src/assets/images/welcome-lesson.webp)
 
@@ -40,7 +40,7 @@ Kiroku is the same kind of solo, accidental thing, just smaller and more selfish
 
 Kiroku doesn't try to be a second Astra-chan. It doesn't teach anything. It's the notebook: the thing that remembers what any AI has already covered, writes the next prompt so that AI doesn't repeat itself or skip ahead, and turns whatever comes back into a saved lesson you can quiz and review. The AI is still the teacher. Kiroku just makes sure it doesn't forget.
 
-The difference from Astra-chan, in one line: Astra drills cards. Kiroku feeds the words you're due to review back into your AI's *next lesson*.
+The difference from Astra-chan, in one line: Astra drills cards. Kiroku feeds the words you keep missing back into your AI's *next lesson*.
 
 ---
 
@@ -49,7 +49,7 @@ The difference from Astra-chan, in one line: Astra drills cards. Kiroku feeds th
 ### The loop: build a prompt, learn, paste it back
 
 1. **Build a prompt** in the AI Lesson Studio (the robot button in the header; it's a full page, and it keeps your pasted reply if you leave and come back). Pick the day, a tone (Gentle & Cozy, Strict Sensei, Casual Japanese Friend, Anime / Manga Companion), a JLPT level (N5, N4 or N3), how many vocab words (5, 10 or 15), how many kanji (1, 3 or 5) and grammar points (1, 2 or 3) per day, a lesson focus, romaji on or off, and an optional custom focus.
-2. **Paste it into any AI** — ChatGPT, Claude, Gemini, whichever you like. The prompt already carries everything you've saved (grammar, kanji, vocab, the words you found hard), so the AI can't repeat itself or assume something you haven't learned. From Day 2 on, the prompt opens by asking the AI to check what you already know and confirm that none of today's grammar points or kanji repeat before it starts teaching.
+2. **Paste it into any AI** — ChatGPT, Claude, Gemini, whichever you like. The prompt already carries what you've saved (grammar and kanji in full, vocabulary as Japanese only with repeats removed), so the AI can't repeat itself or assume something you haven't learned. From Day 2 on, the prompt opens by asking the AI to check what you already know and confirm that today's kanji are new and that no grammar point is an empty repeat before it starts teaching.
 3. **Paste the reply back.** Kiroku finds the structured block in it, checks it, shows you a preview, and saves it as a new day. Nothing is saved until you confirm.
 
 There are three modes:
@@ -80,7 +80,7 @@ Every answer updates a small record for that word. It's a Leitner system: five b
 
 **Questions get harder as a word climbs.** Boxes 1–2 ask you to pick the meaning, box 3 asks you to choose the Japanese word, and boxes 4–5 ask you to type the reading in kana (katakana is accepted for hiragana; romaji isn't). A *Question style* row lets you force one style in any scope — "Choose the word" is the way out if you don't have a Japanese keyboard.
 
-**The review reaches into your next lesson.** When you build the next Learn prompt, up to 10 due words from earlier days (most overdue first) go in with a note asking the AI to use them again in the new lesson's example sentences and phrases. The spaced repetition happens inside real lessons, which a flashcard deck can't do. (Save only never gets this section.)
+**The words you keep missing reach into your next lesson.** A word is brought back only after you've missed it on two separate days in a row (a same-day retry doesn't count, and a right answer on a later day clears it), and only while your last answer on it is no more than 14 days old. When you build the next Learn prompt, up to three such words from earlier days go in, highest miss streak first and then the longest-waiting, as Japanese only. A note asks the AI to use them naturally in the new lesson's examples and phrases, not to teach them again and not to count them as new vocabulary. The spaced repetition happens inside real lessons, which a flashcard deck can't do. Ordinary Leitner review stays in the Quiz, and Save only and repair prompts never get this section.
 
 ### Progress
 
@@ -90,12 +90,12 @@ The Progress tab shows your days, mastered words, answers and word count, plus a
 
 The avatar button in the header opens your Profile page: a name, an avatar (a Google photo, one of eight kanji glyphs — 記 猫 月 葉 花 星 蛍 苔 — or a picture you upload, shrunk to a tiny square in your browser first), an at-a-glance line (streak, due today, mastered), the account and sync controls, your data, preferences and a danger zone.
 
-**Export** saves `kiroku-backup.json` — versioned (currently v4), with your lessons, progress, review records and study log. **Restore** checks the file first, tells you what's in it, and asks before replacing anything; a damaged or too-new file is refused and changes nothing. Older backups from before versions still restore. Music settings, the voice choice, the particle setting and your Gemini key are never in the file. Resetting everything (you type "reset" to confirm) is in the Danger zone.
+**Export** saves `kiroku-backup.json` — versioned (currently v5), with your lessons, progress, review records (including the optional miss streak behind targeted reinforcement) and study log. **Restore** checks the file first, tells you what's in it, and asks before replacing anything; a damaged or too-new file is refused and changes nothing. Older backups from before versions still restore. Music settings, the voice choice, the particle setting and your Gemini key are never in the file. Resetting everything (you type "reset" to confirm) is in the Danger zone.
 
 ### Atmosphere, music and voice
 
 - **Atmosphere:** four background scenes with a reading-contrast slider, a Slow / Medium / Still setting for the gentle drift, an optional theme cycle that crossfades to the next scene every 24 seconds, and a quiet particle effect per scene — fireflies, falling leaves, mist and pollen — set to Off, Subtle or Lively. With reduced motion turned on in your system there are no particles at all. These settings are per device.
-- **Music:** an 10-song player in the corner. Every song comes in slowed, normal and sped-up versions, switching speed keeps your place, and shuffle randomizes the speed as well as the song. It has its own volume and loop.
+- **Music:** a 10-song player in the corner. Every song comes in slowed, normal and sped-up versions, switching speed keeps your place, and shuffle randomizes the speed as well as the song. It has its own volume and loop.
 - **Voice:** pick which Japanese voice your browser uses for the Listen buttons, with a short sample when you tap one. The list comes from your browser and operating system, so it differs from device to device.
 
 ### Help when you're new
@@ -116,7 +116,8 @@ Besides the welcome panel, there are small dismissible tip cards on the Quiz, Pr
 - Voices depend on what your browser and OS provide, and the selected voice is intentionally per device. Typing readings needs a Japanese keyboard (or switch the Question style to "Choose the word").
 - Free-tier Gemini models get busy and have daily limits; the fallback chain helps but can't promise an answer.
 - Kiroku doesn't teach, so it can't enforce what the AI teaches. The prompt asks for the level you picked, but an AI can still drift (I once got an N4 kanji in an N5 lesson). Reading the Check section at the top of a reply is the cheap guard.
-- The prompt grows with your history. A very long course makes a very long prompt to copy, which may be awkward on a phone. There's no chunked or downloadable prompt yet.
+- The prompt still grows with your history, although known vocabulary is now deduplicated and sent as Japanese only. A very long course can still make a prompt that's awkward to copy on a phone, and there's no chunked or downloadable prompt yet.
+- Reinforcement is deliberately small: at most three words, sent as Japanese only (a word with several readings can look ambiguous to the AI), with no rotation or random scheduling yet.
 - Rebuilding an older day gives the AI only the lessons before it, not the ones after, so it can repeat something you've since learned.
 - The study log began with the 7-day chart, so earlier answers don't appear in it.
 
@@ -197,6 +198,7 @@ The dates come from my local handoff notes.
 | Oct 16 | The deleted-day navigation fix |
 | Oct 17 | Studio warning for missing days, safe day replacement on one device and across devices, the Progress Memory block and word filters (19b) |
 | Oct 18 | The Lesson Studio as a page, scene particles and lighter image loading, the crossfade fix (20, 21, 21a) |
+| Oct 25–28 | Prompt history made lighter (Japanese-only, deduplicated known vocabulary); the old due-review block replaced by targeted reinforcement of up to three recently, repeatedly missed words |
 
 ### AI tools used
 
@@ -257,7 +259,7 @@ The planning documents, the handoff notes and the small check scripts that go wi
 
 Push to GitHub and connect the repo to Vercel. `npm run build` uses Nitro's `vercel` preset, which writes the whole Vercel output itself, so there's no `vercel.json`. The Gemini relay runs as a Vercel Function; its worst case, five models in a row, is about 225 seconds, and Vercel's Hobby plan allows 300.
 
-For accounts and sync, add the same six `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's Environment Variables (Production, and Preview if wanted) before redeploying; Vite bakes them into the client build. Add the production domain to Firebase Authentication's authorized domains and publish the current `firebase/database.rules.json` in Realtime Database → Rules. Random Vercel preview URLs are not automatically authorized for Google sign-in. When a release changes `firebase/database.rules.json`, publish the new rules before any device runs the new build, then hard-refresh open tabs so an old cached one can't sync without the new fields.
+For accounts and sync, add the same six `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's Environment Variables (Production, and Preview if wanted) before redeploying; Vite bakes them into the client build. Add the production domain to Firebase Authentication's authorized domains and publish the current `firebase/database.rules.json` in Realtime Database → Rules. Random Vercel preview URLs are not automatically authorized for Google sign-in. When a release changes `firebase/database.rules.json`, publish the new rules before any device runs the new build, then hard-refresh open tabs so an old cached one can't sync without the new fields. Targeted reinforcement is such a release: it adds the optional `memory/$id/streak` field and raises the sync schema to 2, so publish the current rules first. An older cached tab then refuses to sync until it's reloaded, rather than silently dropping the streaks.
 
 Vercel refuses to build versions of TanStack Start that have a known security advisory. Phase 15 hit exactly that. The fix is to upgrade `@tanstack/react-start`, `@tanstack/react-router` and `@tanstack/router-plugin` together, then re-run the checks.
 
@@ -271,7 +273,7 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 - [x] Welcome screen, tip cards and a help button
 - [x] Versioned, validated backup and restore
 - [x] Quiz rounds, per-word Leitner memory, Due today, calm intake
-- [x] Review words carried into the next lesson prompt
+- [x] Targeted reinforcement: up to three recently, repeatedly missed words carried naturally into the next Learn prompt
 - [x] Harder question types as a word moves up
 - [x] Music player, voice picker, atmosphere
 - [x] Leave Lovable; GitHub and Vercel

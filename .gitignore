@@ -36,3 +36,5 @@ dist-ssr
 .env.*
 !.env.example
 .vercel
+# Local audit notes
+context-audit.md

@@ -15,7 +15,7 @@
 //  - Reinforcement Phase 2: a record may carry a MISS STREAK (`streak`), the number of LOCAL days in a row whose
 //    first real answer was a miss. Only the first real answer of a local day changes it (a miss adds 1, a right
 //    answer resets it), so a same-day retry never does; "Add to review" never makes one; a missing `streak` means 0.
-//    It is read by nothing yet: Phase 3 will build the AI reinforcement list from it. The Leitner rules above are untouched.
+//    Phase 3 reads it (`src/lib/reinforcement.ts` builds the AI reinforcement list from it); the Leitner rules above are untouched.
 import { z } from "zod";
 import type { VocabWord, WordMemory } from "@/types/japanese";
 

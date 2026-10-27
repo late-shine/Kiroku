@@ -21,6 +21,7 @@ import {
   buildLessonPrompt,
   buildRepairPrompt,
   buildSaveOnlyPrompt,
+  reinforcementWordsForPrompt,
   type GrammarCount,
   type JlptLevel,
   type KanjiCount,
@@ -30,6 +31,7 @@ import {
   type VocabCount,
 } from "@/lib/prompt-builder";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
+import { useToday } from "@/hooks/use-today";
 import { isReplacement, mayImport, studioDayNotice } from "@/lib/day-replace";
 import { detectDayNumber, parseLessonFromText, stripDayPrefix } from "@/lib/lesson-schema";
 import { readGeminiRefusal, type GeminiAttempt } from "@/lib/gemini-fallback";
@@ -224,6 +226,14 @@ export function LessonStudio({
     }
   }, [tone, style, level, vocabCount, kanjiCount, grammarCount, romaji, customFocus, mode]);
 
+  // Reinforcement Phase 3: today's local day (null until the client has read the clock, then it moves on at midnight)
+  // is the reference point of the 14-day window; the same function feeds the prompt and the note in step 2.
+  const today = useToday() ?? undefined;
+  const reinforcement = useMemo(
+    () => reinforcementWordsForPrompt({ day, mode, lessons, progress, today }),
+    [day, mode, lessons, progress, today],
+  );
+
   const prompt = useMemo(
     () =>
       buildLessonPrompt({
@@ -238,6 +248,7 @@ export function LessonStudio({
         customFocus,
         lessons,
         progress,
+        today,
         mode,
         existingLessonText,
       }),
@@ -253,6 +264,7 @@ export function LessonStudio({
       customFocus,
       lessons,
       progress,
+      today,
       mode,
       existingLessonText,
     ],
@@ -703,6 +715,14 @@ export function LessonStudio({
             <p className="text-xs text-muted-foreground">
               This preview updates live as you change options in step 1.
             </p>
+            {reinforcement.length > 0 && (
+              <p role="status" className="text-xs text-muted-foreground">
+                Reinforcement: {reinforcement.length} earlier{" "}
+                {reinforcement.length === 1 ? "word" : "words"} you missed on several days (
+                {reinforcement.map((w) => w.japanese.trim()).join("、")}) will be woven into the
+                lesson, not added to its new vocabulary.
+              </p>
+            )}
             <pre className="max-h-80 overflow-y-auto overscroll-contain whitespace-pre-wrap rounded-md border border-border bg-background/30 p-3 text-[11px] leading-relaxed text-foreground/80">
               {prompt}
             </pre>

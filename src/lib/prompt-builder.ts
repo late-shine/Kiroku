@@ -1,4 +1,5 @@
 import type { DayLesson, UserProgressState, VocabWord } from "@/types/japanese";
+import { selectReinforcementWords } from "@/lib/reinforcement";
 
 export type Tone = "gentle" | "strict" | "casual" | "anime";
 export type LessonStyle = "balanced" | "grammar-heavy" | "kanji-deep" | "conversational";
@@ -77,16 +78,17 @@ export interface PromptOptions {
   /** Only read when mode is "save-only" — see buildSaveOnlyPrompt. */
   existingLessonText: string;
   /**
-   * Reinforcement plan, Phase 1: the progress tracker no longer reads `progress` (the one-miss weak paragraph and the
-   * Phase 14c due-review block are gone). The field stays because every caller passes it and the planned Phase 3
-   * reinforcement block (streak-based, from `progress.vocabMemory`) will read it again. Nothing reads it today.
+   * Reinforcement plan, Phase 3: only `progress.vocabMemory` is read, and only to build the reinforcement list (the
+   * earlier-lessons tracker itself still ignores it: the one-miss weak paragraph and the Phase 14c due-review block
+   * are gone). Save only never reads it.
    */
   progress: UserProgressState;
   /**
-   * Reserved for the planned Phase 3 reinforcement block (expiry window is measured against today's local day,
-   * "YYYY-MM-DD"). Nothing reads it in Phase 1.
+   * Reinforcement plan, Phase 3: today's LOCAL calendar day, "YYYY-MM-DD", the reference point for the 14-day window.
+   * A pure function must not read the clock, so the caller supplies it. When it is missing (or not a real date) the
+   * prompt simply has no reinforcement block; nothing else changes.
    */
-  today?: string;
+  today?: string | undefined;
 }
 
 // ---- Reinforcement plan, Phase 1: the earlier-lessons tracker -----------------------------------------------------
@@ -173,6 +175,37 @@ ${vocabLabel}:
 ${vocabSummary || "(none recorded)"}
 
 IMPORTANT: Do NOT skip ahead or assume any grammatical form or vocabulary beyond what's listed above.`;
+}
+
+// ---- Reinforcement plan, Phase 3: the reinforcement list ------------------------------------------------------------
+
+/**
+ * The earlier words this prompt asks the tutor to weave back in (see `selectReinforcementWords`: earlier lesson, miss
+ * streak of at least 2, last real answer within about 14 days, at most 3). Empty for Save only, for a prompt with no
+ * earlier lesson (Day 1 / an empty curriculum, which has no tracker either) and when `today` is missing.
+ * `buildLessonPrompt` and the Lesson Studio's note both call this, so what the user is told is what the prompt holds. Pure.
+ */
+export function reinforcementWordsForPrompt(
+  opts: Pick<PromptOptions, "day" | "mode" | "lessons" | "progress" | "today">,
+): VocabWord[] {
+  if (opts.mode === "save-only" || opts.today === undefined) return [];
+  if (!(opts.day > 1 && opts.lessons.some((l) => l.dayNumber < opts.day))) return [];
+  return selectReinforcementWords(opts.day, opts.lessons, opts.progress.vocabMemory, opts.today);
+}
+
+/**
+ * The reinforcement block: the words, Japanese only (no reading, meaning, romaji or miss count), and what the tutor may
+ * and may not do with them. They are NOT new words: they stay out of today's vocabulary list and the lesson stays a
+ * new lesson. Empty string when there is nothing to reinforce. DRAFT WORDING, awaiting the user's approval. Pure.
+ */
+function reinforcementBlock(words: readonly VocabWord[], vocabCount: number): string {
+  if (words.length === 0) return "";
+  const list = words.map((w) => `- ${w.japanese.trim()}`).join("\n");
+  return `=== WORDS TO REINFORCE (${words.length} earlier word${words.length === 1 ? "" : "s"}, Japanese only) ===
+The learner got these earlier words wrong on at least two different days recently:
+${list}
+
+Use them where they fit today's topic naturally, for example in example sentences, breakdowns or the natural phrase. They are NOT new words: do not teach them again, do not put them in today's vocabulary list (it still holds exactly ${vocabCount} new words), and do not turn today's lesson into a review lesson. If one does not fit naturally, leave it out rather than forcing it.`;
 }
 
 function schemaAndExampleBlock(day: number, vocabCount: number, counts: PointCounts): string {
@@ -366,13 +399,17 @@ export function buildLessonPrompt(opts: PromptOptions): string {
   const hasTracker = day > 1 && lessons.some((l) => l.dayNumber < day);
   const checkBlock = hasTracker ? `\n\n${analysisFirstBlock(grammarCount, kanjiCount)}` : "";
 
+  // Phase 3: the reinforcement list sits between the tracker and the Check block (empty when there is nothing to reinforce).
+  const reinforcement = reinforcementBlock(reinforcementWordsForPrompt(opts), vocabCount);
+  const reinforcementPart = reinforcement ? `\n\n${reinforcement}` : "";
+
   return `I am learning Japanese with you following a progressive daily method. Act as my teacher for today's lesson.
 
 Role & tone: You are my Japanese tutor for Day ${day}. Target level: JLPT ${level}. ${TONE_INSTRUCTIONS[tone]}
 ${STYLE_INSTRUCTIONS[style].replace("{vocabCount}", String(vocabCount))}
 ${romajiLine}
 ${focusLine ? focusLine + "\n" : ""}
-${priorKnowledgeBlock(day, lessons)}${checkBlock}
+${priorKnowledgeBlock(day, lessons)}${reinforcementPart}${checkBlock}
 
 === TODAY'S LESSON REQUEST: DAY ${day} ===
 ${requestBody}`;

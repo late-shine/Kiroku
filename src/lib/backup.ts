@@ -4,7 +4,7 @@
  * Pure functions only (no React, no localStorage, no DOM) so they can be tested without a browser.
  * `ProgressView`'s Export / Restore controls in `src/routes/index.tsx` are the only callers.
  *
- * Format (version 5):  { app: "kiroku", version: 5, exportedAt: <ISO string>, lessons, progress }
+ * Format (version 6):  { app: "kiroku", version: 6, exportedAt: <ISO string>, lessons, progress }
  *
  * What is deliberately NOT in a backup:
  * - The Gemini API key (BYOK rule — backup files get shared and emailed). `buildBackup` only accepts
@@ -26,10 +26,11 @@ import {
 } from "@/lib/lesson-schema";
 import { studyLogSchema } from "@/lib/study-log";
 import { vocabMemorySchema } from "@/lib/word-memory";
+import { badgesSchema, writingLogSchema, writingSchema } from "@/lib/writing";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 export const BACKUP_APP = "kiroku";
-export const BACKUP_VERSION = 5;
+export const BACKUP_VERSION = 6;
 
 export interface BackupFile {
   app: typeof BACKUP_APP;
@@ -98,6 +99,9 @@ const progressSchema = z
     totalQuizzesTaken: z.number().int().nonnegative(),
     totalCorrectAnswers: z.number().int().nonnegative(),
     studyLog: studyLogSchema,
+    writing: writingSchema,
+    writingLog: writingLogSchema,
+    badges: badgesSchema,
     lastQuizScore: z.object({
       correct: z.number().int().nonnegative(),
       total: z.number().int().nonnegative(),
@@ -124,6 +128,9 @@ function fillProgress(
     totalQuizzesTaken: parsed.totalQuizzesTaken ?? defaults.totalQuizzesTaken,
     totalCorrectAnswers: parsed.totalCorrectAnswers ?? defaults.totalCorrectAnswers,
     studyLog: parsed.studyLog ?? defaults.studyLog,
+    writing: parsed.writing ?? defaults.writing,
+    writingLog: parsed.writingLog ?? defaults.writingLog,
+    badges: parsed.badges ?? defaults.badges,
     ...(lastQuizScore ? { lastQuizScore } : {}),
     backgroundIndex: parsed.backgroundIndex ?? defaults.backgroundIndex,
     bgZoomSpeed: parsed.bgZoomSpeed ?? defaults.bgZoomSpeed,
@@ -153,6 +160,10 @@ type RawFile = Record<string, unknown>;
  * streak). A record without one means 0, so older files need no rewriting and this step changes nothing. The version
  * is bumped anyway, on purpose: an older Kiroku (which only knows up to v4) REFUSES a v5 file with its "made by a newer
  * Kiroku" message, instead of restoring it and silently dropping every streak.
+ * v5 → v6 (Writing quests, Phase Q1): progress gains `writing` (per-kanji writing records), `writingLog` (marks per local
+ * day) and `badges` (badge id → day earned). Older files have none, so they restore with all three empty: set
+ * explicitly here (like v1 → v2) rather than left to whatever the caller's defaults hold. All three arrive in this ONE
+ * bump; sync and the database rules do not carry them until Phase Q10.
  */
 const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
   (file) => file,
@@ -173,6 +184,20 @@ const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
   },
   // v4 → v5: nothing to convert (a missing `streak` already means 0); see the note above.
   (file) => file,
+  // v5 → v6 (Phase Q1): the three writing fields start empty, set explicitly; a field already present is kept.
+  (file) => {
+    const progress = file["progress"];
+    if (!isRecord(progress)) return file;
+    return {
+      ...file,
+      progress: {
+        ...progress,
+        writing: "writing" in progress ? progress["writing"] : {},
+        writingLog: "writingLog" in progress ? progress["writingLog"] : {},
+        badges: "badges" in progress ? progress["badges"] : {},
+      },
+    };
+  },
 ];
 
 // ---------------------------------------------------------------------------------------------

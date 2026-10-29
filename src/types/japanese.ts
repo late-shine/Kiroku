@@ -115,6 +115,30 @@ export interface StudyDay {
   correct: number;
 }
 
+/**
+ * Writing quests, Phase Q1 — what Kiroku remembers about writing ONE kanji from memory on paper. Keyed by
+ * `kanjiKey` ("u" + lowercase hex code point, 力 -> "u529b") in `UserProgressState.writing`. The learner's own
+ * mark is the record. Days are LOCAL calendar days, "YYYY-MM-DD", the same ones `word-memory.ts` uses.
+ */
+export interface WritingRecord {
+  /** The last <=3 distinct local days this kanji was written right, ascending. */
+  ok: string[];
+  /** The last <=3 distinct local days it was missed, ascending. */
+  miss: string[];
+  /** A photo check once matched this kanji AND the final mark was right. Present only when true, never `undefined`. */
+  v?: true;
+}
+
+/** Writing quests, Phase Q1: one local day of saved marks. `p` (marks that carry a green tick) is omitted when 0. */
+export interface WritingDay {
+  /** Marks saved that day (right or not yet). */
+  n: number;
+  /** Marks that were "Wrote it right". Never more than `n`. */
+  ok: number;
+  /** Right marks that carry a photo-check tick. Never more than `ok`. */
+  p?: number;
+}
+
 export interface UserProgressState {
   completedDays: number[];
   currentDay: number;
@@ -129,6 +153,16 @@ export interface UserProgressState {
    * under the 7-day graph (18b). Empty for new users and for backups made before 18a.
    */
   studyLog: Record<string, StudyDay>;
+  /**
+   * Writing quests, Phase Q1: per-kanji writing records, keyed by `kanjiKey` (see `WritingRecord`). Empty for new
+   * users and for backups made before v6. Counts always read through the lessons, so a record whose lesson was
+   * deleted is simply ignored.
+   */
+  writing: Record<string, WritingRecord>;
+  /** Writing quests, Phase Q1: marks saved per LOCAL day, keyed "YYYY-MM-DD", at most the last 120 days. */
+  writingLog: Record<string, WritingDay>;
+  /** Writing quests, Phase Q1: badge id -> the local day it was first earned. Nothing grants badges until Q6. */
+  badges: Record<string, string>;
   lastQuizScore?: { correct: number; total: number; date: string };
   backgroundIndex: number;
   bgZoomSpeed: "slow" | "medium" | "still";

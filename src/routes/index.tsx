@@ -54,6 +54,7 @@ import {
   pruneMemory,
 } from "@/lib/word-memory";
 import { parseStoredStudyLog } from "@/lib/study-log";
+import { parseStoredBadges, parseStoredWriting, parseStoredWritingLog } from "@/lib/writing";
 import { RhythmChart } from "@/components/progress/RhythmChart";
 import { MemoryBlock } from "@/components/progress/MemoryBlock";
 import { WordList } from "@/components/progress/WordList";
@@ -119,6 +120,9 @@ const emptyProgress: UserProgressState = {
   totalQuizzesTaken: 0,
   totalCorrectAnswers: 0,
   studyLog: {},
+  writing: {},
+  writingLog: {},
+  badges: {},
   backgroundIndex: 0,
   bgZoomSpeed: "slow",
   showFurigana: true,
@@ -135,6 +139,10 @@ function loadProgress() {
       vocabMemory: parseStoredMemory(saved?.vocabMemory),
       // Phase 18a: saves from before the study log have none; anything malformed is dropped.
       studyLog: parseStoredStudyLog(saved?.studyLog),
+      // Writing quests, Phase Q1: saves from before them have none; anything malformed is dropped.
+      writing: parseStoredWriting(saved?.writing),
+      writingLog: parseStoredWritingLog(saved?.writingLog),
+      badges: parseStoredBadges(saved?.badges),
     };
   } catch {
     return emptyProgress;

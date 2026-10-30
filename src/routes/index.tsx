@@ -9,6 +9,7 @@ import {
   CircleHelp,
   Image,
   Music2,
+  PenLine,
   Sparkles,
   Trash2,
   Trophy,
@@ -54,7 +55,15 @@ import {
   pruneMemory,
 } from "@/lib/word-memory";
 import { parseStoredStudyLog } from "@/lib/study-log";
-import { parseStoredBadges, parseStoredWriting, parseStoredWritingLog } from "@/lib/writing";
+import {
+  freshUnwritten,
+  parseStoredBadges,
+  parseStoredWriting,
+  parseStoredWritingLog,
+} from "@/lib/writing";
+import { questsEnabled } from "@/lib/quest-prefs";
+import { useQuestPrefs } from "@/components/write/useQuestPrefs";
+import { WritePage } from "@/components/write/WritePage";
 import { RhythmChart } from "@/components/progress/RhythmChart";
 import { MemoryBlock } from "@/components/progress/MemoryBlock";
 import { WordList } from "@/components/progress/WordList";
@@ -99,7 +108,8 @@ export const Route = createFileRoute("/")({
 });
 
 // Phase 20: "studio" is a shell mode like the others — the AI Lesson Studio is a page, not an overlay.
-type MainTab = "lesson" | "quiz" | "progress" | "atmosphere" | "profile" | "studio";
+// Writing quests Q2: "write" is one too (its pill shows only while Writing practice is on).
+type MainTab = "lesson" | "quiz" | "progress" | "atmosphere" | "profile" | "studio" | "write";
 type LessonTab = "overview" | "grammar" | "kanji" | "vocab";
 const backgrounds = [
   { name: "Misty companions", url: cats },
@@ -298,6 +308,18 @@ function JapaneseDesk() {
         localDay(),
       ).length
     : 0;
+  // Writing quests Q2: the device-only Writing practice switch (read after mount, so the server render and the first
+  // client render agree: no Write pill). The dot on the pill means a fresh kanji (newest 4 lessons) has no record yet.
+  const quests = useQuestPrefs();
+  const questsOn = mounted && quests.loaded && questsEnabled(quests.prefs, progress.writing);
+  const writeReady = useMemo(
+    () => questsOn && freshUnwritten(lessons, progress.writing, localDay()).length > 0,
+    [questsOn, lessons, progress.writing],
+  );
+  // Switched off while on the Write page (for example in another tab): go back to Lessons, never stay stranded.
+  useEffect(() => {
+    if (quests.loaded && !questsOn && tab === "write") setTab("lesson");
+  }, [quests.loaded, questsOn, tab]);
   const selectDay = (value: number) => {
     if (lessonDays.includes(value)) setDay(value);
   };
@@ -339,6 +361,7 @@ function JapaneseDesk() {
     setProgress(emptyProgress);
     setCycleIndex(null);
     setDay(1);
+    quests.reset();
   };
   return (
     // Phase 9b: one shared account + sync state for the header button and the Progress card.
@@ -396,6 +419,8 @@ function JapaneseDesk() {
             canPrev={prevDay !== null}
             canNext={nextDay !== null}
             quizDue={quizDue}
+            showWrite={questsOn || tab === "write"}
+            writeReady={writeReady}
             onAI={() => (tab === "studio" ? closeStudio() : openStudio())}
             onSound={() => setSoundOpen((v) => !v)}
             onHelp={() => setHelpOpen(true)}
@@ -482,8 +507,20 @@ function JapaneseDesk() {
                   onOpenQuiz={() => setTab("quiz")}
                   onOpenAtmosphere={() => setTab("atmosphere")}
                   onShowTipsAgain={tips.showAgain}
+                  questsOn={questsOn}
+                  onSetQuestsOn={quests.setOn}
                 />
               </>
+            )}
+            {mounted && tab === "write" && (
+              <WritePage
+                lessons={lessons}
+                progress={progress}
+                setProgress={setProgress}
+                quests={quests}
+                onOpenStudio={openStudio}
+                onBack={() => setTab("lesson")}
+              />
             )}
             {mounted && tab === "atmosphere" && (
               <>
@@ -556,12 +593,18 @@ function Header({
   canPrev,
   canNext,
   quizDue,
+  showWrite,
+  writeReady,
   onAI,
   onSound,
   onHelp,
   onProfile,
 }: {
   quizDue: number;
+  /** Writing quests Q2: the fifth pill (only while Writing practice is on, or while on the Write page). */
+  showWrite: boolean;
+  /** A fresh kanji has no writing record yet: a small dot on the Write pill. */
+  writeReady: boolean;
   tab: MainTab;
   setTab: (v: MainTab) => void;
   positionLabel: string | null;
@@ -579,6 +622,7 @@ function Header({
     { id: "quiz", label: "Quiz", icon: Sparkles },
     { id: "progress", label: "Progress", icon: Trophy },
     { id: "atmosphere", label: "Atmosphere", icon: Image },
+    ...(showWrite ? [{ id: "write" as const, label: "Write", icon: PenLine }] : []),
   ];
   return (
     <header className="glass-panel grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl px-3.5 py-2.5 lg:grid-cols-[1fr_auto_1fr]">
@@ -596,14 +640,26 @@ function Header({
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`hit-area flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+            className={`hit-area flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 motion-reduce:transition-none ${
               tab === id
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
             }`}
           >
             <Icon className="size-3.5" />
-            <span className="hidden sm:inline">{label}</span>
+            {/* The Write pill keeps its name for a screen reader on a phone (the other labels are display:none there). */}
+            <span className={id === "write" ? "sr-only sm:not-sr-only" : "hidden sm:inline"}>
+              {label}
+            </span>
+            {id === "write" && writeReady && tab !== "write" && (
+              <>
+                <span
+                  aria-hidden
+                  className="absolute right-1.5 top-1 size-1.5 rounded-full bg-primary"
+                />
+                <span className="sr-only">A writing page is ready</span>
+              </>
+            )}
             {id === "quiz" && quizDue > 0 && (
               <span
                 aria-label={`${quizDue} words due today`}

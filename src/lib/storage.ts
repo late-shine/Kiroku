@@ -25,6 +25,7 @@ export const STORAGE_KEYS = {
   sync: "kiroku_sync_v1", // Phase 9b — { uid, lastSyncedAt }: which account this device last synced with; no legacy counterpart, never in a backup
   atmosphere: "kiroku_atmosphere_v1", // Phase 16d — { cycle, darkness }: this device's scene cycling + reading-contrast; device-only like `voice`, never synced or backed up
   profile: "kiroku_profile_v1", // Phase 19a — { name, glyph, lastExportAt }: name + avatar choice sync (prefs); lastExportAt is this device only; never in a backup; no legacy counterpart
+  quests: "kiroku_quests_v1", // Writing quests Q2 — { v, on?, draft? }: the Writing practice switch and the page being written; DEVICE-ONLY, never backed up or synced; no legacy counterpart; absent = quests off
 } as const;
 
 /** The pre-rebrand keys, paired with what replaced them. Never write to these. */

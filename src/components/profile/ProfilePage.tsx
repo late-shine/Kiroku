@@ -101,6 +101,8 @@ export function ProfilePage({
   onOpenQuiz,
   onOpenAtmosphere,
   onShowTipsAgain,
+  questsOn,
+  onSetQuestsOn,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
@@ -117,6 +119,9 @@ export function ProfilePage({
   onOpenAtmosphere: () => void;
   /** The shell's `useTips().showAgain`: the shell owns the tip state (a second copy here would not refresh its tip cards). */
   onShowTipsAgain: () => void;
+  /** Writing quests Q2: whether Writing practice is on, and the switch that sets it (the shell owns the device-only state). */
+  questsOn: boolean;
+  onSetQuestsOn: (on: boolean) => void;
 }) {
   const { account } = useAccountSync();
   const { profile, setName, setGlyph, setPhoto, removePhoto, markExported } = useProfile();
@@ -395,6 +400,34 @@ export function ProfilePage({
               <span
                 className={`block size-4 rounded-full bg-background shadow transition-transform ${
                   progress.showFurigana ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p id="pref-writing" className="text-sm">
+                Writing practice
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {
+                  "Short pen-and-paper pages for kanji you can read but can't yet write. Off by default."
+                }
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={questsOn}
+              aria-labelledby="pref-writing"
+              onClick={() => onSetQuestsOn(!questsOn)}
+              className={`hit-area relative h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors motion-reduce:transition-none ${
+                questsOn ? "bg-primary" : "bg-input"
+              }`}
+            >
+              <span
+                className={`block size-4 rounded-full bg-background shadow transition-transform motion-reduce:transition-none ${
+                  questsOn ? "translate-x-4" : "translate-x-0"
                 }`}
               />
             </button>

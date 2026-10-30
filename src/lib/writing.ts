@@ -381,6 +381,48 @@ export function freshUnwritten(
     .map((entry) => entry.key);
 }
 
+/** Where a kanji stands, for the "Choose by meaning" list (Phase Q3). Text only: it never shows the character. */
+export type WritingChoiceState = "new" | "once" | "missed" | "carved";
+
+/** One kanji the learner may choose to write, and where it stands. */
+export interface WritingChoice extends PoolKanji {
+  /** `new` = never attempted; `once` = written right on one day so far; `missed` = last attempt was a miss; `carved`. */
+  state: WritingChoiceState;
+}
+
+/**
+ * Every kanji of the curriculum the learner may CHOOSE to write today (Phase Q3, "Choose by meaning"): all of them
+ * except what was already attempted today (so one kanji still gains at most one success per local day, and a chosen
+ * page cannot farm rank). Carved kanji are included: this list is what is left when the automatic page has nothing to
+ * offer. Sorted by meaning (then key), so the order is deterministic and says nothing about the characters. Inputs are
+ * never changed.
+ */
+export function eligibleKanji(
+  lessons: readonly DayLesson[],
+  writing: Readonly<Record<string, WritingRecord>>,
+  today: string,
+): WritingChoice[] {
+  const out: WritingChoice[] = [];
+  for (const entry of poolKanji(lessons)) {
+    const rec = writing[entry.key];
+    if (attemptedOn(rec, today)) continue;
+    const state: WritingChoiceState = !attempted(rec)
+      ? "new"
+      : lastAttemptMissed(rec)
+        ? "missed"
+        : isCarved(rec)
+          ? "carved"
+          : "once";
+    out.push({ ...entry, state });
+  }
+  return out.sort((a, b) => {
+    const am = a.kanji.meaning.trim().toLowerCase();
+    const bm = b.kanji.meaning.trim().toLowerCase();
+    if (am !== bm) return am < bm ? -1 : 1;
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+  });
+}
+
 /**
  * How many kanji are carved, counted THROUGH the lessons: a record whose lesson was deleted is ignored, so this is
  * bounded by the curriculum. A later miss never lowers it (the `ok` days stay); it can only fall when a lesson goes.

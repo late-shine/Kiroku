@@ -1,4 +1,5 @@
-// Writing quests, Phase Q2 — the Write page: a MODE of the shell (like Profile), shown only while writing practice is on.
+// Writing quests, Phases Q2 and Q3 — the Write page: a MODE of the shell (like Profile), shown only while writing
+// practice is on.
 //
 // One page of up to 3 kanji from the learner's own lessons, in two steps (the optional photo step arrives in Phase Q5):
 //   1. Write:   numbered cue cards (meaning, readings, one blanked compound). The characters are not in the DOM.
@@ -9,13 +10,20 @@
 // The page being written is kept in the device-only quest prefs (`prefs.draft`), so a reload keeps the marks. It is
 // made the first time the page is shown, which also freezes which kanji are on it (a sync that changes the lessons
 // meanwhile cannot change the numbering on the learner's paper). It belongs to one local day (`useToday` moves on at
-// midnight) and saving clears it. After a save the page says it is done for today: today's attempted kanji never come
-// back the same day.
+// midnight) and saving clears it. Today's attempted kanji never come back the same day, which is also what keeps the
+// extras below from farming rank.
+//
+// Phase Q3 extras:
+//   - "Write 3 more" (after a save): a new page from the kanji not yet attempted today.
+//   - "Choose by meaning" (when nothing is left to pick automatically): the learner ticks 1 to 5 kanji by meaning and
+//     reading. The list never shows a character, and a chosen page runs through the same steps and the same save.
+//   - A first-visit note, dismissible; the dismissal is kept in the device prefs (`intro`).
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { PageCard } from "@/components/write/PageCard";
+import { ChoiceRow, PageCard } from "@/components/write/PageCard";
 import type { QuestPrefsApi } from "@/components/write/useQuestPrefs";
 import { useToday } from "@/hooks/use-today";
 import {
+  DRAFT_MAX_KEYS,
   allMarked,
   draftForDay,
   draftResults,
@@ -24,10 +32,20 @@ import {
   newDraft,
   resolveDraft,
   revealDraft,
+  withIntro,
   type WritingDraft,
   type WritingMark,
 } from "@/lib/quest-prefs";
-import { applyPage, knownKanji, pickPage, poolKanji, recordWritingDay } from "@/lib/writing";
+import {
+  WRITING_PAGE_SIZE,
+  applyPage,
+  eligibleKanji,
+  knownKanji,
+  pickPage,
+  poolKanji,
+  recordWritingDay,
+  type WritingPick,
+} from "@/lib/writing";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 const labelClass = "font-display text-xs font-semibold tracking-wider text-primary";
@@ -36,6 +54,8 @@ const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 const primaryButton = `hit-area rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors motion-reduce:transition-none hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`;
 const quietButton = `hit-area rounded-full border border-border px-5 py-2.5 text-sm text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-accent hover:text-foreground ${focusRing}`;
+
+const NO_PICKS: readonly WritingPick[] = [];
 
 type View = "loading" | "no-kanji" | "write" | "reveal" | "done" | "empty";
 
@@ -55,7 +75,7 @@ export function WritePage({
   onBack: () => void;
 }) {
   const today = useToday();
-  const { prefs, loaded, setDraft } = quests;
+  const { prefs, loaded, setDraft, update } = quests;
 
   const pool = useMemo(() => poolKanji(lessons), [lessons]);
   const known = useMemo(() => knownKanji(lessons), [lessons]);
@@ -65,25 +85,26 @@ export function WritePage({
   const dayEntry = today === null ? undefined : progress.writingLog[today];
   const savedToday = (dayEntry?.n ?? 0) > 0;
 
-  // With no page yet, today's page is picked now (deterministic: same lessons and records, same page). Nothing is
-  // picked once a page is saved for today, or while a page is already open.
-  const picked = useMemo(
+  // What the automatic picker offers now (deterministic: same lessons and records, same page). Computed while no page
+  // is open. Before anything is saved today it IS today's page; after a save it is what "Write 3 more" would start.
+  const candidates = useMemo(
     () =>
-      loaded && today !== null && stored === null && !savedToday
+      loaded && today !== null && stored === null
         ? pickPage(lessons, progress.writing, today)
-        : [],
-    [loaded, today, stored, savedToday, lessons, progress.writing],
+        : NO_PICKS,
+    [loaded, today, stored, lessons, progress.writing],
   );
   const provisional = useMemo(
     () =>
-      today !== null && picked.length > 0
+      today !== null && !savedToday && candidates.length > 0
         ? newDraft(
             today,
-            picked.map((p) => p.key),
+            candidates.map((p) => p.key),
           )
         : null,
-    [today, picked],
+    [today, savedToday, candidates],
   );
+  const more = savedToday ? candidates : NO_PICKS;
   const shown: WritingDraft | null = stored ?? provisional;
   const cards = useMemo(() => (shown === null ? [] : resolveDraft(shown, pool)), [shown, pool]);
 
@@ -110,11 +131,32 @@ export function WritePage({
   else if (shown !== null && cards.length > 0) view = shown.step;
   else if (savedToday) view = "done";
 
+  // "Choose by meaning": only offered when no page is open and the automatic picker has nothing left to give.
+  const choices = useMemo(
+    () =>
+      (view === "empty" || view === "done") && candidates.length === 0 && today !== null
+        ? eligibleKanji(lessons, progress.writing, today)
+        : [],
+    [view, candidates.length, today, lessons, progress.writing],
+  );
+  const [ticked, setTicked] = useState<string[]>([]);
+  const tickedNow = choices
+    .filter((choice) => ticked.includes(choice.key))
+    .slice(0, DRAFT_MAX_KEYS);
+
   // What the done step says: the numbers just saved, or (after a reload) the day's log.
-  const doneNumbers =
-    saved !== null && saved.day === today
-      ? { ok: saved.ok, total: saved.total }
-      : { ok: dayEntry?.ok ?? 0, total: dayEntry?.n ?? 0 };
+  const savedNow = saved !== null && saved.day === today;
+  const doneNumbers = savedNow
+    ? { ok: saved.ok, total: saved.total }
+    : { ok: dayEntry?.ok ?? 0, total: dayEntry?.n ?? 0 };
+  const doneText = `${savedNow ? "Saved." : "Saved today."} ${doneNumbers.ok} of ${doneNumbers.total} written right.`;
+
+  // The first-visit note: until it is dismissed, and never once a page has been saved (the note has done its job).
+  const showIntro =
+    loaded &&
+    prefs.intro !== true &&
+    Object.keys(progress.writing).length === 0 &&
+    (view === "write" || view === "reveal" || view === "empty");
 
   // Focus moves to the new step's heading when the step changes (never on the first display).
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -158,14 +200,90 @@ export function WritePage({
     setDraft(null);
   };
 
+  // "Write 3 more": a new page from what the picker still offers today (attempted kanji are already left out).
+  const writeMore = () => {
+    if (today === null || more.length === 0) return;
+    setDraft(
+      newDraft(
+        today,
+        more.map((pick) => pick.key),
+      ),
+    );
+  };
+
+  // "Choose by meaning": the ticked kanji, in list order, become the page.
+  const toggleTick = (key: string) =>
+    setTicked((current) =>
+      current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+    );
+  const writeChosen = () => {
+    if (today === null || tickedNow.length === 0) return;
+    setDraft(
+      newDraft(
+        today,
+        tickedNow.map((choice) => choice.key),
+      ),
+    );
+    setTicked([]);
+  };
+
+  const dismissIntro = () => {
+    update(withIntro);
+    headingRef.current?.focus();
+  };
+
   const announce =
     view === "write"
       ? `Today's page, ${cards.length} kanji. Write them on paper.`
       : view === "reveal"
         ? "Compare with your page. Mark each kanji."
         : view === "done"
-          ? `Saved. ${doneNumbers.ok} of ${doneNumbers.total} written right.`
+          ? doneText
           : "";
+
+  // The collapsed "Choose by meaning" list (empty when there is nothing to choose from).
+  const chooseList =
+    choices.length > 0 ? (
+      <details className="mt-5 rounded-xl border border-border/60 bg-glass/50 p-4">
+        <summary
+          className={`cursor-pointer rounded-md py-2 font-display text-base text-foreground ${focusRing}`}
+        >
+          Choose by meaning
+        </summary>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Pick 1 to {DRAFT_MAX_KEYS} kanji by what they mean. The characters stay hidden until you
+          compare.
+        </p>
+        <ul className="mt-3 max-h-88 space-y-2 overflow-y-auto pr-1">
+          {choices.map((choice) => {
+            const checked = ticked.includes(choice.key);
+            return (
+              <ChoiceRow
+                key={choice.key}
+                item={choice.kanji}
+                state={choice.state}
+                checked={checked}
+                disabled={!checked && tickedNow.length >= DRAFT_MAX_KEYS}
+                onToggle={() => toggleTick(choice.key)}
+              />
+            );
+          })}
+        </ul>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={writeChosen}
+            disabled={tickedNow.length === 0}
+            className={primaryButton}
+          >
+            Write these
+          </button>
+          <p aria-live="polite" className="text-xs text-muted-foreground">
+            {tickedNow.length} of {DRAFT_MAX_KEYS} picked
+          </p>
+        </div>
+      </details>
+    ) : null;
 
   return (
     <section
@@ -176,6 +294,24 @@ export function WritePage({
       <p role="status" aria-live="polite" className="sr-only">
         {announce}
       </p>
+
+      {showIntro && (
+        <div
+          role="note"
+          className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-primary/30 bg-primary/10 p-3"
+        >
+          <p className="text-xs text-foreground">
+            Write the answers on paper, from memory. Kiroku shows what to write; you do the writing.
+          </p>
+          <button
+            type="button"
+            onClick={dismissIntro}
+            className={`hit-area shrink-0 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground transition-colors motion-reduce:transition-none hover:bg-accent ${focusRing}`}
+          >
+            Got it
+          </button>
+        </div>
+      )}
 
       {view === "no-kanji" && (
         <div className="mt-3">
@@ -191,25 +327,44 @@ export function WritePage({
       {view === "empty" && (
         <div className="mt-3">
           <p className="text-sm text-muted-foreground">
-            Nothing to write right now. Come back after your next lesson.
+            {choices.length > 0
+              ? "Nothing to write right now. Come back after your next lesson, or choose by meaning below."
+              : "Nothing to write right now. Come back after your next lesson."}
           </p>
           <button type="button" onClick={onBack} className={`mt-4 ${quietButton}`}>
             Back to lessons
           </button>
+          {chooseList}
         </div>
       )}
 
       {view === "done" && (
         <div className="mt-3">
           <h2 ref={headingRef} tabIndex={-1} className={headingClass}>
-            Saved. {doneNumbers.ok} of {doneNumbers.total} written right.
+            {doneText}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            That&apos;s today&apos;s page. Come back tomorrow for the next one.
+            {more.length > 0
+              ? "Write more whenever you like, or come back tomorrow."
+              : choices.length > 0
+                ? "Nothing more to write right now. Come back after your next lesson, or choose by meaning below."
+                : "Nothing more to write right now. Come back after your next lesson."}
           </p>
-          <button type="button" onClick={onBack} className={`mt-4 ${primaryButton}`}>
-            Back to lessons
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {more.length > 0 && (
+              <button type="button" onClick={writeMore} className={primaryButton}>
+                Write {Math.min(WRITING_PAGE_SIZE, more.length)} more
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onBack}
+              className={more.length > 0 ? quietButton : primaryButton}
+            >
+              Back to lessons
+            </button>
+          </div>
+          {more.length === 0 && chooseList}
         </div>
       )}
 

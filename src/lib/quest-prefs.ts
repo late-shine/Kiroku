@@ -2,11 +2,13 @@
 // in; no React, no DOM), so it is checked from a plain script (handoffs/phase-Q2-quest-prefs-check.ts).
 //
 // Device-only, like the voice and atmosphere choices: never in a backup, never synced (plan 2.5). The stored shape is
-//   kiroku_quests_v1 = { v: 1, on?: boolean, draft?: { day, keys, step, marks } }
+//   kiroku_quests_v1 = { v: 1, on?: boolean, intro?: true, draft?: { day, keys, step, marks } }
 //
 // `on` is a TRI-STATE. Absent = the learner never touched the switch: quests count as on only if writing records
 // already exist (a restored backup). An explicit true or false always wins. While quests are off nothing writing-related
 // shows anywhere.
+//
+// `intro` (Phase Q3) is true once the learner has dismissed the first-visit note on the Write page; it never goes back.
 //
 // `draft` is the page that is open right now, so a reload keeps it. It holds the kanji KEYS (never the characters, and
 // never an image), which step the learner is on, and the marks made so far. It belongs to one local day: the next day it
@@ -42,6 +44,8 @@ export interface WritingDraft {
 export interface QuestPrefs {
   /** Tri-state: absent (never touched), true, false. */
   on?: boolean;
+  /** Phase Q3: the first-visit note on the Write page was dismissed. Present only when true. */
+  intro?: true;
   draft?: WritingDraft;
 }
 
@@ -88,6 +92,7 @@ export function parseQuestPrefs(raw: unknown): QuestPrefs {
   const out: QuestPrefs = {};
   const on = raw["on"];
   if (typeof on === "boolean") out.on = on;
+  if (raw["intro"] === true) out.intro = true;
   const draft = parseDraft(raw["draft"]);
   if (draft !== undefined) out.draft = draft;
   return out;
@@ -119,15 +124,16 @@ export function readQuestPrefs(storage: Reader, key: string): QuestPrefs {
 }
 
 /**
- * The text to store, or null when there is nothing worth keeping (no explicit `on`, no draft): the key is then removed
+ * The text to store, or null when there is nothing worth keeping (no explicit `on`, no `intro`, no draft): the key is then removed
  * instead of holding an empty shell, so "Reset everything" and a fresh app leave no trace.
  */
 export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
-  const { on, draft } = prefs;
-  if (on === undefined && draft === undefined) return null;
+  const { on, intro, draft } = prefs;
+  if (on === undefined && intro !== true && draft === undefined) return null;
   return JSON.stringify({
     v: QUEST_PREFS_VERSION,
     ...(on !== undefined ? { on } : {}),
+    ...(intro === true ? { intro: true } : {}),
     ...(draft !== undefined
       ? { draft: { day: draft.day, keys: draft.keys, step: draft.step, marks: draft.marks } }
       : {}),
@@ -159,6 +165,11 @@ export function questsEnabled(
 ): boolean {
   if (prefs.on !== undefined) return prefs.on;
   return Object.keys(writing).length > 0;
+}
+
+/** The prefs once the first-visit note has been dismissed. The same object comes back if it already was. */
+export function withIntro(prefs: QuestPrefs): QuestPrefs {
+  return prefs.intro === true ? prefs : { ...prefs, intro: true };
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -23,6 +23,11 @@ export interface QuestPrefsApi {
   setDraft: (
     next: WritingDraft | null | ((previous: WritingDraft | undefined) => WritingDraft | null),
   ) => void;
+  /**
+   * Changes the prefs with a pure function (for example `withIntro`). Later phases keep their own fields in the same
+   * key (the photo-check acknowledgement and counters, the stamp, the accent), so they use this instead of a new setter.
+   */
+  update: (change: (previous: QuestPrefs) => QuestPrefs) => void;
   /** Forgets everything (used by "Reset everything"): the stored key is removed too. */
   reset: () => void;
 }
@@ -51,13 +56,18 @@ export function useQuestPrefs(): QuestPrefsApi {
     });
   }, []);
 
+  const update = useCallback(
+    (change: (previous: QuestPrefs) => QuestPrefs) => setPrefs(change),
+    [],
+  );
+
   const reset = useCallback(() => {
     setPrefs({});
     writeQuestPrefs(localStorage, STORAGE_KEYS.quests, {});
   }, []);
 
   return useMemo(
-    () => ({ prefs, loaded, setOn, setDraft, reset }),
-    [prefs, loaded, setOn, setDraft, reset],
+    () => ({ prefs, loaded, setOn, setDraft, update, reset }),
+    [prefs, loaded, setOn, setDraft, update, reset],
   );
 }

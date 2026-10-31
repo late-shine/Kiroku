@@ -20,6 +20,7 @@
 //     reading. The list never shows a character, and a chosen page runs through the same steps and the same save.
 //   - A first-visit note, dismissible; the dismissal is kept in the device prefs (`intro`).
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { RankLine } from "@/components/profile/BadgeShelf";
 import { ChoiceRow, PageCard } from "@/components/write/PageCard";
 import { PhotoCheck } from "@/components/write/PhotoCheck";
 import type { QuestPrefsApi } from "@/components/write/useQuestPrefs";
@@ -41,9 +42,11 @@ import {
   type WritingDraft,
   type WritingMark,
 } from "@/lib/quest-prefs";
+import { rankText } from "@/lib/rewards";
 import {
   WRITING_PAGE_SIZE,
   applyPage,
+  carvedCount,
   eligibleKanji,
   knownKanji,
   pickPage,
@@ -162,6 +165,8 @@ export function WritePage({
     ? { ok: saved.ok, total: saved.total }
     : { ok: dayEntry?.ok ?? 0, total: dayEntry?.n ?? 0 };
   const doneText = `${savedNow ? "Saved." : "Saved today."} ${doneNumbers.ok} of ${doneNumbers.total} written right.`;
+  // Q6: the rank, read through the lessons (the same count the Profile card uses).
+  const carved = useMemo(() => carvedCount(lessons, progress.writing), [lessons, progress.writing]);
 
   // The first-visit note: until it is dismissed, and never once a page has been saved (the note has done its job).
   const showIntro =
@@ -294,7 +299,7 @@ export function WritePage({
         : view === "reveal"
           ? "Compare with your page. Mark each kanji."
           : view === "done"
-            ? doneText
+            ? `${doneText} ${rankText(carved)}.`
             : "";
 
   // The collapsed "Choose by meaning" list (empty when there is nothing to choose from).
@@ -399,7 +404,8 @@ export function WritePage({
           <h2 ref={headingRef} tabIndex={-1} className={headingClass}>
             {doneText}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <RankLine carved={carved} className="mt-3" />
+          <p className="mt-3 text-sm text-muted-foreground">
             {more.length > 0
               ? "Write more whenever you like, or come back tomorrow."
               : choices.length > 0

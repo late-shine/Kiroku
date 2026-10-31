@@ -62,6 +62,7 @@ import {
   parseStoredWritingLog,
 } from "@/lib/writing";
 import { questsEnabled } from "@/lib/quest-prefs";
+import { grantBadges } from "@/lib/rewards";
 import { useQuestPrefs } from "@/components/write/useQuestPrefs";
 import { WritePage } from "@/components/write/WritePage";
 import { RhythmChart } from "@/components/progress/RhythmChart";
@@ -316,6 +317,13 @@ function JapaneseDesk() {
     () => questsOn && freshUnwritten(lessons, progress.writing, localDay()).length > 0,
     [questsOn, lessons, progress.writing],
   );
+  // Writing quests Q6: the silent badge catch-up. It runs after the stored data is loaded (`mounted`) and again whenever
+  // the lessons or progress change (a quiz answer, a saved page, a restore, a sync), with no toast. `grantBadges` returns
+  // the SAME object when nothing is new, so the update bails out and this cannot loop.
+  useEffect(() => {
+    if (!mounted) return;
+    setProgress((p) => grantBadges(p, lessons, localDay()));
+  }, [mounted, lessons, progress]);
   // Switched off while on the Write page (for example in another tab): go back to Lessons, never stay stranded.
   useEffect(() => {
     if (quests.loaded && !questsOn && tab === "write") setTab("lesson");

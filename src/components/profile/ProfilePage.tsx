@@ -17,6 +17,7 @@ import { AccountCard } from "@/components/account/AccountCard";
 import { Avatar } from "@/components/profile/Avatar";
 import { AvatarCropper } from "@/components/profile/AvatarCropper";
 import { BackupControls } from "@/components/profile/BackupControls";
+import { BadgeShelf, RankLine } from "@/components/profile/BadgeShelf";
 import { ResetControl } from "@/components/profile/ResetControl";
 import { useProfile } from "@/components/profile/useProfile";
 import { AvatarImageError, loadAvatarSource, type AvatarSource } from "@/lib/avatar-image";
@@ -30,6 +31,7 @@ import {
   resolveName,
 } from "@/lib/profile";
 import { streak } from "@/lib/study-log";
+import { carvedCount } from "@/lib/writing";
 import { isEmptySnapshot, snapshotOf } from "@/lib/sync";
 import { localDay } from "@/lib/word-memory";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
@@ -174,6 +176,13 @@ export function ProfilePage({
       setPhotoBusy(false);
     }
   };
+
+  // Writing quests Q6: the writing card shows while Writing practice is on, or once any badge has been earned (so a fresh
+  // app shows no empty trophy case). The rank is writing-only; the shelf lists every badge, including the quiz ones.
+  const today = localDay();
+  const hasBadges = Object.keys(progress.badges).length > 0;
+  const showRewards = questsOn || hasBadges;
+  const carved = carvedCount(lessons, progress.writing);
 
   const [tipsReset, setTipsReset] = useState(false);
   const lastBackup = profile.lastExportAt
@@ -338,6 +347,13 @@ export function ProfilePage({
           />
         </div>
       </Section>
+
+      {showRewards && (
+        <Section label={questsOn ? "書く · WRITING" : "バッジ · BADGES"} delay="90ms">
+          {questsOn && <RankLine carved={carved} className="mt-4" />}
+          <BadgeShelf badges={progress.badges} today={today} className="mt-5" />
+        </Section>
+      )}
 
       <Section label="同期 · ACCOUNT & SYNC" delay="120ms">
         {account.configured ? (

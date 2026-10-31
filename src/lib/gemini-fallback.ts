@@ -12,7 +12,8 @@ import { GEMINI_ATTEMPT_TIMEOUT_MS, GEMINI_MODEL_CHAIN, geminiEndpoint, normaliz
  *   widens PLAN.md's original "429 only" rule after a real 503 on gemini-3.8-flash.
  * - A model that doesn't answer within the per-attempt timeout is skipped too (it was hanging).
  * - 400/401/403 (bad request / bad key) stop immediately with a plain-language message.
- * - Any other failure also stops with a clear message — a different model can't fix it.
+ * - Any other failure also stops with a clear message, except 404 when the vision caller explicitly
+ *   enables `moveOnNotFound` for its dashboard-confirmed model chain.
  * - The API key goes in the `x-goog-api-key` header (never the URL) and is never logged or stored.
  */
 
@@ -30,6 +31,17 @@ export interface GeminiAttempt {
 export type GeminiResult =
   | { ok: true; text: string; model: string; attempts: GeminiAttempt[] }
   | { ok: false; message: string; attempts: GeminiAttempt[] };
+
+export interface GeminiImageInput {
+  mime: "image/jpeg";
+  base64: string;
+}
+
+export interface GeminiRequestOptions {
+  image?: GeminiImageInput;
+  thinkingLevel?: "medium";
+  moveOnNotFound?: boolean;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -102,6 +114,7 @@ async function attemptModel(
   fetchImpl: FetchLike,
   attempts: GeminiAttempt[],
   signal: AbortSignal,
+  moveOnNotFound: boolean,
 ): Promise<AttemptStep> {
   const stop = (message: string, attempt: GeminiAttempt): AttemptStep => ({
     kind: "done",
@@ -122,6 +135,10 @@ async function attemptModel(
 
   if (res.status === 429 || res.status === 503) {
     return { kind: "next", attempt: { model, outcome: res.status === 429 ? "rate-limited" : "overloaded", status: res.status } };
+  }
+
+  if (moveOnNotFound && res.status === 404) {
+    return { kind: "next", attempt: { model, outcome: "failed", status: 404 } };
   }
 
   if (!res.ok) {
@@ -153,6 +170,24 @@ async function attemptModel(
   return { kind: "done", result: { ok: true, text: reply.text, model, attempts: [...attempts, { model, outcome: "ok", status: res.status }] } };
 }
 
+export function buildGeminiBody(prompt: string, options?: GeminiRequestOptions): string {
+  const parts: unknown[] = [{ text: prompt }];
+  if (options?.image !== undefined) {
+    parts.push({
+      inlineData: { mimeType: options.image.mime, data: options.image.base64 },
+    });
+  }
+  return JSON.stringify({
+    contents: [{ role: "user", parts }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      ...(options?.thinkingLevel !== undefined
+        ? { thinkingConfig: { thinkingLevel: options.thinkingLevel } }
+        : {}),
+    },
+  });
+}
+
 /**
  * Sends `prompt` to Gemini, walking `models` in order but only moving on when a model returns 429,
  * 503, or doesn't answer within `timeoutMs` (a hung connection used to spin forever).
@@ -166,6 +201,7 @@ export async function generateWithFallback(
   fetchImpl: FetchLike = (input, init) => fetch(input, init),
   models: readonly string[] = GEMINI_MODEL_CHAIN,
   timeoutMs: number = GEMINI_ATTEMPT_TIMEOUT_MS,
+  options?: GeminiRequestOptions,
 ): Promise<GeminiResult> {
   const attempts: GeminiAttempt[] = [];
   const key = apiKey.trim();
@@ -173,12 +209,7 @@ export async function generateWithFallback(
   if (!key) return { ok: false, message: "Add your Gemini API key first.", attempts };
   if (models.length === 0) return { ok: false, message: "No Gemini models are configured.", attempts };
 
-  const body = JSON.stringify({
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    // Worth trying per the plan; whatever comes back still goes through parseLessonFromText and the
-    // preview card — nothing is ever saved straight from an API response.
-    generationConfig: { responseMimeType: "application/json" },
-  });
+  const body = buildGeminiBody(prompt, options);
 
   for (const rawId of models) {
     const model = normalizeModelId(rawId);
@@ -193,7 +224,18 @@ export async function generateWithFallback(
       }, timeoutMs);
     });
 
-    const step = await Promise.race([attemptModel(key, model, body, fetchImpl, attempts, controller.signal), timeout]);
+    const step = await Promise.race([
+      attemptModel(
+        key,
+        model,
+        body,
+        fetchImpl,
+        attempts,
+        controller.signal,
+        options?.moveOnNotFound === true,
+      ),
+      timeout,
+    ]);
     clearTimeout(timer);
 
     if (step === "timeout") {

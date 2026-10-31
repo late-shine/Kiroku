@@ -1,11 +1,12 @@
 // Writing quests, Phases Q2 and Q3 — the Write page: a MODE of the shell (like Profile), shown only while writing
 // practice is on.
 //
-// One page of up to 3 kanji from the learner's own lessons, in two steps (the optional photo step arrives in Phase Q5):
+// One page of up to 3 kanji from the learner's own lessons:
 //   1. Write:   numbered cue cards (meaning, readings, one blanked compound). The characters are not in the DOM.
-//   2. Compare: the characters are revealed; the learner marks each "Wrote it right" or "Not yet", then saves.
+//   2. Photo:   optional; only an explicit photo check calls the relay. Mark by hand always works.
+//   3. Compare: the characters are revealed; the learner marks each "Wrote it right" or "Not yet", then saves.
 // The learner's own mark is the record. Saving writes `progress.writing` and `progress.writingLog[today]` and nothing
-// else: no vocab memory, no study log, no quiz counters. No network request is made anywhere on this page.
+// else: no vocab memory, no study log, no quiz counters.
 //
 // The page being written is kept in the device-only quest prefs (`prefs.draft`), so a reload keeps the marks. It is
 // made the first time the page is shown, which also freezes which kanji are on it (a sync that changes the lessons
@@ -20,11 +21,15 @@
 //   - A first-visit note, dismissible; the dismissal is kept in the device prefs (`intro`).
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { ChoiceRow, PageCard } from "@/components/write/PageCard";
+import { PhotoCheck } from "@/components/write/PhotoCheck";
 import type { QuestPrefsApi } from "@/components/write/useQuestPrefs";
 import { useToday } from "@/hooks/use-today";
+import type { RelayGeminiVisionResult } from "@/lib/gemini-relay";
+import { compareItems, type VisionComparison, type VisionKind } from "@/lib/gemini-vision";
 import {
   DRAFT_MAX_KEYS,
   allMarked,
+  applyPhotoChecks,
   draftForDay,
   draftResults,
   markDraft,
@@ -57,7 +62,9 @@ const quietButton = `hit-area rounded-full border border-border px-5 py-2.5 text
 
 const NO_PICKS: readonly WritingPick[] = [];
 
-type View = "loading" | "no-kanji" | "write" | "reveal" | "done" | "empty";
+type View = "loading" | "no-kanji" | "write" | "photo" | "reveal" | "done" | "empty";
+type PhotoReview = { page: string; kind: VisionKind; items: VisionComparison[] };
+type VisionSuccess = Extract<RelayGeminiVisionResult, { ok: true }>;
 
 export function WritePage({
   lessons,
@@ -124,12 +131,17 @@ export function WritePage({
   }, [loaded, today, prefs.draft, stored, cards.length, provisional, setDraft]);
 
   const [saved, setSaved] = useState<{ day: string; ok: number; total: number } | null>(null);
+  const pageId = shown === null ? "" : `${shown.day}:${shown.keys.join(",")}`;
+  const [photoPage, setPhotoPage] = useState<string | null>(null);
+  const [photoReview, setPhotoReview] = useState<PhotoReview | null>(null);
+  const review = photoReview?.page === pageId ? photoReview : null;
 
   let view: View = "empty";
   if (today === null || !loaded) view = "loading";
   else if (pool.length === 0) view = "no-kanji";
-  else if (shown !== null && cards.length > 0) view = shown.step;
-  else if (savedToday) view = "done";
+  else if (shown !== null && cards.length > 0) {
+    view = shown.step === "write" && photoPage === pageId ? "photo" : shown.step;
+  } else if (savedToday) view = "done";
 
   // "Choose by meaning": only offered when no page is open and the automatic picker has nothing left to give.
   const choices = useMemo(
@@ -179,6 +191,42 @@ export function WritePage({
       return base === null ? null : revealDraft(base);
     });
 
+  const openPhoto = () => {
+    setPhotoReview(null);
+    setPhotoPage(pageId);
+  };
+
+  const markByHand = () => {
+    setPhotoPage(null);
+    setPhotoReview(null);
+    reveal();
+  };
+
+  const completePhoto = (reply: VisionSuccess) => {
+    const items =
+      reply.kind === "handwriting"
+        ? compareItems(
+            cards.map((card) => ({ n: card.n, character: card.entry.kanji.character })),
+            reply.items,
+            reply.model,
+          )
+        : [];
+    const tickKeys = items
+      .filter((item) => item.photoMatch)
+      .map((item) => cards.find((card) => card.n === item.n)?.entry.key)
+      .filter((key): key is string => key !== undefined);
+    const preselectKeys = items
+      .filter((item) => item.preselect)
+      .map((item) => cards.find((card) => card.n === item.n)?.entry.key)
+      .filter((key): key is string => key !== undefined);
+    setPhotoReview({ page: pageId, kind: reply.kind, items });
+    setPhotoPage(null);
+    setDraft((previous) => {
+      const base = baseOf(previous);
+      return base === null ? null : revealDraft(applyPhotoChecks(base, tickKeys, preselectKeys));
+    });
+  };
+
   const setMark = (key: string, next: WritingMark) =>
     setDraft((previous) => {
       const base = baseOf(previous);
@@ -197,12 +245,16 @@ export function WritePage({
       return { ...p, writing, writingLog: recordWritingDay(p.writingLog, today, results) };
     });
     setSaved({ day: today, ok: results.filter((r) => r.right).length, total: results.length });
+    setPhotoPage(null);
+    setPhotoReview(null);
     setDraft(null);
   };
 
   // "Write 3 more": a new page from what the picker still offers today (attempted kanji are already left out).
   const writeMore = () => {
     if (today === null || more.length === 0) return;
+    setPhotoPage(null);
+    setPhotoReview(null);
     setDraft(
       newDraft(
         today,
@@ -218,6 +270,8 @@ export function WritePage({
     );
   const writeChosen = () => {
     if (today === null || tickedNow.length === 0) return;
+    setPhotoPage(null);
+    setPhotoReview(null);
     setDraft(
       newDraft(
         today,
@@ -235,11 +289,13 @@ export function WritePage({
   const announce =
     view === "write"
       ? `Today's page, ${cards.length} kanji. Write them on paper.`
-      : view === "reveal"
-        ? "Compare with your page. Mark each kanji."
-        : view === "done"
-          ? doneText
-          : "";
+      : view === "photo"
+        ? "Optional photo check. Choose a photo or mark by hand."
+        : view === "reveal"
+          ? "Compare with your page. Mark each kanji."
+          : view === "done"
+            ? doneText
+            : "";
 
   // The collapsed "Choose by meaning" list (empty when there is nothing to choose from).
   const chooseList =
@@ -368,6 +424,26 @@ export function WritePage({
         </div>
       )}
 
+      {view === "photo" && shown !== null && today !== null && (
+        <div className="mt-3">
+          <h2 ref={headingRef} tabIndex={-1} className={headingClass}>
+            Photo check · optional
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Use one photo of your numbered page, or go straight to your own marks.
+          </p>
+          <PhotoCheck
+            count={shown.keys.length}
+            today={today}
+            prefs={prefs}
+            update={update}
+            onOpenStudio={onOpenStudio}
+            onHandMark={markByHand}
+            onReply={completePhoto}
+          />
+        </div>
+      )}
+
       {(view === "write" || view === "reveal") && shown !== null && (
         <div className="mt-3">
           <h2 ref={headingRef} tabIndex={-1} className={headingClass}>
@@ -380,6 +456,16 @@ export function WritePage({
                   .join(", ")}. No peeking: the check comes next.`
               : "Look at what you wrote, then mark each kanji. Your marks are what Kiroku remembers."}
           </p>
+          {view === "reveal" && review !== null && review.kind !== "handwriting" && (
+            <p
+              role="status"
+              className="mt-4 rounded-lg border border-border/60 bg-glass/40 p-3 text-sm text-muted-foreground"
+            >
+              {review.kind === "screen_or_print"
+                ? "That looks like a screen or printed text. Photo checks need your own handwriting."
+                : "That photo couldn't be read. Mark by hand."}
+            </p>
+          )}
           <ol className="mt-5 space-y-4">
             {cards.map(({ n, entry }) => (
               <PageCard
@@ -389,12 +475,14 @@ export function WritePage({
                 known={known}
                 revealed={view === "reveal"}
                 mark={shown.marks[entry.key]}
+                photoMatch={shown.checks?.[entry.key] === true}
+                photoResult={review?.items.find((item) => item.n === n) ?? null}
                 onMark={(next) => setMark(entry.key, next)}
               />
             ))}
           </ol>
           {view === "write" ? (
-            <button type="button" onClick={reveal} className={`mt-6 ${primaryButton}`}>
+            <button type="button" onClick={openPhoto} className={`mt-6 ${primaryButton}`}>
               I&apos;ve written them
             </button>
           ) : (

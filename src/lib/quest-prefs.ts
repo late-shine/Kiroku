@@ -2,7 +2,7 @@
 // in; no React, no DOM), so it is checked from a plain script (handoffs/phase-Q2-quest-prefs-check.ts).
 //
 // Device-only, like the voice and atmosphere choices: never in a backup, never synced (plan 2.5). The stored shape is
-//   kiroku_quests_v1 = { v: 1, on?: boolean, intro?: true, draft?: { day, keys, step, marks } }
+//   kiroku_quests_v1 = { v: 1, on?, intro?, ack?, visionDay?, visionCalls?, draft? }
 //
 // `on` is a TRI-STATE. Absent = the learner never touched the switch: quests count as on only if writing records
 // already exist (a restored backup). An explicit true or false always wins. While quests are off nothing writing-related
@@ -39,6 +39,8 @@ export interface WritingDraft {
   step: DraftStep;
   /** The learner's marks so far, only for keys that are on the page. */
   marks: Record<string, WritingMark>;
+  /** Full-Flash matches eligible for a green tick; never transcripts or model notes. */
+  checks?: Record<string, true>;
 }
 
 export interface QuestPrefs {
@@ -46,6 +48,9 @@ export interface QuestPrefs {
   on?: boolean;
   /** Phase Q3: the first-visit note on the Write page was dismissed. Present only when true. */
   intro?: true;
+  ack?: true;
+  visionDay?: string;
+  visionCalls?: number;
   draft?: WritingDraft;
 }
 
@@ -83,7 +88,14 @@ export function parseDraft(raw: unknown): WritingDraft | undefined {
       if (mark === "right" || mark === "miss") marks[key] = mark;
     }
   }
-  return { day, keys, step, marks };
+  const checks: Record<string, true> = {};
+  const rawChecks = raw["checks"];
+  if (isRecord(rawChecks)) {
+    for (const key of keys) {
+      if (rawChecks[key] === true) checks[key] = true;
+    }
+  }
+  return { day, keys, step, marks, ...(Object.keys(checks).length > 0 ? { checks } : {}) };
 }
 
 /** Stored prefs as an object. Anything that is not valid is dropped; never throws. */
@@ -93,6 +105,13 @@ export function parseQuestPrefs(raw: unknown): QuestPrefs {
   const on = raw["on"];
   if (typeof on === "boolean") out.on = on;
   if (raw["intro"] === true) out.intro = true;
+  if (raw["ack"] === true) out.ack = true;
+  const visionDay = raw["visionDay"];
+  if (typeof visionDay === "string" && isValidDay(visionDay)) out.visionDay = visionDay;
+  const visionCalls = raw["visionCalls"];
+  if (typeof visionCalls === "number" && Number.isSafeInteger(visionCalls) && visionCalls >= 0) {
+    out.visionCalls = visionCalls;
+  }
   const draft = parseDraft(raw["draft"]);
   if (draft !== undefined) out.draft = draft;
   return out;
@@ -128,14 +147,36 @@ export function readQuestPrefs(storage: Reader, key: string): QuestPrefs {
  * instead of holding an empty shell, so "Reset everything" and a fresh app leave no trace.
  */
 export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
-  const { on, intro, draft } = prefs;
-  if (on === undefined && intro !== true && draft === undefined) return null;
+  const { on, intro, ack, visionDay, visionCalls, draft } = prefs;
+  if (
+    on === undefined &&
+    intro !== true &&
+    ack !== true &&
+    visionDay === undefined &&
+    visionCalls === undefined &&
+    draft === undefined
+  ) {
+    return null;
+  }
   return JSON.stringify({
     v: QUEST_PREFS_VERSION,
     ...(on !== undefined ? { on } : {}),
     ...(intro === true ? { intro: true } : {}),
+    ...(ack === true ? { ack: true } : {}),
+    ...(visionDay !== undefined ? { visionDay } : {}),
+    ...(visionCalls !== undefined ? { visionCalls } : {}),
     ...(draft !== undefined
-      ? { draft: { day: draft.day, keys: draft.keys, step: draft.step, marks: draft.marks } }
+      ? {
+          draft: {
+            day: draft.day,
+            keys: draft.keys,
+            step: draft.step,
+            marks: draft.marks,
+            ...(draft.checks !== undefined && Object.keys(draft.checks).length > 0
+              ? { checks: draft.checks }
+              : {}),
+          },
+        }
       : {}),
   });
 }
@@ -207,6 +248,23 @@ export function markDraft(
   return { ...draft, marks };
 }
 
+export function applyPhotoChecks(
+  draft: WritingDraft,
+  tickKeys: readonly string[],
+  preselectKeys: readonly string[],
+): WritingDraft {
+  const checks: Record<string, true> = {};
+  for (const key of tickKeys) {
+    if (draft.keys.includes(key)) checks[key] = true;
+  }
+  const marks = { ...draft.marks };
+  for (const key of preselectKeys) {
+    if (draft.keys.includes(key)) marks[key] = "right";
+  }
+  const { checks: _previous, ...rest } = draft;
+  return { ...rest, marks, ...(Object.keys(checks).length > 0 ? { checks } : {}) };
+}
+
 /** One card on the page: its number on paper (1-based, the key's place on the page) and the kanji it shows. */
 export interface DraftCard {
   n: number;
@@ -238,14 +296,19 @@ export function markedCount(draft: WritingDraft, keys: readonly string[]): numbe
 }
 
 /**
- * The results to save, in page order, for the marked ones among `keys`. There is no photo in Phase Q2, so no result
- * carries `photoMatch` (Phase Q5 adds it).
+ * The results to save, in page order, for the marked ones among `keys`. Q5 `checks` become `photoMatch`.
  */
 export function draftResults(draft: WritingDraft, keys: readonly string[]): PageResult[] {
   const results: PageResult[] = [];
   for (const key of keys) {
     const mark = draft.marks[key];
-    if (mark !== undefined) results.push({ key, right: mark === "right" });
+    if (mark !== undefined) {
+      results.push({
+        key,
+        right: mark === "right",
+        ...(draft.checks?.[key] === true ? { photoMatch: true } : {}),
+      });
+    }
   }
   return results;
 }

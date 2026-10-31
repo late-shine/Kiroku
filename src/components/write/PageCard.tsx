@@ -5,8 +5,11 @@
 // CHARACTER IS NOT IN THE DOM at all until `revealed` (CSS hiding would still be read out by a screen reader), and no
 // id, key or attribute here is built from it. Step 3 (`revealed` = true) shows the character, the lesson's own stroke
 // count and radical (labelled "from your lesson"), the memory tip if there is one, a speak button, and the two marks.
+// Q5 adds the photo comparison after reveal and the hollow/green tick; neither appears in the pre-reveal DOM.
 import { Check } from "lucide-react";
+import { MarkTick } from "@/components/write/MarkTick";
 import { SpeakButton } from "@/components/voice/SpeakButton";
+import { visionComparisonMessage, type VisionComparison } from "@/lib/gemini-vision";
 import { cueReadings, hideCharacter, speakReading, type WritingMark } from "@/lib/quest-prefs";
 import { compoundCue, type WritingChoiceState } from "@/lib/writing";
 import type { KanjiItem } from "@/types/japanese";
@@ -20,6 +23,8 @@ export function PageCard({
   known,
   revealed,
   mark,
+  photoMatch = false,
+  photoResult = null,
   onMark,
 }: {
   /** The number the learner writes next to the answer on paper. */
@@ -29,6 +34,8 @@ export function PageCard({
   known: ReadonlySet<string>;
   revealed: boolean;
   mark: WritingMark | undefined;
+  photoMatch: boolean;
+  photoResult: VisionComparison | null;
   onMark: (mark: WritingMark) => void;
 }) {
   // Before the reveal every piece of text goes through the blank-out, so a stray copy of the character in the lesson's
@@ -91,6 +98,11 @@ export function PageCard({
             </div>
             <SpeakButton text={speakReading(item)} label={item.character} />
           </div>
+          {photoResult !== null && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              {visionComparisonMessage(photoResult)}
+            </p>
+          )}
           <div role="group" aria-label={`Mark number ${n}`} className="mt-4 grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -103,7 +115,7 @@ export function PageCard({
               }`}
             >
               {mark === "right" && <Check className="size-4" aria-hidden />}
-              Wrote it right
+              {photoResult?.kind === "differs" ? "Mine is right" : "Wrote it right"}
             </button>
             <button
               type="button"
@@ -116,9 +128,14 @@ export function PageCard({
               }`}
             >
               {mark === "miss" && <Check className="size-4" aria-hidden />}
-              Not yet
+              {photoResult?.kind === "differs" ? "I got it wrong" : "Not yet"}
             </button>
           </div>
+          {mark === "right" && (
+            <div className="mt-3 flex justify-end">
+              <MarkTick checked={photoMatch} />
+            </div>
+          )}
         </>
       )}
     </li>

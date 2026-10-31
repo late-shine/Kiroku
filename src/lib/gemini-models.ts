@@ -15,6 +15,13 @@ export const GEMINI_MODEL_CHAIN: readonly string[] = [
   "gemini-3.1-flash-lite", // last resort — much higher daily quota
 ];
 
+/** Photo checks use only the dashboard-confirmed vision models. */
+export const VISION_MODEL_CHAIN: readonly string[] = [
+  "gemini-3.8-flash",
+  "gemini-3.6-flash",
+  "gemini-3.1-flash-lite",
+];
+
 /** How long one model gets to answer before the chain moves on (also shown in the UI). */
 export const GEMINI_ATTEMPT_TIMEOUT_MS = 45_000;
 

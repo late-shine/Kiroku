@@ -129,9 +129,12 @@ export const LESSONS_BADGE = 10;
 export const CARVED_MANY = 10;
 export const HARD_STROKES = 12;
 
-/** True for a badge earned `today` or `yesterday` (the shelf marks these "New"). A later day counts too. */
+/**
+ * True only for a badge earned `today` or `yesterday` (the shelf marks these "New"). A day after `today` (a clock that
+ * was set ahead, or a device that moved back) is not new, and neither is anything older than yesterday.
+ */
 export function isNewBadge(day: string, today: string): boolean {
-  return day >= addDays(today, -1);
+  return day >= addDays(today, -1) && day <= today;
 }
 
 // ---- runs of study days -----------------------------------------------------------------------

@@ -1000,7 +1000,10 @@ function LessonWorkspace({
           </div>
           <div className="mt-6 grid grid-cols-3 border-t border-border/50 pt-4 text-center">
             <Metric value={progress.completedDays.length} label="days" />
-            <Metric value={lessons.length} label="kanji" />
+            <Metric
+              value={lessons.reduce((total, lesson) => total + lesson.kanji.length, 0)}
+              label="kanji"
+            />
             <Metric
               value={countMastered(
                 lessons.flatMap((l) => l.vocab),

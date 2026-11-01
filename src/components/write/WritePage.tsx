@@ -20,9 +20,9 @@
 //     reading. The list never shows a character, and a chosen page runs through the same steps and the same save.
 //   - A first-visit note, dismissible; the dismissal is kept in the device prefs (`intro`).
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { RankLine } from "@/components/profile/BadgeShelf";
 import { ChoiceRow, PageCard } from "@/components/write/PageCard";
 import { PhotoCheck } from "@/components/write/PhotoCheck";
+import { StampedRankLine } from "@/components/write/RankStamp";
 import type { QuestPrefsApi } from "@/components/write/useQuestPrefs";
 import { useToday } from "@/hooks/use-today";
 import type { RelayGeminiVisionResult } from "@/lib/gemini-relay";
@@ -404,7 +404,7 @@ export function WritePage({
           <h2 ref={headingRef} tabIndex={-1} className={headingClass}>
             {doneText}
           </h2>
-          <RankLine carved={carved} className="mt-3" />
+          <StampedRankLine carved={carved} saved={prefs.stamp} className="mt-3" />
           <p className="mt-3 text-sm text-muted-foreground">
             {more.length > 0
               ? "Write more whenever you like, or come back tomorrow."

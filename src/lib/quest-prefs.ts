@@ -2,13 +2,17 @@
 // in; no React, no DOM), so it is checked from a plain script (handoffs/phase-Q2-quest-prefs-check.ts).
 //
 // Device-only, like the voice and atmosphere choices: never in a backup, never synced (plan 2.5). The stored shape is
-//   kiroku_quests_v1 = { v: 1, on?, intro?, ack?, visionDay?, visionCalls?, draft? }
+//   kiroku_quests_v1 = { v: 1, on?, intro?, ack?, visionDay?, visionCalls?, stamp?, draft? }
 //
 // `on` is a TRI-STATE. Absent = the learner never touched the switch: quests count as on only if writing records
 // already exist (a restored backup). An explicit true or false always wins. While quests are off nothing writing-related
 // shows anywhere.
 //
 // `intro` (Phase Q3) is true once the learner has dismissed the first-visit note on the Write page; it never goes back.
+//
+// `stamp` (Phase Q7) is the style of the rank stamp: ink (the default, never stored), moss (from rank 2) or paper (from
+// rank 4). The stored choice is kept even if the rank later falls below its unlock; `resolveStamp` then shows ink, and
+// the choice comes back when the rank does.
 //
 // `draft` is the page that is open right now, so a reload keeps it. It holds the kanji KEYS (never the characters, and
 // never an image), which step the learner is on, and the marks made so far. It belongs to one local day: the next day it
@@ -43,6 +47,26 @@ export interface WritingDraft {
   checks?: Record<string, true>;
 }
 
+/** The three looks of the rank stamp (plan 2.3). Existing colour tokens only; the classes live in `RankStamp.tsx`. */
+export type StampId = "ink" | "moss" | "paper";
+
+export interface StampDef {
+  id: StampId;
+  name: string;
+  /** The rank level (`Rank.level`, 1 for the first rank) that unlocks it. 0 = always available. */
+  level: number;
+}
+
+/** The styles in display order. Moss unlocks at rank 2 (One page), paper at rank 4 (A notebook). */
+export const STAMPS: readonly StampDef[] = [
+  { id: "ink", name: "Ink", level: 0 },
+  { id: "moss", name: "Moss", level: 2 },
+  { id: "paper", name: "Paper", level: 4 },
+];
+
+/** What is shown when nothing is chosen, or when the chosen style is locked or unknown. */
+export const DEFAULT_STAMP: StampId = "ink";
+
 export interface QuestPrefs {
   /** Tri-state: absent (never touched), true, false. */
   on?: boolean;
@@ -51,6 +75,8 @@ export interface QuestPrefs {
   ack?: true;
   visionDay?: string;
   visionCalls?: number;
+  /** Phase Q7: the chosen rank stamp. Present only when it is not the default (ink). */
+  stamp?: StampId;
   draft?: WritingDraft;
 }
 
@@ -112,6 +138,8 @@ export function parseQuestPrefs(raw: unknown): QuestPrefs {
   if (typeof visionCalls === "number" && Number.isSafeInteger(visionCalls) && visionCalls >= 0) {
     out.visionCalls = visionCalls;
   }
+  const stamp = raw["stamp"];
+  if (isStampId(stamp) && stamp !== DEFAULT_STAMP) out.stamp = stamp;
   const draft = parseDraft(raw["draft"]);
   if (draft !== undefined) out.draft = draft;
   return out;
@@ -147,13 +175,16 @@ export function readQuestPrefs(storage: Reader, key: string): QuestPrefs {
  * instead of holding an empty shell, so "Reset everything" and a fresh app leave no trace.
  */
 export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
-  const { on, intro, ack, visionDay, visionCalls, draft } = prefs;
+  const { on, intro, ack, visionDay, visionCalls, stamp: rawStamp, draft } = prefs;
+  // The default style is never written down: "ink" and "nothing chosen" are the same thing.
+  const stamp = rawStamp !== undefined && rawStamp !== DEFAULT_STAMP ? rawStamp : undefined;
   if (
     on === undefined &&
     intro !== true &&
     ack !== true &&
     visionDay === undefined &&
     visionCalls === undefined &&
+    stamp === undefined &&
     draft === undefined
   ) {
     return null;
@@ -165,6 +196,7 @@ export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
     ...(ack === true ? { ack: true } : {}),
     ...(visionDay !== undefined ? { visionDay } : {}),
     ...(visionCalls !== undefined ? { visionCalls } : {}),
+    ...(stamp !== undefined ? { stamp } : {}),
     ...(draft !== undefined
       ? {
           draft: {
@@ -211,6 +243,46 @@ export function questsEnabled(
 /** The prefs once the first-visit note has been dismissed. The same object comes back if it already was. */
 export function withIntro(prefs: QuestPrefs): QuestPrefs {
   return prefs.intro === true ? prefs : { ...prefs, intro: true };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The rank stamp (Phase Q7)
+// ---------------------------------------------------------------------------------------------
+
+/** True for the three known style ids; anything else (junk from storage, a made-up id) is false. */
+export function isStampId(value: unknown): value is StampId {
+  return STAMPS.some((stamp) => stamp.id === value);
+}
+
+/**
+ * Whether the style is available at `rankLevel` (`Rank.level`; 0 when the learner has no rank yet). Ink is always
+ * available, even for a level that is not a number; an unknown id is never available.
+ */
+export function stampUnlocked(id: StampId, rankLevel: number): boolean {
+  const def = STAMPS.find((stamp) => stamp.id === id);
+  if (def === undefined) return false;
+  return def.level === 0 || rankLevel >= def.level;
+}
+
+/**
+ * The style to draw: the saved choice when it is a known style and unlocked at `rankLevel`, otherwise ink. A choice
+ * that is locked right now (the rank fell because a lesson was deleted) is not forgotten; it simply is not used.
+ */
+export function resolveStamp(saved: unknown, rankLevel: number): StampId {
+  return isStampId(saved) && stampUnlocked(saved, rankLevel) ? saved : DEFAULT_STAMP;
+}
+
+/**
+ * The prefs with `stamp` chosen. Ink clears the field (the default is never stored). The same object comes back when
+ * nothing changes. This does not check the unlock: the chooser does, and `resolveStamp` falls back to ink anyway.
+ */
+export function withStamp(prefs: QuestPrefs, stamp: StampId): QuestPrefs {
+  if (stamp === DEFAULT_STAMP) {
+    if (prefs.stamp === undefined) return prefs;
+    const { stamp: _previous, ...rest } = prefs;
+    return rest;
+  }
+  return prefs.stamp === stamp ? prefs : { ...prefs, stamp };
 }
 
 // ---------------------------------------------------------------------------------------------

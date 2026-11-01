@@ -517,6 +517,7 @@ function JapaneseDesk() {
                   onShowTipsAgain={tips.showAgain}
                   questsOn={questsOn}
                   onSetQuestsOn={quests.setOn}
+                  quests={quests}
                 />
               </>
             )}

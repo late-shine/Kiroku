@@ -17,9 +17,11 @@ import { AccountCard } from "@/components/account/AccountCard";
 import { Avatar } from "@/components/profile/Avatar";
 import { AvatarCropper } from "@/components/profile/AvatarCropper";
 import { BackupControls } from "@/components/profile/BackupControls";
-import { BadgeShelf, RankLine } from "@/components/profile/BadgeShelf";
+import { BadgeShelf } from "@/components/profile/BadgeShelf";
 import { ResetControl } from "@/components/profile/ResetControl";
 import { useProfile } from "@/components/profile/useProfile";
+import { StampChooser, StampedRankLine } from "@/components/write/RankStamp";
+import type { QuestPrefsApi } from "@/components/write/useQuestPrefs";
 import { AvatarImageError, loadAvatarSource, type AvatarSource } from "@/lib/avatar-image";
 import {
   GLYPH_AUTO,
@@ -30,6 +32,7 @@ import {
   initialOf,
   resolveName,
 } from "@/lib/profile";
+import { withStamp } from "@/lib/quest-prefs";
 import { streak } from "@/lib/study-log";
 import { carvedCount } from "@/lib/writing";
 import { isEmptySnapshot, snapshotOf } from "@/lib/sync";
@@ -105,6 +108,7 @@ export function ProfilePage({
   onShowTipsAgain,
   questsOn,
   onSetQuestsOn,
+  quests,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
@@ -124,6 +128,8 @@ export function ProfilePage({
   /** Writing quests Q2: whether Writing practice is on, and the switch that sets it (the shell owns the device-only state). */
   questsOn: boolean;
   onSetQuestsOn: (on: boolean) => void;
+  /** Writing quests Q7: the shell's device-only quest prefs (the rank stamp is read from them and chosen through `update`). */
+  quests: Pick<QuestPrefsApi, "prefs" | "update">;
 }) {
   const { account } = useAccountSync();
   const { profile, setName, setGlyph, setPhoto, removePhoto, markExported } = useProfile();
@@ -350,7 +356,9 @@ export function ProfilePage({
 
       {showRewards && (
         <Section label={questsOn ? "書く · WRITING" : "バッジ · BADGES"} delay="90ms">
-          {questsOn && <RankLine carved={carved} className="mt-4" />}
+          {questsOn && (
+            <StampedRankLine carved={carved} saved={quests.prefs.stamp} className="mt-4" />
+          )}
           <BadgeShelf badges={progress.badges} today={today} className="mt-5" />
         </Section>
       )}
@@ -448,6 +456,13 @@ export function ProfilePage({
               />
             </button>
           </div>
+          {questsOn && (
+            <StampChooser
+              carved={carved}
+              saved={quests.prefs.stamp}
+              onChoose={(stamp) => quests.update((p) => withStamp(p, stamp))}
+            />
+          )}
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm">Tips</p>

@@ -54,6 +54,13 @@
   --glass-strong: oklch(0.12 0.018 155 / 0.82);
   --success: oklch(0.78 0.1 152);
   --destructive: oklch(0.68 0.14 28);
+  /* Writing quests Q8: the accent colours a learner can pick in Profile → Preferences. --accent-amber is the default
+     and MUST stay equal to --primary above: it exists so the swatch row can still draw amber while another accent is
+     active (an accent replaces --primary, --ring and --glow below). The other three unlock with badges. */
+  --accent-amber: oklch(0.82 0.095 80);
+  --accent-sakura: oklch(0.82 0.085 10);
+  --accent-moss: oklch(0.8 0.1 135);
+  --accent-sky: oklch(0.8 0.08 235);
   /* Overlay and depth tokens. Alpha is baked in except --scrim, which is a plain colour so gradients can
      pick their own stops (from-scrim/85 via-scrim/40). */
   --scrim: oklch(0.1 0.015 155);
@@ -62,6 +69,26 @@
   --highlight-strong: oklch(0.97 0.012 95 / 0.12);
   --shadow-deep: oklch(0 0 0 / 0.45);
   --shadow-deep-strong: oklch(0 0 0 / 0.6);
+}
+
+/* Writing quests Q8: a chosen accent. The shell sets <html data-accent="sakura | moss | sky"> (amber sets nothing).
+   Everything that reads --primary, --ring or --glow recolours: buttons, active pills, focus rings, the particles and
+   their halo. --primary-foreground stays dark: every accent measures about 10.5 to 11 : 1 against it. Each --glow is
+   its accent colour at 0.3 alpha, written out (not color-mix) so it matches the default --glow above. */
+:root[data-accent="sakura"] {
+  --primary: var(--accent-sakura);
+  --ring: var(--accent-sakura);
+  --glow: oklch(0.82 0.085 10 / 0.3);
+}
+:root[data-accent="moss"] {
+  --primary: var(--accent-moss);
+  --ring: var(--accent-moss);
+  --glow: oklch(0.8 0.1 135 / 0.3);
+}
+:root[data-accent="sky"] {
+  --primary: var(--accent-sky);
+  --ring: var(--accent-sky);
+  --glow: oklch(0.8 0.08 235 / 0.3);
 }
 
 html {

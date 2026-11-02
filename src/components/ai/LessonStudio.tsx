@@ -42,6 +42,7 @@ import {
 } from "@/lib/gemini-models";
 import { relayGemini } from "@/lib/gemini-relay";
 import { TipCard } from "@/components/tips/TipCard";
+import { readGeminiKey, subscribeGeminiKey } from "@/lib/gemini-key";
 import { LEGACY_STORAGE_KEYS, STORAGE_KEYS, migrateLegacyStorage } from "@/lib/storage";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
@@ -198,6 +199,9 @@ export function LessonStudio({
 
   // Phase 3c — optional Gemini helpers. Everything here is additive: the manual flow never needs it.
   const [geminiKey, setGeminiKey] = useState(loadGeminiKey);
+  // Writing quests Q8: the key can also be added or removed in Profile. The Studio stays mounted while another mode is
+  // showing, so it follows that change here (its own Save / Remove below set the state directly).
+  useEffect(() => subscribeGeminiKey(() => setGeminiKey(readGeminiKey())), []);
   const [geminiBusy, setGeminiBusy] = useState(false);
   const [geminiError, setGeminiError] = useState<string | null>(null);
   const [geminiTrail, setGeminiTrail] = useState<GeminiAttempt[]>([]);

@@ -11,6 +11,8 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { accentBootScript } from "@/lib/quest-prefs";
+import { STORAGE_KEYS } from "@/lib/storage";
 
 function NotFoundComponent() {
   return (
@@ -90,6 +92,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" },
     ],
+    // Writing quests Q8: put a saved accent colour on <html> before the first paint (see `accentBootScript`).
+    scripts: [{ children: accentBootScript(STORAGE_KEYS.quests) }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -99,7 +103,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the boot script above may add data-accent to <html> before React hydrates it.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

@@ -61,7 +61,7 @@ import {
   parseStoredWriting,
   parseStoredWritingLog,
 } from "@/lib/writing";
-import { questsEnabled } from "@/lib/quest-prefs";
+import { DEFAULT_ACCENT, questsEnabled, resolveAccent } from "@/lib/quest-prefs";
 import { grantBadges } from "@/lib/rewards";
 import { useQuestPrefs } from "@/components/write/useQuestPrefs";
 import { WritePage } from "@/components/write/WritePage";
@@ -324,6 +324,16 @@ function JapaneseDesk() {
     if (!mounted) return;
     setProgress((p) => grantBadges(p, lessons, localDay()));
   }, [mounted, lessons, progress]);
+  // Writing quests Q8: the chosen accent colour is one attribute on <html>; styles.css does the recolouring. A choice
+  // whose badge is not earned (a restore, a reset) reads as the default amber, which sets no attribute. It waits for the
+  // stored prefs (`quests.loaded`) so a saved accent is never switched off by the first, empty render.
+  const accent = resolveAccent(quests.prefs.accent, progress.badges);
+  useEffect(() => {
+    if (!mounted || !quests.loaded) return;
+    const root = document.documentElement;
+    if (accent === DEFAULT_ACCENT) root.removeAttribute("data-accent");
+    else root.dataset["accent"] = accent;
+  }, [mounted, quests.loaded, accent]);
   // Switched off while on the Write page (for example in another tab): go back to Lessons, never stay stranded.
   useEffect(() => {
     if (quests.loaded && !questsOn && tab === "write") setTab("lesson");
@@ -528,6 +538,7 @@ function JapaneseDesk() {
                 setProgress={setProgress}
                 quests={quests}
                 onOpenStudio={openStudio}
+                onOpenProfile={() => setTab("profile")}
                 onBack={() => setTab("lesson")}
               />
             )}

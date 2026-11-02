@@ -65,9 +65,9 @@ export function WelcomePanel({
           </ol>
 
           <p className="mt-5 max-w-prose text-xs leading-relaxed text-muted-foreground">
-            Free, no account, no key needed. (Optional: add your own Gemini key to speed up saving —
-            it stays in your browser.) Everything is stored in this browser only, so export a backup
-            from the Progress tab now and then.
+            Free, no account, no key needed. (Optional: add your own Gemini key in Profile to speed
+            up saving — it stays in your browser.) Everything is stored in this browser only, so
+            export a backup from the Progress tab now and then.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">

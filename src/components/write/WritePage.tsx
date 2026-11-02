@@ -75,6 +75,7 @@ export function WritePage({
   setProgress,
   quests,
   onOpenStudio,
+  onOpenProfile,
   onBack,
 }: {
   lessons: DayLesson[];
@@ -82,6 +83,8 @@ export function WritePage({
   setProgress: Dispatch<SetStateAction<UserProgressState>>;
   quests: QuestPrefsApi;
   onOpenStudio: () => void;
+  /** Phase Q8: opens Profile, where the Gemini key is added (the photo check's "no key" state links to it). */
+  onOpenProfile: () => void;
   onBack: () => void;
 }) {
   const today = useToday();
@@ -443,7 +446,7 @@ export function WritePage({
             today={today}
             prefs={prefs}
             update={update}
-            onOpenStudio={onOpenStudio}
+            onOpenProfile={onOpenProfile}
             onHandMark={markByHand}
             onReply={completePhoto}
           />

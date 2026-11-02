@@ -26,7 +26,7 @@ export function PhotoCheck({
   today,
   prefs,
   update,
-  onOpenStudio,
+  onOpenProfile,
   onHandMark,
   onReply,
 }: {
@@ -34,7 +34,8 @@ export function PhotoCheck({
   today: string;
   prefs: QuestPrefs;
   update: (change: (previous: QuestPrefs) => QuestPrefs) => void;
-  onOpenStudio: () => void;
+  /** Phase Q8: the key is added in Profile now (it used to be the Studio's Save only mode). */
+  onOpenProfile: () => void;
   onHandMark: () => void;
   onReply: (result: VisionSuccess) => void;
 }) {
@@ -161,11 +162,11 @@ export function PhotoCheck({
       ) : !hasKey ? (
         <div className="rounded-lg border border-border/60 bg-glass/40 p-3">
           <p className="text-sm text-muted-foreground">
-            Photo checks need your own Gemini key (add it in the AI Lesson Studio). You can always
-            check yourself.
+            Photo checks need your own Gemini key (add it in Profile, under Gemini key). You can
+            always check yourself.
           </p>
-          <button type="button" onClick={onOpenStudio} className={`mt-3 ${quietButton}`}>
-            Open Studio
+          <button type="button" onClick={onOpenProfile} className={`mt-3 ${quietButton}`}>
+            Open Profile
           </button>
         </div>
       ) : (

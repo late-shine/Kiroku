@@ -2,7 +2,7 @@
 // in; no React, no DOM), so it is checked from a plain script (handoffs/phase-Q2-quest-prefs-check.ts).
 //
 // Device-only, like the voice and atmosphere choices: never in a backup, never synced (plan 2.5). The stored shape is
-//   kiroku_quests_v1 = { v: 1, on?, intro?, ack?, visionDay?, visionCalls?, stamp?, draft? }
+//   kiroku_quests_v1 = { v: 1, on?, intro?, ack?, visionDay?, visionCalls?, stamp?, accent?, draft? }
 //
 // `on` is a TRI-STATE. Absent = the learner never touched the switch: quests count as on only if writing records
 // already exist (a restored backup). An explicit true or false always wins. While quests are off nothing writing-related
@@ -13,6 +13,10 @@
 // `stamp` (Phase Q7) is the style of the rank stamp: ink (the default, never stored), moss (from rank 2) or paper (from
 // rank 4). The stored choice is kept even if the rank later falls below its unlock; `resolveStamp` then shows ink, and
 // the choice comes back when the rank does.
+//
+// `accent` (Phase Q8) is the accent colour: amber (the default, never stored), or sakura, moss or sky, each unlocked by a
+// badge in `progress.badges`. Like the stamp, a stored choice whose badge is not earned (a restore, a reset) is kept
+// but not used (`resolveAccent` then gives amber), and it comes back with the badge.
 //
 // `draft` is the page that is open right now, so a reload keeps it. It holds the kanji KEYS (never the characters, and
 // never an image), which step the learner is on, and the marks made so far. It belongs to one local day: the next day it
@@ -67,6 +71,27 @@ export const STAMPS: readonly StampDef[] = [
 /** What is shown when nothing is chosen, or when the chosen style is locked or unknown. */
 export const DEFAULT_STAMP: StampId = "ink";
 
+/** The accent colours (plan 2.3, Phase Q8). The colours themselves are tokens in `styles.css` (`--accent-<id>`). */
+export type AccentId = "amber" | "sakura" | "moss" | "sky";
+
+export interface AccentDef {
+  id: AccentId;
+  name: string;
+  /** The badge id (a key of `progress.badges`) that unlocks it. null = always available (the default). */
+  badge: string | null;
+}
+
+/** The accents in display order. Sakura <- first-carve, moss <- streak-7, sky <- carved-10 (ids from `BADGES`). */
+export const ACCENTS: readonly AccentDef[] = [
+  { id: "amber", name: "Amber", badge: null },
+  { id: "sakura", name: "Sakura", badge: "first-carve" },
+  { id: "moss", name: "Moss", badge: "streak-7" },
+  { id: "sky", name: "Sky", badge: "carved-10" },
+];
+
+/** What is shown when nothing is chosen, or when the chosen accent is locked or unknown. */
+export const DEFAULT_ACCENT: AccentId = "amber";
+
 export interface QuestPrefs {
   /** Tri-state: absent (never touched), true, false. */
   on?: boolean;
@@ -77,6 +102,8 @@ export interface QuestPrefs {
   visionCalls?: number;
   /** Phase Q7: the chosen rank stamp. Present only when it is not the default (ink). */
   stamp?: StampId;
+  /** Phase Q8: the chosen accent colour. Present only when it is not the default (amber). */
+  accent?: AccentId;
   draft?: WritingDraft;
 }
 
@@ -140,6 +167,8 @@ export function parseQuestPrefs(raw: unknown): QuestPrefs {
   }
   const stamp = raw["stamp"];
   if (isStampId(stamp) && stamp !== DEFAULT_STAMP) out.stamp = stamp;
+  const accent = raw["accent"];
+  if (isAccentId(accent) && accent !== DEFAULT_ACCENT) out.accent = accent;
   const draft = parseDraft(raw["draft"]);
   if (draft !== undefined) out.draft = draft;
   return out;
@@ -175,9 +204,19 @@ export function readQuestPrefs(storage: Reader, key: string): QuestPrefs {
  * instead of holding an empty shell, so "Reset everything" and a fresh app leave no trace.
  */
 export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
-  const { on, intro, ack, visionDay, visionCalls, stamp: rawStamp, draft } = prefs;
-  // The default style is never written down: "ink" and "nothing chosen" are the same thing.
+  const {
+    on,
+    intro,
+    ack,
+    visionDay,
+    visionCalls,
+    stamp: rawStamp,
+    accent: rawAccent,
+    draft,
+  } = prefs;
+  // The default style and accent are never written down: "ink" / "amber" and "nothing chosen" are the same thing.
   const stamp = rawStamp !== undefined && rawStamp !== DEFAULT_STAMP ? rawStamp : undefined;
+  const accent = rawAccent !== undefined && rawAccent !== DEFAULT_ACCENT ? rawAccent : undefined;
   if (
     on === undefined &&
     intro !== true &&
@@ -185,6 +224,7 @@ export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
     visionDay === undefined &&
     visionCalls === undefined &&
     stamp === undefined &&
+    accent === undefined &&
     draft === undefined
   ) {
     return null;
@@ -197,6 +237,7 @@ export function serialiseQuestPrefs(prefs: QuestPrefs): string | null {
     ...(visionDay !== undefined ? { visionDay } : {}),
     ...(visionCalls !== undefined ? { visionCalls } : {}),
     ...(stamp !== undefined ? { stamp } : {}),
+    ...(accent !== undefined ? { accent } : {}),
     ...(draft !== undefined
       ? {
           draft: {
@@ -283,6 +324,62 @@ export function withStamp(prefs: QuestPrefs, stamp: StampId): QuestPrefs {
     return rest;
   }
   return prefs.stamp === stamp ? prefs : { ...prefs, stamp };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The accent colour (Phase Q8)
+// ---------------------------------------------------------------------------------------------
+
+/** True for the four known accent ids; anything else (junk from storage, a made-up id) is false. */
+export function isAccentId(value: unknown): value is AccentId {
+  return ACCENTS.some((accent) => accent.id === value);
+}
+
+/**
+ * Whether the accent is available: the default always is; the others need their badge in `badges` (`progress.badges`,
+ * badge id -> the day it was earned). A badge is stored once earned and never removed, so an unlock does not come and
+ * go with the lessons. An unknown id is never available.
+ */
+export function accentUnlocked(id: AccentId, badges: Readonly<Record<string, string>>): boolean {
+  const def = ACCENTS.find((accent) => accent.id === id);
+  if (def === undefined) return false;
+  return def.badge === null || badges[def.badge] !== undefined;
+}
+
+/**
+ * The accent to draw: the saved choice when it is known and unlocked, otherwise amber. A choice that is locked right
+ * now (a restore without the badge) is not forgotten; it simply is not used.
+ */
+export function resolveAccent(saved: unknown, badges: Readonly<Record<string, string>>): AccentId {
+  return isAccentId(saved) && accentUnlocked(saved, badges) ? saved : DEFAULT_ACCENT;
+}
+
+/**
+ * The prefs with `accent` chosen. Amber clears the field (the default is never stored). The same object comes back
+ * when nothing changes. This does not check the unlock: the chooser does, and `resolveAccent` falls back anyway.
+ */
+export function withAccent(prefs: QuestPrefs, accent: AccentId): QuestPrefs {
+  if (accent === DEFAULT_ACCENT) {
+    if (prefs.accent === undefined) return prefs;
+    const { accent: _previous, ...rest } = prefs;
+    return rest;
+  }
+  return prefs.accent === accent ? prefs : { ...prefs, accent };
+}
+
+/**
+ * A one-line script for the page <head>: it sets `data-accent` from the stored choice BEFORE the first paint, so a saved
+ * accent does not flash amber until React has loaded. It only reads storage and never throws. It does not know about
+ * badges (the shell's effect removes the attribute again if the accent turns out to be locked), and it never sets
+ * amber (the absence of the attribute). The ids come from `ACCENTS`, and the caller passes the storage key, so the
+ * script cannot drift from the rest of the app.
+ */
+export function accentBootScript(storageKey: string): string {
+  const ids = ACCENTS.filter((accent) => accent.id !== DEFAULT_ACCENT).map((accent) => accent.id);
+  return (
+    `try{var q=JSON.parse(localStorage.getItem(${JSON.stringify(storageKey)})||"null"),a=q&&q.accent;` +
+    `if(${JSON.stringify(ids)}.indexOf(a)>-1)document.documentElement.setAttribute("data-accent",a)}catch(e){}`
+  );
 }
 
 // ---------------------------------------------------------------------------------------------

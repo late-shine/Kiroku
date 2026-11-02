@@ -83,8 +83,9 @@ export function HelpCard({
           (reasoning) mode, if your AI has one, often helps.
         </p>
         <p className="mt-4 text-sm text-muted-foreground">
-          No account and no key needed. Optionally, a Gemini key can fix a failed import or save
-          from pasted text; it stays in this browser.
+          No account and no key needed. Optionally, a Gemini key (add it in Profile) can fix a
+          failed import, save from pasted text or check a photo of your writing; it stays in this
+          browser.
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button

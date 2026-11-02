@@ -1,6 +1,6 @@
 /**
  * Phase 19a — the Profile page: a MODE of the shell (like a tab), not a route and not a floating sheet. Opened from the
- * avatar button in the header. Sections: You, At a glance, Account & sync, Your data, Preferences, Danger zone.
+ * avatar button in the header. Sections: You, At a glance, Account & sync, Gemini key, Your data, Preferences, Danger zone.
  * One column on phones, two from `lg`. It owns no app state: lessons and progress come in as props, the profile
  * (name, avatar, last backup) comes from `useProfile`, the account from the shared account/sync context.
  */
@@ -15,9 +15,11 @@ import {
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { AccountCard } from "@/components/account/AccountCard";
 import { Avatar } from "@/components/profile/Avatar";
+import { AccentChooser } from "@/components/profile/AccentChooser";
 import { AvatarCropper } from "@/components/profile/AvatarCropper";
 import { BackupControls } from "@/components/profile/BackupControls";
 import { BadgeShelf } from "@/components/profile/BadgeShelf";
+import { GeminiKeyControls } from "@/components/profile/GeminiKeyControls";
 import { ResetControl } from "@/components/profile/ResetControl";
 import { useProfile } from "@/components/profile/useProfile";
 import { StampChooser, StampedRankLine } from "@/components/write/RankStamp";
@@ -32,7 +34,7 @@ import {
   initialOf,
   resolveName,
 } from "@/lib/profile";
-import { withStamp } from "@/lib/quest-prefs";
+import { withAccent, withStamp } from "@/lib/quest-prefs";
 import { streak } from "@/lib/study-log";
 import { carvedCount } from "@/lib/writing";
 import { isEmptySnapshot, snapshotOf } from "@/lib/sync";
@@ -128,7 +130,7 @@ export function ProfilePage({
   /** Writing quests Q2: whether Writing practice is on, and the switch that sets it (the shell owns the device-only state). */
   questsOn: boolean;
   onSetQuestsOn: (on: boolean) => void;
-  /** Writing quests Q7: the shell's device-only quest prefs (the rank stamp is read from them and chosen through `update`). */
+  /** Writing quests Q7/Q8: the shell's device-only quest prefs (the rank stamp and the accent colour are read from them and chosen through `update`). */
   quests: Pick<QuestPrefsApi, "prefs" | "update">;
 }) {
   const { account } = useAccountSync();
@@ -373,6 +375,10 @@ export function ProfilePage({
         )}
       </Section>
 
+      <Section label="鍵 · GEMINI KEY" delay="150ms">
+        <GeminiKeyControls />
+      </Section>
+
       <Section label="データ · YOUR DATA" delay="180ms">
         <p className="mt-3 text-xs text-muted-foreground">
           Export saves a backup file. Restore replaces your lessons and progress with one.
@@ -461,6 +467,13 @@ export function ProfilePage({
               carved={carved}
               saved={quests.prefs.stamp}
               onChoose={(stamp) => quests.update((p) => withStamp(p, stamp))}
+            />
+          )}
+          {showRewards && (
+            <AccentChooser
+              badges={progress.badges}
+              saved={quests.prefs.accent}
+              onChoose={(accent) => quests.update((p) => withAccent(p, accent))}
             />
           )}
           <div className="flex items-center justify-between gap-3">

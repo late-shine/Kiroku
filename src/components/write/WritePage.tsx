@@ -19,11 +19,15 @@
 //   - "Choose by meaning" (when nothing is left to pick automatically): the learner ticks 1 to 5 kanji by meaning and
 //     reading. The list never shows a character, and a chosen page runs through the same steps and the same save.
 //   - A first-visit note, dismissible; the dismissal is kept in the device prefs (`intro`).
+//
+// Phase Q9: below every step except the photo step, a "Your writing" section (`WritingStats`) shows the last 7 days and
+// the totals once a page has been saved. It only reads `progress.writingLog`.
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { ChoiceRow, PageCard } from "@/components/write/PageCard";
 import { PhotoCheck } from "@/components/write/PhotoCheck";
 import { StampedRankLine } from "@/components/write/RankStamp";
 import type { QuestPrefsApi } from "@/components/write/useQuestPrefs";
+import { WritingStats } from "@/components/write/WritingStats";
 import { useToday } from "@/hooks/use-today";
 import type { RelayGeminiVisionResult } from "@/lib/gemini-relay";
 import { compareItems, type VisionComparison, type VisionKind } from "@/lib/gemini-vision";
@@ -511,6 +515,11 @@ export function WritePage({
             </div>
           )}
         </div>
+      )}
+
+      {/* Phase Q9: the 7-day bars and the totals. Hidden until the first page is saved; it never shows a kanji. */}
+      {view !== "loading" && view !== "photo" && (
+        <WritingStats writingLog={progress.writingLog} today={today} />
       )}
     </section>
   );

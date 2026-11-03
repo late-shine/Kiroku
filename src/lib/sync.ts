@@ -4,11 +4,12 @@
  *
  * WHAT SYNCS: the lessons; the learning progress inside `UserProgressState` (completed days, starred ids, weak ids,
  * the per-word review records, the two quiz counters, and since 18a the study log: answers per local day, for the
- * 7-day graph); and, since 9c, a few small preferences (`prefs`: background,
+ * 7-day graph; and since Q10 the writing records, the writing day log and the earned badges); and, since 9c, a few small preferences (`prefs`: background,
  * zoom speed, furigana, dismissed tip ids, and since 19a the profile name and avatar choice) and the record of which
  * days were deleted (`deleted`, "tombstones").
  * WHAT DOES NOT: the Gemini key, music, the voice choice (a voice that exists on one device usually doesn't exist on
- * another: see src/lib/voice.ts), the temporary quiz state. `currentDay` and `lastQuizScore` are not synced either:
+ * another: see src/lib/voice.ts), the temporary quiz state, and everything in the device-only writing prefs key
+ * (the Writing practice switch, the open page, the rank stamp, the accent colour, the photo-check counter). `currentDay` and `lastQuizScore` are not synced either:
  * nothing in the app reads or writes them any more.
  *
  * WHAT THE CLOUD HOLDS (Realtime Database, everything under `users/<uid>/`; the layout is in PLAN.md, Phase 9):
@@ -19,6 +20,11 @@
  *   progress/masteredVocabIds, weakVocabIds  { "d14-3": true }
  *   progress/totalQuizzesTaken, totalCorrectAnswers  numbers
  *   progress/studyLog/<YYYY-MM-DD>  { a: answered, c: correct }   (18a; a map keyed by local day, at most ~120 days)
+ *   progress/writing/<u529b>  { ok: "2026-10-28,2026-10-30", miss: "2026-10-29", v: true }   (Q10; one record per kanji, key =
+ *                          "u" + lowercase hex code point; the day lists are comma-joined STRINGS (the database turns arrays
+ *                          into objects), at most 3 days each, an empty list is left out; `v` only when true)
+ *   progress/writingLog/<YYYY-MM-DD>  { n, ok, p? }      (Q10; marks saved per local day, at most ~120 days; `p` only when above 0)
+ *   progress/badges/<id>   "2026-10-30"                  (Q10; the day a badge was first earned)
  *   memory/<vocabId>       one record per word: japanese, box, due, right, wrong, lastAnswered, and (Reinforcement Phase 2)
  *                          an optional `streak` (whole number, 1 or more; absent = 0)
  *   prefs                  backgroundIndex, bgZoomSpeed, showFurigana, tips { "quiz": true }   (9c)
@@ -26,7 +32,7 @@
  *                          photo (a small data: address of a JPEG/WebP, or "")                  (19a-2)
  *   deleted/d5             "2026-10-05T10:00:00.000Z": a day was deleted at that time (9c, see below)
  *   replaced/d5            "2026-10-17T10:00:00.000Z": a day was replaced at that time (see REPLACED DAYS)
- *   meta                   { schema: 2, updatedAt }   (`SYNC_SCHEMA`; see below for why Phase 2 raised it from 1)
+ *   meta                   { schema: 3, updatedAt }   (`SYNC_SCHEMA`; see below for why Phase 2 and Q10 raised it)
  * An empty account reads back as `null`; a missing node always means "empty", never "deleted". A deletion is only
  * ever expressed by a `deleted/dN` tombstone.
  *
@@ -54,6 +60,11 @@
  * A `replaced` record is only kept for days that exist after the merge, so deleting a day retires it. If two devices replace the
  * same day, the one that syncs last wins. Like `deleted`, only the account side carries any; a device snapshot has none.
  *
+ * WRITING RECORDS (Q10). They merge by plain union, with no clock and no tombstones (the merges live in src/lib/writing.ts):
+ * per kanji the `ok` days and the `miss` days are united and cut to the last 3 and `v` is kept once either side has it;
+ * per log day the larger of `n`, `ok` and `p`; badges are the union with the earliest day. Deleting a lesson does not
+ * touch any of it: counts read through the lessons, so the history of a deleted lesson's kanji simply stops counting.
+ *
  * The id/size limits below are mirrored by the `.validate` rules in firebase/database.rules.json. If a limit
  * changes here, change the rules too (the check script evaluates the real rules file against real trees).
  */
@@ -67,7 +78,25 @@ import {
   parseStoredMemory,
   type VocabMemory,
 } from "@/lib/word-memory";
-import type { DayLesson, UserProgressState, WordMemory } from "@/types/japanese";
+import {
+  BADGE_ID_RE,
+  isWritingKey,
+  mergeBadges,
+  mergeWriting,
+  mergeWritingLog,
+  parseStoredBadges,
+  parseStoredWritingLog,
+  pruneWritingLog,
+  writingDaySchema,
+  writingRecordSchema,
+} from "@/lib/writing";
+import type {
+  DayLesson,
+  UserProgressState,
+  WordMemory,
+  WritingDay,
+  WritingRecord,
+} from "@/types/japanese";
 
 /**
  * What `meta.schema` holds, and the highest value this build can read (`decodeCloud` refuses an account above it).
@@ -75,8 +104,13 @@ import type { DayLesson, UserProgressState, WordMemory } from "@/types/japanese"
  * "saved by a newer Kiroku" and stops WITHOUT writing, instead of decoding the records, losing `streak` (its schema
  * strips unknown fields) and writing them back without it. This build still reads accounts at 1, which have none.
  * Rolling a deployment back to a build that knows 1 therefore leaves it unable to sync until it is updated again.
+ * 3 (Phase Q10): the account may carry `progress/writing`, `progress/writingLog` and `progress/badges`. A build that
+ * only knows 2 would decode the account without them and write it back without them (the whole tree is replaced by one
+ * `set`), erasing the writing history; so it must read an account at 3 as "saved by a newer Kiroku" and stop WITHOUT
+ * writing. This build still reads accounts at 1 and 2, which simply have none. Rolling a deployment back to a build
+ * that knows 2 leaves it unable to sync until it is updated again, and the database rules must be the Q10 ones first.
  */
-export const SYNC_SCHEMA = 2;
+export const SYNC_SCHEMA = 3;
 
 /** Keys the rules accept: `d13` for a day, `d13-4` for a word, `quiz` for a tip. */
 export const DAY_KEY_RE = /^d[0-9]{1,5}$/;
@@ -97,6 +131,13 @@ export interface SyncProgress {
   totalCorrectAnswers: number;
   /** Phase 18a: answers per LOCAL day. Merged per day (larger of each count), like the two counters. */
   studyLog: StudyLog;
+  /**
+   * Phase Q10: per-kanji writing records, the writing day log and the badges (`WritingRecord`, `WritingDay`). Absent = none
+   * (an account saved before Q10, or a snapshot built without them); every function below reads an absent one as `{}`.
+   */
+  writing?: Record<string, WritingRecord>;
+  writingLog?: Record<string, WritingDay>;
+  badges?: Record<string, string>;
 }
 
 /** Small preferences (9c). Every field is optional: absent = "this side has no opinion". */
@@ -140,6 +181,13 @@ const withoutMarks = (s: SyncSnapshot): SyncSnapshot => ({
   tombstones: {},
 });
 
+/** The three Q10 fields of a snapshot, each `{}` when the snapshot has none. */
+const writingPartsOf = (p: SyncProgress) => ({
+  writing: p.writing ?? {},
+  writingLog: p.writingLog ?? {},
+  badges: p.badges ?? {},
+});
+
 // ---------------------------------------------------------------------------------------------
 // Snapshots
 // ---------------------------------------------------------------------------------------------
@@ -165,6 +213,9 @@ export function snapshotOf(
       totalQuizzesTaken: progress.totalQuizzesTaken,
       totalCorrectAnswers: progress.totalCorrectAnswers,
       studyLog: { ...progress.studyLog },
+      writing: { ...progress.writing },
+      writingLog: { ...progress.writingLog },
+      badges: { ...progress.badges },
     },
     prefs: {
       backgroundIndex: progress.backgroundIndex,
@@ -185,6 +236,7 @@ export function snapshotOf(
  */
 export function isEmptySnapshot(s: SyncSnapshot): boolean {
   const p = s.progress;
+  const w = writingPartsOf(p);
   return (
     s.lessons.length === 0 &&
     p.completedDays.length === 0 &&
@@ -193,7 +245,10 @@ export function isEmptySnapshot(s: SyncSnapshot): boolean {
     Object.keys(p.vocabMemory).length === 0 &&
     p.totalQuizzesTaken === 0 &&
     p.totalCorrectAnswers === 0 &&
-    Object.keys(p.studyLog).length === 0
+    Object.keys(p.studyLog).length === 0 &&
+    Object.keys(w.writing).length === 0 &&
+    Object.keys(w.writingLog).length === 0 &&
+    Object.keys(w.badges).length === 0
   );
 }
 
@@ -208,6 +263,7 @@ export function describeSnapshot(s: SyncSnapshot): { days: number; reviewWords: 
  * `lastQuizScore` always stay as they were. Returns a new object.
  */
 export function applyProgress(s: SyncSnapshot, current: UserProgressState): UserProgressState {
+  const w = writingPartsOf(s.progress);
   return {
     ...current,
     completedDays: [...s.progress.completedDays],
@@ -217,6 +273,9 @@ export function applyProgress(s: SyncSnapshot, current: UserProgressState): User
     totalQuizzesTaken: s.progress.totalQuizzesTaken,
     totalCorrectAnswers: s.progress.totalCorrectAnswers,
     studyLog: { ...s.progress.studyLog },
+    writing: { ...w.writing },
+    writingLog: { ...w.writingLog },
+    badges: { ...w.badges },
     backgroundIndex: s.prefs.backgroundIndex ?? current.backgroundIndex,
     bgZoomSpeed: s.prefs.bgZoomSpeed ?? current.bgZoomSpeed,
     showFurigana: s.prefs.showFurigana ?? current.showFurigana,
@@ -295,6 +354,7 @@ function canonicalMemory(memory: VocabMemory): VocabMemory {
 }
 
 function canonicalSnapshot(s: SyncSnapshot): string {
+  const w = writingPartsOf(s.progress);
   return canonical({
     lessons: s.lessons.map(normalizeLesson).sort((a, b) => a.dayNumber - b.dayNumber),
     completedDays: [...s.progress.completedDays].sort(byNumber),
@@ -304,6 +364,11 @@ function canonicalSnapshot(s: SyncSnapshot): string {
     quizzes: s.progress.totalQuizzesTaken,
     correct: s.progress.totalCorrectAnswers,
     studyLog: s.progress.studyLog,
+    // Q10: in the wire form, so that what the account would hold and what the device holds compare equal, and a
+    // writing-only change is a change (an absent group and an empty one are the same thing)
+    writing: wireWriting(w.writing),
+    writingLog: wireWritingLog(w.writingLog),
+    badges: wireBadges(w.badges),
     // an empty tip list and no tip list are the same thing (the account never stores an empty node)
     prefs: {
       ...s.prefs,
@@ -338,6 +403,57 @@ const flags = (keys: readonly (string | number)[]): Record<string, true> => {
 
 const validTime = (text: unknown): text is string =>
   typeof text === "string" && text.length <= MAX_TIME_TEXT && !Number.isNaN(Date.parse(text));
+
+/** One kanji record as the account holds it: the day lists are comma-joined strings, an empty list has no key. */
+interface WireWritingRecord {
+  ok?: string;
+  miss?: string;
+  v?: true;
+}
+
+/**
+ * `progress.writing` in the form the account stores (Q10). A key or record the rules would refuse (not `u` + 4 to 6 hex
+ * digits, a day that is not a real day) is left out, so is a record with no day at all, and nothing is `undefined`:
+ * one refused value rejects the WHOLE write. Also what `canonicalSnapshot` compares.
+ */
+function wireWriting(
+  map: Readonly<Record<string, WritingRecord>>,
+): Record<string, WireWritingRecord> {
+  const out: Record<string, WireWritingRecord> = {};
+  for (const [key, rec] of Object.entries(map)) {
+    if (!isWritingKey(key)) continue;
+    const parsed = writingRecordSchema.safeParse(rec);
+    if (!parsed.success) continue;
+    const { ok, miss, v } = parsed.data;
+    if (ok.length === 0 && miss.length === 0) continue;
+    out[key] = {
+      ...(ok.length > 0 ? { ok: ok.join(",") } : {}),
+      ...(miss.length > 0 ? { miss: miss.join(",") } : {}),
+      ...(v === true ? { v: true as const } : {}),
+    };
+  }
+  return out;
+}
+
+/** `progress.writingLog` in the form the account stores: only real days with `ok <= n` and `p <= ok`; `p` only above 0. */
+function wireWritingLog(log: Readonly<Record<string, WritingDay>>): Record<string, WritingDay> {
+  const out: Record<string, WritingDay> = {};
+  for (const [day, entry] of Object.entries(log)) {
+    if (!isValidDay(day)) continue;
+    const parsed = writingDaySchema.safeParse(entry);
+    if (parsed.success) out[day] = parsed.data;
+  }
+  return out;
+}
+
+/** `progress.badges` in the form the account stores: only ids the rules accept, each with a real day. */
+function wireBadges(badges: Readonly<Record<string, string>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [id, day] of Object.entries(badges)) {
+    if (BADGE_ID_RE.test(id) && typeof day === "string" && isValidDay(day)) out[id] = day;
+  }
+  return out;
+}
 
 /**
  * The tree written to `users/<uid>`. Empty groups are left out (the database would drop them anyway) and
@@ -374,6 +490,14 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
     }
   }
   if (Object.keys(studyLog).length > 0) progress["studyLog"] = studyLog;
+  // Q10: the same rule, three more groups. Empty groups and empty records are never written.
+  const w = writingPartsOf(p);
+  const writing = wireWriting(w.writing);
+  if (Object.keys(writing).length > 0) progress["writing"] = writing;
+  const writingLog = wireWritingLog(w.writingLog);
+  if (Object.keys(writingLog).length > 0) progress["writingLog"] = writingLog;
+  const badges = wireBadges(w.badges);
+  if (Object.keys(badges).length > 0) progress["badges"] = badges;
 
   const memory: Record<string, WordMemory> = {};
   for (const [id, rec] of Object.entries(p.vocabMemory)) {
@@ -440,6 +564,27 @@ function decodeStudyLog(node: unknown): StudyLog {
   return out;
 }
 
+/** A comma-joined day list from the account ("2026-10-28,2026-10-30"): anything that is not a real day is dropped. */
+const dayList = (node: unknown): string[] =>
+  typeof node === "string" ? node.split(",").filter((day) => isValidDay(day)) : [];
+
+/** The account's `progress/writing` (Q10): records come back canonical (see `writingRecordSchema`); a record with no day is dropped. */
+function decodeWriting(node: unknown): Record<string, WritingRecord> {
+  const out: Record<string, WritingRecord> = {};
+  if (!isRecord(node)) return out;
+  for (const [key, value] of Object.entries(node)) {
+    if (!isWritingKey(key) || !isRecord(value)) continue;
+    const parsed = writingRecordSchema.safeParse({
+      ok: dayList(value["ok"]),
+      miss: dayList(value["miss"]),
+      ...(value["v"] === true ? { v: true } : {}),
+    });
+    if (parsed.success && (parsed.data.ok.length > 0 || parsed.data.miss.length > 0))
+      out[key] = parsed.data;
+  }
+  return out;
+}
+
 function keysWithTrue(node: unknown, accept: (key: string) => boolean): string[] {
   if (!isRecord(node)) return [];
   return Object.entries(node)
@@ -488,6 +633,9 @@ export function decodeCloud(raw: unknown): DecodeResult {
       totalQuizzesTaken: 0,
       totalCorrectAnswers: 0,
       studyLog: {},
+      writing: {},
+      writingLog: {},
+      badges: {},
     },
     prefs: {},
     tombstones: {},
@@ -571,6 +719,10 @@ export function decodeCloud(raw: unknown): DecodeResult {
         totalQuizzesTaken: nonNegativeInt(rawProgress["totalQuizzesTaken"]),
         totalCorrectAnswers: nonNegativeInt(rawProgress["totalCorrectAnswers"]),
         studyLog: decodeStudyLog(rawProgress["studyLog"]),
+        writing: decodeWriting(rawProgress["writing"]),
+        // the writing day log and the badges are stored in the very form the device keeps them, so the lenient readers do
+        writingLog: parseStoredWritingLog(rawProgress["writingLog"]),
+        badges: parseStoredBadges(rawProgress["badges"]),
       },
       prefs: decodePrefs(raw["prefs"]),
       tombstones,
@@ -729,7 +881,8 @@ export interface SyncSummary {
  * keeps THIS DEVICE's version (lessons have no timestamps); word records merge per word (see `pickRecord`); the two
  * counters take the larger value, and so does each day of the study log (`mergeLogs`); completed days and starred ids are the union; a weak id follows whichever side won
  * that word's record (so a right answer that cleared it isn't undone), or the union when only one side has the
- * record. Prefs are merged as on a first meeting (the account's win unless only the device has one); `planSync`
+ * record. Since Q10 the writing records, the writing day log and the badges are merged too (`mergeWriting`,
+ * `mergeWritingLog`, `mergeBadges`). Prefs are merged as on a first meeting (the account's win unless only the device has one); `planSync`
  * redoes them against the saved base. Deletions are NOT handled here (see `planSync`). Pure: neither input is changed.
  */
 export function mergeSnapshots(device: SyncSnapshot, cloud: SyncSnapshot): SyncSnapshot {
@@ -743,6 +896,8 @@ export function mergeSnapshots(device: SyncSnapshot, cloud: SyncSnapshot): SyncS
 
   const d = device.progress;
   const c = cloud.progress;
+  const dw = writingPartsOf(d);
+  const cw = writingPartsOf(c);
   const vocabMemory: VocabMemory = {};
   const winner = new Map<string, "device" | "cloud">();
   for (const id of new Set([...Object.keys(c.vocabMemory), ...Object.keys(d.vocabMemory)])) {
@@ -775,6 +930,10 @@ export function mergeSnapshots(device: SyncSnapshot, cloud: SyncSnapshot): SyncS
       totalQuizzesTaken: Math.max(d.totalQuizzesTaken, c.totalQuizzesTaken),
       totalCorrectAnswers: Math.max(d.totalCorrectAnswers, c.totalCorrectAnswers),
       studyLog: mergeLogs(d.studyLog, c.studyLog),
+      // Q10: plain unions with no clock (see WRITING RECORDS in the header); deleting a day never touches them
+      writing: mergeWriting(dw.writing, cw.writing),
+      writingLog: mergeWritingLog(dw.writingLog, cw.writingLog),
+      badges: mergeBadges(dw.badges, cw.badges),
     },
     prefs: mergePrefs(device.prefs, cloud.prefs, null),
     tombstones: { ...cloud.tombstones },
@@ -955,6 +1114,11 @@ export function planSync(
   const studyLog = pruneLog(result.progress.studyLog, localDay(ctx.now));
   if (studyLog !== result.progress.studyLog)
     result = { ...result, progress: { ...result.progress, studyLog } };
+  // Q10: the same for the writing day log (its last 120 days), so a merge can't bring back days a device already pruned.
+  const writingLogNow = result.progress.writingLog ?? {};
+  const writingLog = pruneWritingLog(writingLogNow, localDay(ctx.now));
+  if (writingLog !== writingLogNow)
+    result = { ...result, progress: { ...result.progress, writingLog } };
 
   const deviceDays = new Map(device.lessons.map((l) => [l.dayNumber, l] as const));
   const cloudDays = new Map(cloud.lessons.map((l) => [l.dayNumber, l] as const));

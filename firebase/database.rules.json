@@ -47,6 +47,41 @@
               "$other": { ".validate": false }
             }
           },
+          "writing": {
+            "$k": {
+              ".validate": "$k.matches(/^u[0-9a-f]{4,6}$/) && newData.hasChildren()",
+              "ok": {
+                ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}(,[0-9]{4}-[0-9]{2}-[0-9]{2}){0,2}$/)"
+              },
+              "miss": {
+                ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}(,[0-9]{4}-[0-9]{2}-[0-9]{2}){0,2}$/)"
+              },
+              "v": {
+                ".validate": "newData.val() === true"
+              },
+              "$other": { ".validate": false }
+            }
+          },
+          "writingLog": {
+            "$day": {
+              ".validate": "$day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.hasChildren(['n', 'ok'])",
+              "n": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "ok": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "p": {
+                ".validate": "newData.isNumber() && newData.val() >= 0"
+              },
+              "$other": { ".validate": false }
+            }
+          },
+          "badges": {
+            "$id": {
+              ".validate": "$id.matches(/^[a-z0-9-]{1,40}$/) && newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+            }
+          },
           "$other": { ".validate": false }
         },
 

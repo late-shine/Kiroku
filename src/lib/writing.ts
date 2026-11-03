@@ -14,7 +14,8 @@
 //   progress.writing:    Record<kanjiKey, WritingRecord>   kanjiKey = "u" + lowercase hex code point (力 -> "u529b")
 //   progress.writingLog: Record<day, WritingDay>           the last 120 days only
 //   progress.badges:     Record<badgeId, day>              nothing grants these until Phase Q6
-// Both the backup (v6) and the localStorage reader go through the schemas below. Sync does not carry them until Q10.
+// Both the backup (v6) and the localStorage reader go through the schemas below. Since Q10 sync carries all three too:
+// the merge rules are at the end of this file, the wire form and the database rules are in sync.ts and firebase/.
 import { z } from "zod";
 import { addDays, isValidDay } from "@/lib/word-memory";
 import type { DayLesson, KanjiItem, WritingDay, WritingRecord } from "@/types/japanese";
@@ -115,6 +116,9 @@ export const writingDaySchema = z
 
 /** `progress.writingLog` in a backup: keys are real local days like 2026-10-13. */
 export const writingLogSchema = z.record(dayStringSchema, writingDaySchema);
+
+/** A badge id as backup and sync accept it (the database rule is the same pattern). */
+export const BADGE_ID_RE = /^[a-z0-9-]{1,40}$/;
 
 /** `progress.badges` in a backup: badge id -> the local day it was first earned. (Phase Q6 grants them.) */
 export const badgesSchema = z.record(
@@ -533,4 +537,79 @@ export function recordWritingDay(
   const p = (prev.p ?? 0) + counted.filter((r) => r.right && r.photoMatch === true).length;
   const entry: WritingDay = p > 0 ? { n, ok, p } : { n, ok };
   return pruneWritingLog({ ...log, [day]: entry }, day);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Merging two devices (Phase Q10)
+// ---------------------------------------------------------------------------------------------
+// Sync joins what two devices hold with NO clock comparison and NO tombstones, so each merge below is commutative,
+// associative and idempotent: merging in any order, or the same thing twice, ends in the same result. Nothing is ever
+// subtracted. Every function is pure, never changes its inputs, and returns canonical data (only valid days, at most 3
+// days per list, no empty record, no `undefined`).
+
+const NO_MARKS: WritingRecord = { ok: [], miss: [] };
+
+/**
+ * Two records for one kanji. The `ok` days are united, sorted and cut to the last 3; the `miss` days likewise; `v` stays
+ * once either side has it. (The last 3 of a union is the same however the pieces are grouped, which is what makes this
+ * associative.) One known side effect: a miss that one device later replaced with a right mark on the same day comes
+ * back from the other device's older copy. The record then holds that day in both lists, and `lastAttemptMissed`
+ * already reads a tie as a miss, so the kanji counts as missed until its next right mark; no right day is lost.
+ */
+export function mergeWritingRecord(a: WritingRecord, b: WritingRecord): WritingRecord {
+  const v = a.v === true || b.v === true;
+  return {
+    ok: normaliseDays([...a.ok, ...b.ok]),
+    miss: normaliseDays([...a.miss, ...b.miss]),
+    ...(v ? { v: true as const } : {}),
+  };
+}
+
+/** `progress.writing` from two devices: per kanji key `mergeWritingRecord`; a key with no valid day left is dropped. */
+export function mergeWriting(
+  a: Readonly<Record<string, WritingRecord>>,
+  b: Readonly<Record<string, WritingRecord>>,
+): Record<string, WritingRecord> {
+  const out: Record<string, WritingRecord> = {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const rec = mergeWritingRecord(a[key] ?? NO_MARKS, b[key] ?? NO_MARKS);
+    if (hasMarks(rec)) out[key] = rec;
+  }
+  return out;
+}
+
+/**
+ * `progress.writingLog` from two devices: per day, the larger of `n`, of `ok` and of `p` (the same rule as the study
+ * log). The larger of each can never break `ok <= n` or `p <= ok`, because both sides already keep them. Days that are not
+ * real days are dropped; `p` stays out of an entry while it is 0. This does not prune: `planSync` does, like the study log.
+ */
+export function mergeWritingLog(
+  a: Readonly<Record<string, WritingDay>>,
+  b: Readonly<Record<string, WritingDay>>,
+): Record<string, WritingDay> {
+  const out: Record<string, WritingDay> = {};
+  for (const day of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (!isValidDay(day)) continue;
+    const x = a[day];
+    const y = b[day];
+    const n = Math.max(x?.n ?? 0, y?.n ?? 0);
+    const ok = Math.max(x?.ok ?? 0, y?.ok ?? 0);
+    const p = Math.max(x?.p ?? 0, y?.p ?? 0);
+    out[day] = p > 0 ? { n, ok, p } : { n, ok };
+  }
+  return out;
+}
+
+/** `progress.badges` from two devices: the union of the ids, each with the EARLIEST day either side recorded. */
+export function mergeBadges(
+  a: Readonly<Record<string, string>>,
+  b: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (!BADGE_ID_RE.test(id)) continue;
+    const days = [a[id], b[id]].filter((d): d is string => d !== undefined && isValidDay(d));
+    if (days.length > 0) out[id] = days.reduce((first, d) => (d < first ? d : first));
+  }
+  return out;
 }

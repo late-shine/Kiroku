@@ -163,7 +163,7 @@ type RawFile = Record<string, unknown>;
  * v5 → v6 (Writing quests, Phase Q1): progress gains `writing` (per-kanji writing records), `writingLog` (marks per local
  * day) and `badges` (badge id → day earned). Older files have none, so they restore with all three empty: set
  * explicitly here (like v1 → v2) rather than left to whatever the caller's defaults hold. All three arrive in this ONE
- * bump; sync and the database rules do not carry them until Phase Q10.
+ * bump; since Phase Q10 sync and the database rules carry them too (`SYNC_SCHEMA` 3).
  */
 const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
   (file) => file,

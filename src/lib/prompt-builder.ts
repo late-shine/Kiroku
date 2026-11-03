@@ -1,4 +1,10 @@
-import type { DayLesson, UserProgressState, VocabWord } from "@/types/japanese";
+import type {
+  DayLesson,
+  GrammarPoint,
+  KanjiItem,
+  UserProgressState,
+  VocabWord,
+} from "@/types/japanese";
 import { selectReinforcementWords } from "@/lib/reinforcement";
 
 export type Tone = "gentle" | "strict" | "casual" | "anime";
@@ -17,8 +23,10 @@ export const TONE_LABELS: Record<Tone, string> = {
 const TONE_INSTRUCTIONS: Record<Tone, string> = {
   gentle: "Tone: Friendly, encouraging, cozy, and clear like a patient mentor.",
   strict: "Tone: Precise, academic, disciplined sensei with exact grammatical breakdown.",
-  casual: "Tone: Ultra-conversational, like a Japanese close friend speaking in modern Tokyo youth Japanese.",
-  anime: "Tone: Energetic anime/manga companion, using fun sound effects and real anime dialogue examples.",
+  casual:
+    "Tone: Ultra-conversational, like a Japanese close friend speaking in modern Tokyo youth Japanese.",
+  anime:
+    "Tone: Energetic anime/manga companion, using fun sound effects and real anime dialogue examples.",
 };
 
 export const STYLE_LABELS: Record<LessonStyle, string> = {
@@ -30,10 +38,14 @@ export const STYLE_LABELS: Record<LessonStyle, string> = {
 
 // Ported verbatim from the original ChatGPTBridgeModal.tsx (lines ~61-66), {vocabCount} substituted in.
 const STYLE_INSTRUCTIONS: Record<LessonStyle, string> = {
-  balanced: "Focus: Standard 6-part balanced daily lesson (Grammar, Kanji, {vocabCount} Vocab, Natural Phrase, Pattern, Culture Corner).",
-  "grammar-heavy": "Focus: Provide in-depth grammatical nuances, contrast with similar particles, and 4+ clear example sentences.",
-  "kanji-deep": "Focus: Provide a detailed kanji stroke breakdown, the radical's origin story, and 6+ high-frequency compound words.",
-  conversational: "Focus: Heavily prioritize everyday spoken contractions, aizuchi reactions, and casual spoken phrasing.",
+  balanced:
+    "Focus: Standard 6-part balanced daily lesson (Grammar, Kanji, {vocabCount} Vocab, Natural Phrase, Pattern, Culture Corner).",
+  "grammar-heavy":
+    "Focus: Provide in-depth grammatical nuances, contrast with similar particles, and 4+ clear example sentences.",
+  "kanji-deep":
+    "Focus: Provide a detailed kanji stroke breakdown, the radical's origin story, and 6+ high-frequency compound words.",
+  conversational:
+    "Focus: Heavily prioritize everyday spoken contractions, aizuchi reactions, and casual spoken phrasing.",
 };
 
 export const MODE_LABELS: Record<PromptMode, string> = {
@@ -47,7 +59,8 @@ export const MODE_HINTS: Record<PromptMode, string> = {
   "learn-save":
     "Teaches you the full lesson, then adds a small block at the end for Kiroku. Paste the whole reply back in.",
   "learn-only": "Just the lesson, no data block. Good for follow-up questions before saving.",
-  "save-only": "Turns a lesson you already have into Kiroku's format. Paste your existing lesson in first, then copy this prompt.",
+  "save-only":
+    "Turns a lesson you already have into Kiroku's format. Paste your existing lesson in first, then copy this prompt.",
 };
 
 export const JLPT_LEVELS: JlptLevel[] = ["N5", "N4", "N3"];
@@ -115,6 +128,23 @@ export function dedupeVocab(words: readonly VocabWord[]): VocabWord[] {
 }
 
 /**
+ * One entry per distinct kanji character, in the order first seen. Characters are NFC normalized
+ * and trimmed; empty characters are skipped. Pure.
+ */
+export function dedupeKanji(kanji: readonly KanjiItem[]): KanjiItem[] {
+  const seen = new Set<string>();
+  const out: KanjiItem[] = [];
+  for (const k of kanji) {
+    const char = k.character.normalize("NFC").trim();
+    if (char === "") continue;
+    if (seen.has(char)) continue;
+    seen.add(char);
+    out.push(k);
+  }
+  return out;
+}
+
+/**
  * The real day numbers as a short label, gaps included: [1,2,3,5,6,8] -> "Days 1-3, 5-6, 8"; [4] -> "Day 4".
  * Sorted and de-duplicated first, so the label never claims a day that is not there (a deleted Day 6 is a gap, not "1 to 7"). Pure.
  */
@@ -139,8 +169,10 @@ export function describeDays(days: readonly number[]): string {
 
 /**
  * The progress tracker the AI reads before teaching. It covers every STORED earlier lesson (`dayNumber < day`), not only the
- * days marked Done: Done is a manual toggle, and an unticked day would otherwise be taught again. Vocabulary is Japanese only
- * (no reading, no meaning, no romaji) and de-duplicated by Japanese + reading; grammar and kanji are listed in full.
+ * days marked Done: Done is a manual toggle, and an unticked day would otherwise be taught again.
+ * - Grammar: listed by day, grouped compactly by title with total point count.
+ * - Kanji: characters only, de-duplicated, with total character count (slashes token bloat for Day 100+).
+ * - Vocabulary: Japanese only (no reading, no meaning, no romaji), de-duplicated by Japanese + reading.
  * There is deliberately no weak-word or due-review text here any more (see kiroku-ai-reinforcement-plan.md). Pure.
  */
 function priorKnowledgeBlock(day: number, lessons: DayLesson[]): string {
@@ -150,14 +182,25 @@ function priorKnowledgeBlock(day: number, lessons: DayLesson[]): string {
     return `This is the learner's very first lesson. Assume ZERO prior Japanese knowledge — no hiragana, no katakana, no grammar, nothing. As part of today's material, briefly introduce hiragana and katakana just enough for the learner to read what you teach, and make です (polite copula, "is/am/are") and だ (its plain-form counterpart) the core grammar point of the day.`;
   }
 
-  // Phase 17: a day can teach several grammar points / kanji — every one is listed (one grammar line per point).
+  // Grammar: day-grouped, titles only, one line per day (compact).
+  const totalGrammarPoints = prior.reduce((sum, l) => sum + l.grammar.length, 0);
   const grammarSummary = prior
-    .flatMap((l) => l.grammar.map((g) => `Day ${l.dayNumber}: ${g.title} (${g.structure})`))
+    .map((l) => {
+      const titles = l.grammar
+        .map((g) => g.title.trim())
+        .filter(Boolean)
+        .join(", ");
+      return `Day ${l.dayNumber}: ${titles || "(none)"}`;
+    })
     .join("\n");
-  const kanjiSummary = prior
-    .flatMap((l) => l.kanji)
-    .map((k) => `${k.character} (${k.meaning} — On: ${k.onyomi.join("/") || "—"} / Kun: ${k.kunyomi.join("/") || "—"})`)
-    .join(", ");
+  const grammarLabel = `Grammar covered (${totalGrammarPoints} point${totalGrammarPoints === 1 ? "" : "s"})`;
+
+  // Kanji: characters only, deduplicated by character (massive token reduction for Day 100+).
+  const knownKanji = dedupeKanji(prior.flatMap((l) => l.kanji));
+  const kanjiSummary = knownKanji.map((k) => k.character.trim()).join(", ");
+  const kanjiLabel = `Kanji taught (${knownKanji.length} character${knownKanji.length === 1 ? "" : "s"}, character only)`;
+
+  // Vocabulary: Japanese only, deduplicated by Japanese + reading.
   const knownVocab = dedupeVocab(prior.flatMap((l) => l.vocab));
   const vocabSummary = knownVocab.map((v) => v.japanese.trim()).join(", ");
   const vocabLabel = `Known vocabulary (${knownVocab.length} word${knownVocab.length === 1 ? "" : "s"}, Japanese only)`;
@@ -165,11 +208,11 @@ function priorKnowledgeBlock(day: number, lessons: DayLesson[]): string {
   return `To ensure you never assume grammar or vocabulary the learner hasn't been taught yet, here is their exact progress tracker so far:
 
 === LESSONS SO FAR (${describeDays(prior.map((l) => l.dayNumber))}) ===
-Grammar covered:
+${grammarLabel}:
 ${grammarSummary}
 
-Kanji taught:
-${kanjiSummary}
+${kanjiLabel}:
+${kanjiSummary || "(none recorded)"}
 
 ${vocabLabel}:
 ${vocabSummary || "(none recorded)"}
@@ -222,7 +265,8 @@ function schemaAndExampleBlock(day: number, vocabCount: number, counts: PointCou
     : counts.kanji === 1
       ? "5 or more"
       : "at least 3 per kanji";
-  const examplesNote = counts && counts.grammar > 1 ? "at least 3 in each grammar point" : "at least 3";
+  const examplesNote =
+    counts && counts.grammar > 1 ? "at least 3 in each grammar point" : "at least 3";
   const listsNote =
     !counts || counts.grammar > 1 || counts.kanji > 1
       ? `\nThe example shows ONE entry in each of "grammar" and "kanji" to save space — follow the entry counts above, not the example.`
@@ -273,7 +317,12 @@ Example below shows the FORMAT only — write real Day ${day} content, not this 
 
 // Shared by "learn-save" and "learn-only" — the actual teaching ask, in prose (not a data-form request).
 // Phase 17: with one grammar point / one kanji the wording is exactly what it was before; with more, items 1 and 2 ask for N of each.
-function teachingInstructionsBlock(day: number, vocabCount: number, grammarCount: number, kanjiCount: number): string {
+function teachingInstructionsBlock(
+  day: number,
+  vocabCount: number,
+  grammarCount: number,
+  kanjiCount: number,
+): string {
   const grammarItem =
     grammarCount === 1
       ? "Grammar Point — structure, a clear explanation, the negative form, the question form, any extra notes, and at least 3 worked examples (Japanese, reading, English, and a short breakdown of each)."
@@ -330,7 +379,11 @@ ${schemaAndExampleBlock(day, vocabCount, counts)}`;
  * just warning about it. When it's empty, we fall back to the same-conversation case, but with
  * an explicit instruction not to invent content it doesn't actually have.
  */
-export function buildSaveOnlyPrompt(day: number, vocabCount: VocabCount, existingLessonText = ""): string {
+export function buildSaveOnlyPrompt(
+  day: number,
+  vocabCount: VocabCount,
+  existingLessonText = "",
+): string {
   const lessonText = existingLessonText.trim();
 
   const sourceAndGuard = lessonText
@@ -355,8 +408,15 @@ ${schemaAndExampleBlock(day, vocabCount, null)}`;
  * is told to fix only what's present and to answer `{"error": ...}` rather than invent content.
  * Reuses `schemaAndExampleBlock()` so the schema text is never duplicated.
  */
-export function buildRepairPrompt(day: number, vocabCount: VocabCount, failedText: string, errors: string[]): string {
-  const errorList = errors.length ? errors.map((e) => `- ${e}`).join("\n") : "- (no specific errors were listed)";
+export function buildRepairPrompt(
+  day: number,
+  vocabCount: VocabCount,
+  failedText: string,
+  errors: string[],
+): string {
+  const errorList = errors.length
+    ? errors.map((e) => `- ${e}`).join("\n")
+    : "- (no specific errors were listed)";
 
   return `The text below was supposed to contain a Japanese lesson for Day ${day} in Kiroku's JSON format, but it failed validation. Fix it.
 
@@ -377,7 +437,20 @@ ${schemaAndExampleBlock(day, vocabCount, null)}`;
 
 /** Pure function: builds the full copy-paste prompt for a given day and set of options. */
 export function buildLessonPrompt(opts: PromptOptions): string {
-  const { day, tone, style, level, vocabCount, kanjiCount, grammarCount, romaji, customFocus, lessons, mode, existingLessonText } = opts;
+  const {
+    day,
+    tone,
+    style,
+    level,
+    vocabCount,
+    kanjiCount,
+    grammarCount,
+    romaji,
+    customFocus,
+    lessons,
+    mode,
+    existingLessonText,
+  } = opts;
 
   if (mode === "save-only") {
     return buildSaveOnlyPrompt(day, vocabCount, existingLessonText);
@@ -393,7 +466,9 @@ export function buildLessonPrompt(opts: PromptOptions): string {
   const counts: PointCounts = { kanji: kanjiCount, grammar: grammarCount };
   const teaching = teachingInstructionsBlock(day, vocabCount, grammarCount, kanjiCount);
   const requestBody =
-    mode === "learn-save" ? `${teaching}\n\n${teachThenSaveBridge(day, vocabCount, counts)}` : teaching;
+    mode === "learn-save"
+      ? `${teaching}\n\n${teachThenSaveBridge(day, vocabCount, counts)}`
+      : teaching;
 
   // Phase 17: the "Check" block sits right after the progress tracker, so it only exists when a tracker does.
   const hasTracker = day > 1 && lessons.some((l) => l.dayNumber < day);

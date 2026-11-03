@@ -66,8 +66,8 @@ export function kanjiToNextRank(carved: number): number | null {
 }
 
 /**
- * The rank line, one sentence: `Rank 一行 First line · 5 more kanji to 一頁 One page`. Below the first rank:
- * `No rank yet · 3 more kanji to 一行 First line`. At the top: `Rank 書庫 Archive`.
+ * The rank line, one sentence: `Rank 一行 First line · 5 more carved kanji to 一頁 One page`. Below the first rank:
+ * `No rank yet · 3 more carved kanji to 一行 First line`. At the top: `Rank 書庫 Archive`.
  */
 export function rankText(carved: number): string {
   const rank = rankOf(carved);
@@ -75,7 +75,7 @@ export function rankText(carved: number): string {
   const here = rank === null ? "No rank yet" : `Rank ${rank.glyph} ${rank.name}`;
   if (next === null) return here;
   const left = Math.max(0, next.carved - carved);
-  return `${here} · ${left} more kanji to ${next.glyph} ${next.name}`;
+  return `${here} · ${left} more carved kanji to ${next.glyph} ${next.name}`;
 }
 
 // ---------------------------------------------------------------------------------------------

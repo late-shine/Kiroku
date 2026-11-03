@@ -4,9 +4,9 @@
 
 **GitHub →** [github.com/late-shine/Kiroku](https://github.com/late-shine/Kiroku) · **Live app →** [usekiroku.vercel.app](https://usekiroku.vercel.app/)
 
-**Status:** Active personal project. Everything under [What it does](#what-it-does) is built. Most of it has been tried in the real running app; the newest piece, targeted reinforcement, is still being observed through normal daily study. What isn't built yet is in the [Roadmap](#roadmap).
+**Status:** Active personal project. The core lessons, quiz, writing practice, photo check, rewards, writing stats and cross-device writing sync are built. The newest photo-check behavior is still being observed through normal daily study. Remaining ideas are in the [Roadmap](#roadmap).
 
-![A saved Kiroku lesson: grammar point, progress ring and the curriculum list](src/assets/images/welcome-lesson.webp)
+![A Kiroku lesson: grammar point, progress ring and the curriculum list](README_images/lesson-overview.png)
 
 If you know a little Japanese: 記録 (*kiroku*) means "record." That wasn't a branding decision — it's just what the app is. (It was called Komorebi, 木漏れ日, until the rebrand on September 30.) It doesn't correct your grammar or grade your speaking. It remembers.
 
@@ -60,7 +60,7 @@ There are three modes:
 
 No account or API key is required for any of this. Manual copy and paste is the permanent default.
 
-**Optional accounts and sync.** Kiroku is local-first, but you can optionally sign in with Google and sync across devices when Firebase is configured. The first sync offers **Merge**, **Use my account's data** or **Use this device's data**; after that, automatic sync runs on app start, when the tab regains focus, when the connection returns and after local changes. **Sync now** and **Choose how to sync…** remain available. Sync includes lessons, completed days, stars and weak-word state, review memory, quiz counters, the 7-day study log, your name and avatar, and selected display preferences. The Gemini key, music, active quiz state, voice choice and particle setting stay on the device. Deleting or replacing a day is announced to your other devices, so old state can't sneak back in. Restoring a backup adds to the account; it does not delete account-only days.
+**Optional accounts and sync.** Kiroku is local-first, but you can optionally sign in with Google and sync across devices when Firebase is configured. The first sync offers **Merge**, **Use my account's data** or **Use this device's data**; after that, automatic sync runs on app start, when the tab regains focus, when the connection returns and after local changes. **Sync now** and **Choose how to sync…** remain available. Sync includes lessons, completed days, stars and weak-word state, review memory, quiz counters, the 7-day study log, writing records, the writing day log, earned badges, your name and avatar, and selected display preferences. Writing preferences, drafts, stamps, accent choice, photo-check counters, the Gemini key, music, active quiz state, voice choice and particle setting stay on the device. Deleting or replacing a day is announced to your other devices, so old state can't sneak back in. Restoring a backup adds to the account; it does not delete account-only days.
 
 **Optional Gemini help.** If you add your own Gemini API key, two buttons appear: *Fix with Gemini* repairs a reply that failed the check, and *Save with Gemini* does the Save-only step for you from pasted lesson text. Free-tier models are often busy, so Kiroku tries a chain of five in turn (45 seconds each) and shows you the trail. The result still goes through the same preview before anything is saved.
 
@@ -69,6 +69,20 @@ No account or API key is required for any of this. Manual copy and paste is the 
 Each day has grammar, kanji, vocab, a natural phrase, a pattern and a culture corner — shown across Overview, Grammar, Kanji and Vocab tabs. A day can hold up to 3 grammar points and 5 kanji; when it has several, a row of chips switches between them. There's a furigana toggle, on'yomi and kun'yomi on every kanji, speaker buttons on kanji compounds, grammar examples and the natural phrase, and "Mark done" for finished days. On a phone, a small day stepper sits at the top of the lesson.
 
 You can delete a day or select several and delete them together. Day numbers never shift: delete Day 14 and the list reads 13, 15, the arrows skip the gap, and the stepper says things like "Day 15 · lesson 14 of 16". The dialog tells you that the day's review words go with it. If you rebuild a day that already exists, Kiroku asks first and clears that day's review and mastery records, so old progress can't attach to different words. If you pick a deleted day in the Studio, it warns you that the original lesson can't be recovered without a backup. A new visitor starts empty and sees a welcome panel that explains the loop, not a sample course.
+
+![Kiroku's Lesson Studio for building the next AI lesson](README_images/lesson-studio.png)
+
+### Writing practice
+
+Writing practice is optional and off by default. Turn it on in Profile and a **Write** tab appears. Each page gives you three kanji you can read but cannot yet write, with a short cue for each. Write them on paper from memory, reveal the answers, and mark yourself **right** or **not yet**. Your mark is the only one that counts. A kanji is *carved* once you get it right on two different days; missed ones come back first.
+
+![Kiroku's optional photo check for a handwritten page](README_images/writing-photo-check.png)
+
+If you add your own Gemini key in Profile, you can photograph the page for a second opinion. Ticks show where Gemini read the same answer you marked, and you can still override it. The photo goes to Google through Kiroku's relay for that one check, and Kiroku never keeps it.
+
+Pages earn a writing rank and badges, a rank stamp (Ink, Moss or Paper), and accent colours that unlock with badges. Once you have saved a page, the Write page also shows seven days of marks and your recent right, photo-checked and by-hand totals.
+
+![Kiroku's writing results and seven-day writing stats](README_images/writing-results.png)
 
 ### Quiz and review
 
@@ -86,11 +100,13 @@ Every answer updates a small record for that word. It's a Leitner system: five b
 
 The Progress tab shows your days, mastered words, answers and word count, plus a **7-day rhythm chart** drawn from a real per-day study log (right and wrong answers, today last; it starts filling from the first answer after it was added, because earlier days can't be reconstructed). Below it, a **Memory block** shows how many words sit in each of the five boxes and when the words in review come due: today, tomorrow, in 2–7 days, later. The word list has a search box and filters (All, Due, Weak, Mastered, Not in review) with counts, and each word shows its box and any Due or Weak mark.
 
+![Kiroku's Progress archive with rhythm and review memory](README_images/progress-archive.png)
+
 ### Profile and backup
 
 The avatar button in the header opens your Profile page: a name, an avatar (a Google photo, one of eight kanji glyphs — 記 猫 月 葉 花 星 蛍 苔 — or a picture you upload, shrunk to a tiny square in your browser first), an at-a-glance line (streak, due today, mastered), the account and sync controls, your data, preferences and a danger zone.
 
-**Export** saves `kiroku-backup.json` — versioned (currently v5), with your lessons, progress, review records (including the optional miss streak behind targeted reinforcement) and study log. **Restore** checks the file first, tells you what's in it, and asks before replacing anything; a damaged or too-new file is refused and changes nothing. Older backups from before versions still restore. Music settings, the voice choice, the particle setting and your Gemini key are never in the file. Resetting everything (you type "reset" to confirm) is in the Danger zone.
+**Export** saves `kiroku-backup.json` — versioned (currently v6), with your lessons, progress, writing records, writing day log, earned badges, review records (including the optional miss streak behind targeted reinforcement) and study log. **Restore** checks the file first, tells you what's in it, and asks before replacing anything; a damaged or too-new file is refused and changes nothing. Older backups from before versions still restore. Writing preferences, drafts, stamps, accent choice, photo-check counters, music settings, the voice choice, the particle setting and your Gemini key are never in the file. Resetting everything (you type "reset" to confirm) is in the Danger zone.
 
 ### Atmosphere, music and voice
 
@@ -107,7 +123,7 @@ Besides the welcome panel, there are small dismissible tip cards on the Quiz, Pr
 ## Your data and your key
 
 - **Local-first by default.** Without Firebase configuration, lessons and progress live in your browser's `localStorage`. Clear your browser data and they're gone, so export a backup now and then.
-- **Optional Firebase sync.** A signed-in account can sync lessons, progress, review memory, the 7-day study log, your name and avatar, and selected display preferences between devices. The Firebase web configuration is public by design; access is protected by `firebase/database.rules.json`, which must be published in the Firebase console.
+- **Optional Firebase sync.** A signed-in account can sync lessons, progress, review memory, the 7-day study log, writing records, the writing day log, earned badges, your name and avatar, and selected display preferences between devices. Writing preferences, drafts, stamps, accent choice, photo-check counters and the Gemini key are not backed up or synced. The Firebase web configuration is public by design; access is protected by `firebase/database.rules.json`, which must be published in the Firebase console.
 - **Your Gemini key (optional) stays in your browser.** The app's one server function relays each request to Google and is built not to store or log the key. The key is never part of a backup, and it's never in the code.
 
 ## Known limits
@@ -261,6 +277,8 @@ Push to GitHub and connect the repo to Vercel. `npm run build` uses Nitro's `ver
 
 For accounts and sync, add the same six `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's Environment Variables (Production, and Preview if wanted) before redeploying; Vite bakes them into the client build. Add the production domain to Firebase Authentication's authorized domains and publish the current `firebase/database.rules.json` in Realtime Database → Rules. Random Vercel preview URLs are not automatically authorized for Google sign-in. When a release changes `firebase/database.rules.json`, publish the new rules before any device runs the new build, then hard-refresh open tabs so an old cached one can't sync without the new fields. Targeted reinforcement is such a release: it adds the optional `memory/$id/streak` field and raises the sync schema to 2, so publish the current rules first. An older cached tab then refuses to sync until it's reloaded, rather than silently dropping the streaks.
 
+Writing sync is another rules-changing release: it adds `progress/writing`, `progress/writingLog` and `progress/badges` and raises the sync schema to 3. Older cached tabs refuse to sync until reloaded rather than silently dropping writing history.
+
 Vercel refuses to build versions of TanStack Start that have a known security advisory. Phase 15 hit exactly that. The fix is to upgrade `@tanstack/react-start`, `@tanstack/react-router` and `@tanstack/router-plugin` together, then re-run the checks.
 
 ---
@@ -285,6 +303,8 @@ Vercel refuses to build versions of TanStack Start that have a known security ad
 - [x] Several kanji and grammar points per day, with a Check step at the top of the prompt
 - [x] A real 7-day study chart and a Memory block with word filters in Progress
 - [x] Profile page with a synced name, avatar and uploaded picture
+- [x] Optional paper-based Writing practice with photo check, ranks, badges and writing stats
+- [x] Writing records, writing log and earned badges synced across devices
 - [x] Safe day deletion and replacement, on one device and across devices
 - [x] The Lesson Studio as a full page
 - [ ] Prompt that keeps the AI to the chosen JLPT level and says so when that level is already covered

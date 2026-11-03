@@ -25,8 +25,8 @@ function formatDay(day: string, today: string): string {
 }
 
 /**
- * `Rank 一行 First line · 5 more kanji to 一頁 One page`, with the one sentence that says what moves it. The glyphs
- * carry `lang="ja"`; below the first rank the line reads `No rank yet · 3 more kanji to 一行 First line`.
+ * `Rank 一行 First line · 5 more carved kanji to 一頁 One page`, with the one sentence that says what moves it. The glyphs
+ * carry `lang="ja"`; below the first rank the line reads `No rank yet · 3 more carved kanji to 一行 First line`.
  */
 export function RankLine({
   carved,
@@ -57,7 +57,7 @@ export function RankLine({
         {next !== null && (
           <span className="text-muted-foreground">
             {" "}
-            · {left} more kanji to{" "}
+            · {left} more carved kanji to{" "}
             <span lang="ja" className="text-foreground">
               {next.glyph}
             </span>{" "}

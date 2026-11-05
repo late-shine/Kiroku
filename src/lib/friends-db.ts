@@ -657,7 +657,7 @@ export function saveFriendSharing(
     const snapshot = on ? source() : null;
     if (on && requireReady && !snapshot)
       throw new FriendsError(
-        "Wait for progress to finish loading or syncing, then review the sharing preview again.",
+        "Wait for progress to finish loading or syncing, then try again.",
       );
     const settings: FriendSettings = {
       v: 1,
@@ -710,11 +710,11 @@ export function publishFriendCard(
     if (!settings || settings.rev !== expectedRevision)
       throw new FriendsError(SETTINGS_CONFLICT, "conflict");
     if (!settings.on)
-      throw new FriendsError("Sharing is off. Review the preview to start sharing.");
+      throw new FriendsError("Sharing is off. Turn it on to share your card.");
     const snapshot = source();
     if (!snapshot)
       throw new FriendsError(
-        "Your progress is not ready for this account. Review this device before publishing.",
+        "Your progress is not ready for this account. Use this device's progress or finish syncing first.",
       );
     const publication = buildFriendPublication(settings, snapshot);
     await update(token, await publicationPaths(token, publication), () => {

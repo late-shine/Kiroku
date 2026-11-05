@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import {
@@ -8,6 +9,7 @@ import {
   friendCardAge,
   type FriendPeer,
   type FriendCard,
+  type FriendSettings,
 } from "@/lib/friends";
 import { PROFILE_GLYPHS, initialOf } from "@/lib/profile";
 import { BADGES, RANKS } from "@/lib/rewards";
@@ -24,15 +26,9 @@ type RowKind = "incoming" | "outgoing" | "final" | "unavailable";
 function FriendsConfirmation({
   confirmation,
   onClose,
-  children,
-  cancelLabel = "Cancel",
-  disabled = false,
 }: {
   confirmation: Confirmation;
   onClose: () => void;
-  children?: ReactNode;
-  cancelLabel?: string;
-  disabled?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useScrollLock();
@@ -63,15 +59,13 @@ function FriendsConfirmation({
       >
         {confirmation.body}
       </p>
-      {children}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button type="button" autoFocus className={buttonClass} onClick={onClose}>
-          {cancelLabel}
+          Cancel
         </button>
         <button
           type="button"
           className={primaryClass}
-          disabled={disabled}
           onClick={() => {
             onClose();
             confirmation.run();
@@ -93,6 +87,8 @@ export function FriendsPanel() {
   const friends = useFriends();
   const { sync } = useAccountSync();
   const [settingUp, setSettingUp] = useState(false);
+  // Default for a new setup only; saved choices always win.
+  const [setupShare, setSetupShare] = useState(true);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [batch, setBatch] = useState(INBOX_BATCH);
@@ -103,6 +99,7 @@ export function FriendsPanel() {
   useEffect(() => {
     setNameDraft(null);
     setSettingUp(false);
+    setSetupShare(true);
     setCode("");
     setBatch(INBOX_BATCH);
     setConfirmation(null);
@@ -117,6 +114,7 @@ export function FriendsPanel() {
     if (!friends.activity.deleting) return;
     setNameDraft(null);
     setSettingUp(false);
+    setSetupShare(true);
     setConfirmation(null);
     setCopyNotice(null);
   }, [friends.activity.deleting]);
@@ -146,9 +144,11 @@ export function FriendsPanel() {
   const symbol = symbolLabel(friends.glyph, chosenName);
   const requestDisclosure = !friends.sharing.loaded
     ? "This request shares your name and avatar symbol. Your saved sharing choice controls progress sharing."
-    : friends.sharing.settings?.on
-      ? "This request shares your name and avatar symbol. Your sharing choice stays on. Accepted friends can see your published card."
-      : "This request shares your name and avatar symbol. Progress sharing stays off.";
+    : !friends.sharing.settings
+      ? "This request shares your name and avatar symbol. No progress is shared until you save a sharing choice."
+      : friends.sharing.settings.on
+        ? "This request shares your name and avatar symbol. Your sharing choice stays on. Accepted friends can see your published card."
+        : "This request shares your name and avatar symbol. Progress sharing stays off.";
   const consent = `Public name: ${clean ?? "Choose a name"}\nAvatar symbol: ${symbol}\n\n${requestDisclosure}`;
   const peers = snapshot?.peers ?? [];
   const incoming = peers.filter(
@@ -192,17 +192,6 @@ export function FriendsPanel() {
       label: block ? "Block" : peer.state === "final" ? "Remove" : "Clear requests",
       run: () => {
         void friends.remove(peer.uid, block);
-      },
-    });
-  };
-
-  const confirmSetup = () => {
-    setConfirmation({
-      title: "Set up friends?",
-      body: `Public name: ${clean}\nAvatar symbol: ${symbol}\n\nCreate a friend code for people you know. Progress sharing stays off.`,
-      label: "Create friend code",
-      run: () => {
-        void friends.setup(identity);
       },
     });
   };
@@ -350,7 +339,7 @@ export function FriendsPanel() {
           {snapshot && !snapshot.own && !snapshot.cached && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-muted-foreground">
-                Friends · Off. Study alongside someone you know.
+                Friends · Not set up yet. Study alongside someone you know.
               </p>
               {!settingUp && (
                 <button
@@ -384,27 +373,48 @@ export function FriendsPanel() {
                 />
               </label>
               <p className="break-words text-sm text-muted-foreground">
-                Avatar symbol: {symbol}. To change it, choose a symbol in your profile above.
-                Picture sharing is controlled below.
+                Avatar symbol: {symbol}. To change it, choose a symbol in your profile above. Your
+                uploaded picture is shared only if you choose that separately.
               </p>
               {!clean && (
                 <p className="text-sm text-muted-foreground">Enter a name to use Friends.</p>
               )}
               {!snapshot?.own && (
-                <button
-                  type="button"
-                  className={primaryClass}
-                  disabled={disabled || !clean}
-                  onClick={confirmSetup}
-                >
-                  Create friend code
-                </button>
+                <div className="space-y-3 border-t border-border pt-3">
+                  <SharingChoice
+                    id="friends-setup-share"
+                    checked={setupShare}
+                    disabled={disabled}
+                    onChange={setSetupShare}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {setupShare ? READY_TEXT : "Nothing is shared. You can turn sharing on later."}
+                  </p>
+                  <WhatFriendsSee />
+                  <p className="text-xs text-muted-foreground">
+                    Creating your friend code also saves this choice.
+                  </p>
+                  <button
+                    type="button"
+                    className={primaryClass}
+                    disabled={disabled || !clean}
+                    onClick={() => {
+                      void friends.setup(identity, setupShare);
+                    }}
+                  >
+                    Create friend code
+                  </button>
+                </div>
               )}
             </div>
           )}
           {snapshot?.own && !snapshot.cached && (
             <div className="mt-5 space-y-4 border-t border-border pt-4">
-              <FriendsSharing name={chosenName} disabled={disabled} />
+              <FriendsSharing
+                name={chosenName}
+                disabled={disabled}
+                friendCount={connected.length}
+              />
               <div>
                 <p className="text-sm text-muted-foreground">Your friend code</p>
                 <p
@@ -673,150 +683,269 @@ function PlainFriendCard({ peer }: { peer: FriendPeer }) {
   );
 }
 
-const SHARING_COPY =
-  "Friends you accept can see your chosen name and avatar symbol, rank, streak, kanji carved, words mastered, lesson and taught-kanji counts, vocabulary count, your last 7 days of answers and writing marks, earned badges and selected decorations, study tag and status. They never see your email, lesson text, word lists or Gemini key.";
+// F3d/F3f: extend SHARING_FIELDS when typed status and uploaded banners join the card.
+const SHARING_SUMMARY =
+  "Accepted friends can see your card and study summary. Lessons, email and API keys stay private.";
+const SHARING_FIELDS = [
+  "Your public name and avatar symbol.",
+  "Rank, study streak, kanji carved, words mastered, and lesson, taught-kanji and vocabulary counts.",
+  "Your last 7 days of quiz answers and writing marks.",
+  "Earned badges and up to three pinned badges.",
+  "Your card look: accent, stamp, frame, effect, banner scene, study tag and status preset.",
+];
+const SHARING_PICTURE =
+  "Your uploaded picture is shown only if you turn on the separate picture choice. Your Google picture is never shared.";
+const SHARING_PRIVATE = "Never shared: your email, lesson text, word lists and Gemini key.";
+const READY_TEXT = "Ready for your first friend. Only people you accept can see your shared card.";
+const MISSING_HELP =
+  "Sharing starts On for a new setup. Only people you accept can see your card. Nothing is shared until you save.";
+const DEVICE_HELP =
+  "Sync this account, or use the study progress stored on this device. Nothing is shared from this device until you choose.";
+const DEVICE_WAIT =
+  "Wait for progress to finish loading or syncing before using this device's progress.";
+const CARD_KEPT = "Your last published card stays visible until then.";
 
-function SharingConsent({
-  initialName,
-  revision,
-  onClose,
+/** A real switch; the On/Off word beside it means state never relies on color alone. */
+function SharingChoice({
+  id,
+  checked,
+  disabled,
+  describedBy,
+  onChange,
 }: {
-  initialName: string;
-  revision: string | null;
-  onClose: () => void;
+  id: string;
+  checked: boolean;
+  disabled: boolean;
+  describedBy?: string;
+  onChange: (next: boolean) => void;
 }) {
-  const friends = useFriends();
-  const [name, setName] = useState(initialName);
-  const [photo, setPhoto] = useState(
-    Boolean(
-      friends.sharing.settings?.on &&
-      friends.sharing.settings.photo &&
-      friends.uploadedPhotoAvailable,
-    ),
-  );
-  const preview = friends.previewSharing(name, photo, revision);
   return (
-    <FriendsConfirmation
-      confirmation={{
-        title: "Share with friends?",
-        body: SHARING_COPY,
-        label: "Start sharing",
-        run: () => {
-          if (preview) void friends.startSharing(preview);
-        },
-      }}
-      onClose={onClose}
-      cancelLabel="Not now"
-      disabled={!preview || friends.activity.busy || friends.activity.deleting}
-    >
-      <div className="mt-4 space-y-4">
-        <label className="block space-y-2 text-sm">
-          <span>Public name</span>
-          <input
-            autoComplete="off"
-            maxLength={24}
-            className={inputClass}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+    <div className="flex min-h-11 items-center justify-between gap-3">
+      <span id={`${id}-label`} className="text-sm">
+        Share with friends
+      </span>
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="text-xs text-muted-foreground">
+          {checked ? "On" : "Off"}
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-labelledby={`${id}-label`}
+          aria-describedby={describedBy}
+          disabled={disabled}
+          onClick={() => onChange(!checked)}
+          className={`hit-area relative h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 motion-reduce:transition-none ${
+            checked ? "bg-primary" : "bg-input"
+          }`}
+        >
+          <span
+            className={`block size-4 rounded-full bg-background shadow transition-transform motion-reduce:transition-none ${
+              checked ? "translate-x-4" : "translate-x-0"
+            }`}
           />
-        </label>
-        <label className="flex min-h-11 items-center gap-3 text-sm">
-          <input
-            type="checkbox"
-            className="size-5 accent-primary focus-visible:outline-2 focus-visible:outline-ring"
-            checked={photo}
-            disabled={!friends.uploadedPhotoAvailable && !photo}
-            onChange={(event) => setPhoto(event.target.checked)}
-          />
-          <span>Also show my uploaded picture</span>
-        </label>
-        {!friends.uploadedPhotoAvailable && (
-          <p className="text-xs text-muted-foreground">
-            Upload a picture in your profile to include it. Your Google picture is never shared.
-          </p>
-        )}
-        {preview ? (
-          <div className="border-t border-border pt-4">
-            <p className="break-words text-sm font-medium">
-              {symbolLabel(preview.publication.card.g, preview.name)} · {preview.name}
-            </p>
-            {preview.publication.photo && (
-              <img
-                className="mt-3 size-16 rounded-md object-cover"
-                src={preview.publication.photo.data}
-                alt="Your uploaded picture in the sharing preview"
-                onError={(event) => {
-                  event.currentTarget.hidden = true;
-                }}
-              />
-            )}
-            <p className="mt-2 text-xs text-muted-foreground">
-              This is the progress on this device that you are confirming for this account.
-            </p>
-            <PublicSummary card={preview.publication.card} />
-          </div>
-        ) : (
-          <p role="status" className="text-sm text-muted-foreground">
-            Wait for progress to finish loading or syncing. If sharing settings changed, close this
-            preview and review them again.
-          </p>
-        )}
-      </div>
-    </FriendsConfirmation>
+        </button>
+      </span>
+    </div>
   );
 }
 
-function FriendsSharing({ name, disabled }: { name: string; disabled: boolean }) {
+/** The summary line stays visible; the details list the published fields. Not a technical dump. */
+function WhatFriendsSee() {
+  return (
+    <details className="group text-sm">
+      <summary className="flex min-h-11 cursor-pointer list-none items-start justify-between gap-3 py-2 focus-visible:outline-2 focus-visible:outline-ring">
+        <span className="min-w-0">
+          <span className="block font-medium">What friends see</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{SHARING_SUMMARY}</span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="mt-1 size-4 shrink-0 text-muted-foreground group-open:rotate-180"
+        />
+      </summary>
+      <div className="space-y-3 pb-2 text-xs text-muted-foreground">
+        <ul className="list-disc space-y-1 pl-5">
+          {SHARING_FIELDS.map((field) => (
+            <li key={field}>{field}</li>
+          ))}
+        </ul>
+        <p>{SHARING_PICTURE}</p>
+        <p>{SHARING_PRIVATE}</p>
+        <p>Stats and unlocks are self-reported, not verified achievements.</p>
+        <p>
+          Turning sharing off prevents new reads after it is saved. Copies already seen on another
+          device may remain there until refreshed.
+        </p>
+        <p>Signing out doesn&apos;t hide your card. Turn sharing off first.</p>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The exceptional, inline source-of-progress guard (it replaces the removed consent dialog). Shown only when
+ * sharing is On and this device is not yet associated with the signed-in account. The action reuses the captured
+ * preview and source-key check, then publishes through the provider. Nothing here runs automatically.
+ */
+function DeviceProgress({
+  settings,
+  kept,
+  disabled,
+}: {
+  settings: FriendSettings;
+  kept: boolean;
+  disabled: boolean;
+}) {
+  const friends = useFriends();
+  const preview = friends.previewSharing(settings.n, settings.photo, settings.rev);
+  const card = preview?.publication.card;
+  const rank = RANKS.find((item) => item.level === card?.r);
+  const summary = card
+    ? `${rank ? rank.name : "No rank yet"} · ${card.s}-day streak · ${card.c} kanji carved · ${card.m} words mastered · ${card.l} lessons`
+    : null;
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <p className="text-sm font-medium">Your card is waiting for this device&apos;s progress.</p>
+      <p className="text-xs text-muted-foreground">{DEVICE_HELP}</p>
+      {kept && <p className="text-xs text-muted-foreground">{CARD_KEPT}</p>}
+      {preview && card ? (
+        <>
+          <p className="break-words text-xs">
+            {symbolLabel(card.g, preview.name)} · {preview.name}
+          </p>
+          <p className="break-words text-xs text-muted-foreground">{summary}</p>
+          {preview.publication.photo && (
+            <p className="text-xs text-muted-foreground">
+              Your uploaded picture will be included.
+            </p>
+          )}
+          <button
+            type="button"
+            className={primaryClass}
+            disabled={disabled}
+            onClick={() => {
+              void friends.startSharing(preview);
+            }}
+          >
+            Use this device&apos;s progress
+          </button>
+        </>
+      ) : (
+        <p role="status" className="text-xs text-muted-foreground">
+          {DEVICE_WAIT}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FriendsSharing({
+  name,
+  disabled,
+  friendCount,
+}: {
+  name: string;
+  disabled: boolean;
+  friendCount: number;
+}) {
   const friends = useFriends();
   const { loaded, settings, card, error } = friends.sharing;
-  const [consent, setConsent] = useState<{ revision: string | null } | null>(null);
   const [photo, setPhoto] = useState(false);
+  const [choice, setChoice] = useState(true); // Draft for confirmed-missing settings only.
   useEffect(() => {
     setPhoto(settings?.photo ?? false);
   }, [settings?.rev, settings?.photo]);
   useEffect(() => {
-    setConsent(null);
+    setChoice(true);
   }, [friends.uid, friends.activity.deleting]);
   const clean = publicName(name, null);
+  const missing = loaded && settings === null;
+  const on = settings?.on === true;
+  const pending = friends.activity.busy
+    ? friends.activity.uncertain
+      ? "The last change may still be processing. Reconnect to check its status."
+      : "Saving…"
+    : friends.loading
+      ? "Refreshing Friends…"
+      : null;
+  const waiting =
+    friends.deviceProgress === "needs-device"
+      ? "On · waiting for this device's progress. No card is shared yet."
+      : friends.deviceProgress === "loading"
+        ? "On · waiting for progress to finish loading or syncing. No card is shared yet."
+        : "On · your card will be published shortly. No card is shared yet.";
+  const status = !loaded
+    ? "Sharing status isn't confirmed. Refresh to check your saved choice."
+    : missing
+      ? "Not saved yet. Nothing is shared until you save your choice."
+      : !on
+        ? "Off. Nothing is shared."
+        : card.kind === "published"
+          ? "On · accepted friends can see your card."
+          : card.kind === "closed"
+            ? waiting
+            : "On · card status unavailable. Refresh to check it.";
+  // Zero friends never disables the switch; On only means ready for people you accept.
+  const showReady = (missing ? choice : on) && friendCount === 0;
   return (
     <div className="space-y-3 border-b border-border pb-5">
       <h3 className="text-sm font-semibold">Share with friends</h3>
-      <p className="text-sm text-muted-foreground">
-        {loaded
-          ? settings?.on
-            ? "Sharing is on."
-            : "Sharing is off."
-          : "Sharing status is not confirmed. Refresh to check your saved choice."}
-      </p>
+      <SharingChoice
+        id="friends-sharing"
+        checked={missing ? choice : on}
+        disabled={disabled || !loaded}
+        describedBy="friends-sharing-status"
+        onChange={(next) => {
+          if (missing) setChoice(next);
+          else if (settings && next) void friends.saveSharing({ on: true }, settings.rev);
+          else if (settings) void friends.stopSharing();
+        }}
+      />
+      <div
+        id="friends-sharing-status"
+        role="status"
+        className="space-y-1 text-sm text-muted-foreground"
+      >
+        <p>{status}</p>
+        {showReady && <p>{READY_TEXT}</p>}
+        {on && card.kind === "published" && <p>{friendCardAge(card.card.t)}</p>}
+        {pending && <p>{pending}</p>}
+      </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      <label className="flex min-h-11 items-center gap-3 text-sm">
-        <input
-          type="checkbox"
-          role="switch"
-          className="size-5 accent-primary focus-visible:outline-2 focus-visible:outline-ring"
-          checked={settings?.on ?? false}
-          disabled={disabled || !loaded}
-          onChange={(event) => {
-            if (event.target.checked) setConsent({ revision: settings?.rev ?? null });
-            else void friends.stopSharing();
+      <WhatFriendsSee />
+      {missing && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{MISSING_HELP}</p>
+          <button
+            type="button"
+            className={primaryClass}
+            disabled={disabled || !clean}
+            onClick={() => {
+              if (clean) void friends.saveSharing({ on: choice, n: clean }, null);
+            }}
+          >
+            Save sharing choice
+          </button>
+        </div>
+      )}
+      {settings && (
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={disabled || !loaded || !clean || clean === settings.n}
+          onClick={() => {
+            if (clean) void friends.saveSharing({ n: clean }, settings.rev);
           }}
-        />
-        <span>Share with friends</span>
-      </label>
-      <button
-        type="button"
-        className={buttonClass}
-        disabled={disabled || !loaded || !clean || clean === settings?.n}
-        onClick={() => {
-          if (clean) void friends.saveSharing({ n: clean }, settings?.rev ?? null);
-        }}
-      >
-        Save public name
-      </button>
+        >
+          Save public name
+        </button>
+      )}
       {settings?.on && (
         <>
           <label className="flex min-h-11 items-center gap-3 text-sm">
@@ -850,52 +979,15 @@ function FriendsSharing({ name, disabled }: { name: string; disabled: boolean })
             >
               Update now
             </button>
-            {!friends.readyToUpdate && (
-              <button
-                type="button"
-                className={buttonClass}
-                disabled={disabled || !loaded}
-                onClick={() => setConsent({ revision: settings.rev })}
-              >
-                Review this device
-              </button>
-            )}
           </div>
-          {!friends.readyToUpdate && (
-            <p className="text-xs text-muted-foreground">
-              Your published card is kept until this device&apos;s progress is ready. Sync this
-              account, or review this device to confirm its progress.
-            </p>
+          {friends.deviceProgress === "needs-device" && (
+            <DeviceProgress
+              settings={settings}
+              kept={card.kind === "published"}
+              disabled={disabled || !loaded}
+            />
           )}
-          <p className="text-xs text-muted-foreground">
-            {card.kind === "published"
-              ? friendCardAge(card.card.t)
-              : card.kind === "closed"
-                ? "No card is published. Update it when your progress is ready."
-                : "Publication status unavailable. Refresh to check it."}
-          </p>
         </>
-      )}
-      <details className="text-sm">
-        <summary className="min-h-11 cursor-pointer py-3 focus-visible:outline-2 focus-visible:outline-ring">
-          What friends see
-        </summary>
-        <div className="space-y-3 text-xs text-muted-foreground">
-          <p>{SHARING_COPY}</p>
-          <p>Stats and unlocks are self-reported, not verified achievements.</p>
-          <p>
-            Turning sharing off prevents new reads after it is saved. Copies already seen on another
-            device may remain there until refreshed.
-          </p>
-          <p>Signing out doesn&apos;t hide your card. Turn sharing off first.</p>
-        </div>
-      </details>
-      {consent && (
-        <SharingConsent
-          initialName={name}
-          revision={consent.revision}
-          onClose={() => setConsent(null)}
-        />
       )}
     </div>
   );

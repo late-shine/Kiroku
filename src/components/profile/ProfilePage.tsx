@@ -545,7 +545,9 @@ export function ProfilePage({
                 <span className="mt-1 block text-xs text-muted-foreground">
                   {friends.sharing.loaded
                     ? friends.sharing.settings?.on
-                      ? "Your card is shared with accepted friends."
+                      ? friends.sharing.card.kind === "published"
+                        ? "Your card is shared with accepted friends."
+                        : "Sharing is on. No card is shared yet."
                       : "Your progress stays private until you choose to share."
                     : "Choose who studies alongside you."}
                 </span>

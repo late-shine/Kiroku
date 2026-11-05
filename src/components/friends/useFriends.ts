@@ -699,6 +699,7 @@ export function useFriendsController({
   schedulePublishRef.current = schedulePublish;
 
   // Association is established by an acknowledged sync in this session, or the explicit preview.
+  // `sharing.loaded` re-runs this after explicit setup (isSetUp is true by then); the conditions are unchanged.
   useEffect(() => {
     if (
       !uid ||
@@ -717,7 +718,7 @@ export function useFriendsController({
     sourceUid.current = uid;
     patchLocal(uid, { publishSourceUid: uid });
     setSourceTick((value) => value + 1);
-  }, [uid, study.hydrated, study.syncBusy, study.syncLinked, study.syncStamp]);
+  }, [uid, study.hydrated, study.syncBusy, study.syncLinked, study.syncStamp, sharing.loaded]);
 
   useEffect(() => {
     if (!study.hydrated || study.syncBusy) {
@@ -781,9 +782,13 @@ export function useFriendsController({
       );
       if (!result.settings.on)
         return "Sharing is off. Your public card and picture have been removed.";
-      return result.publication
-        ? "Your sharing choices and card are saved."
-        : "Your choices are saved. Update your card when your progress is ready.";
+      if (result.publication)
+        return edit.on
+          ? "Sharing is on. Your card is saved."
+          : "Your sharing choices and card are saved.";
+      return edit.on
+        ? "Sharing is on. No card is shared until this device's progress is ready."
+        : "Your choices are saved. No card is shared until this device's progress is ready.";
     });
   cosmeticSaveRef.current = () => {
     if (
@@ -958,6 +963,12 @@ export function useFriendsController({
     setDecoDraft,
     previewPhoto: sharing.uid === uid ? previewPhoto : null,
     loadPreviewPhoto,
+    // Why a card may be missing while sharing is On: still loading/syncing, or this device is not yet associated.
+    deviceProgress: (!study.hydrated || study.syncBusy
+      ? "loading"
+      : sourceUid.current === uid
+        ? "ready"
+        : "needs-device") as "loading" | "needs-device" | "ready",
     readyToPublish: getSource() !== null,
     readyToUpdate: getSource(false, true) !== null,
     uploadedPhotoAvailable: Boolean(getSource(true)?.photo),
@@ -983,7 +994,7 @@ export function useFriendsController({
           true,
           ({ settings, publication }) => acknowledge(captured, settings, publication, true),
         );
-        return "Sharing is on. Your card is saved.";
+        return "This device's progress is confirmed and your card is saved.";
       }),
     updateNow: () =>
       perform(async () => {
@@ -991,9 +1002,9 @@ export function useFriendsController({
         const value = await readFriendSharing(uid!);
         if (current.current !== captured) throw new FriendsError("The signed-in account changed.");
         applySharing(value);
-        if (!value.settings?.on) return "Sharing is off. Review the preview to start sharing.";
+        if (!value.settings?.on) return "Sharing is off. Turn it on to share your card.";
         if (!getSource(false, true))
-          return "Review this device's progress before updating your card, or finish syncing this account.";
+          return "Use this device's progress or finish syncing this account before updating your card.";
         if (cosmeticPending.current) {
           const result = await saveFriendSharing(
             uid!,
@@ -1005,7 +1016,7 @@ export function useFriendsController({
           );
           return result.publication
             ? "Your choices and card are saved."
-            : "Your choices are saved. Update your card when your progress is ready.";
+            : "Your choices are saved. No card is shared until this device's progress is ready.";
         }
         await publishFriendCard(
           uid!,
@@ -1019,11 +1030,26 @@ export function useFriendsController({
     blockedName: (peer: string) => closedCovers.current.get(peer)?.name ?? "Blocked person",
     clearInvite: () => setInvite(null),
     refresh,
-    setup: (identity: PublicIdentity) =>
+    // Explicit new setup only: the person's switch (default On) is saved as their first settings record.
+    // Nothing here runs on sign-in or mount. Off is saved too, so a later reopen never re-applies the default.
+    setup: (identity: PublicIdentity, share = true) =>
       perform(async () => {
-        if (!publicName(identity.n, null)) throw new FriendsError("Choose a public name first.");
+        const n = publicName(identity.n, null);
+        if (!n) throw new FriendsError("Choose a public name first.");
         await setupFriends(uid!);
-        return "Friends is set up. Review sharing separately below.";
+        const captured = current.current!;
+        const result = await saveFriendSharing(
+          uid!,
+          null,
+          { on: share, photo: false, n },
+          () => getSource(false, true),
+          false,
+          ({ settings, publication }) => acknowledge(captured, settings, publication),
+        );
+        if (!result.settings.on) return "Friends is set up. Sharing is off.";
+        return result.publication
+          ? "Friends is set up. Sharing is on and your card is saved."
+          : "Friends is set up. Sharing is on; no card is shared until this device's progress is ready.";
       }, identity),
     rotate: () =>
       perform(async () => {

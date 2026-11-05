@@ -516,6 +516,7 @@ function JapaneseDesk() {
                     <TipCard id="profile" onDismiss={tips.dismiss} className="mb-4 max-w-5xl" />
                   )}
                   <ProfilePage
+                    scenes={backgrounds}
                     lessons={lessons}
                     progress={progress}
                     setLessons={setLessons}

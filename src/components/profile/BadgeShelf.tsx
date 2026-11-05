@@ -127,15 +127,17 @@ export function BadgeShelf({
   badges,
   today,
   className = "",
+  includeDefs = true,
 }: {
   badges: Readonly<Record<string, string>>;
   today: string;
   className?: string;
+  includeDefs?: boolean;
 }) {
   const earnedCount = BADGES.filter((def) => badges[def.id] !== undefined).length;
   return (
     <div className={className}>
-      <BadgeArtDefs />
+      {includeDefs && <BadgeArtDefs />}
       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
         Badges · {earnedCount} of {BADGES.length}
       </p>

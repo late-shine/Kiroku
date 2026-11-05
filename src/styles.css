@@ -91,6 +91,53 @@
   --glow: oklch(0.8 0.08 235 / 0.3);
 }
 
+/* F3: a card's published tint never changes the viewer's root/device accent. */
+[data-card-accent="amber"] {
+  --primary: var(--accent-amber);
+  --ring: var(--accent-amber);
+  --glow: oklch(0.82 0.095 80 / 0.3);
+}
+[data-card-accent="sakura"] {
+  --primary: var(--accent-sakura);
+  --ring: var(--accent-sakura);
+  --glow: oklch(0.82 0.085 10 / 0.3);
+}
+[data-card-accent="moss"] {
+  --primary: var(--accent-moss);
+  --ring: var(--accent-moss);
+  --glow: oklch(0.8 0.1 135 / 0.3);
+}
+[data-card-accent="sky"] {
+  --primary: var(--accent-sky);
+  --ring: var(--accent-sky);
+  --glow: oklch(0.8 0.08 235 / 0.3);
+}
+.profile-frame[data-frame="plain"] {
+  box-shadow: 0 0 0 1px var(--border);
+}
+.profile-frame[data-frame="gold"] {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+.profile-frame[data-frame="stitch"] {
+  outline: 2px dashed color-mix(in oklab, var(--primary) 70%, transparent);
+  outline-offset: 1px;
+}
+.profile-frame[data-frame="moss"] {
+  box-shadow: 0 0 0 2px var(--accent-moss);
+}
+.profile-frame[data-frame="double"] {
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--primary);
+}
+.profile-frame[data-frame="seal"] {
+  border-radius: 0.875rem;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 70%, transparent);
+}
+.profile-frame[data-frame="seal"] .profile-avatar {
+  border-radius: 0.625rem;
+}
+
 html {
   background: var(--background);
   color-scheme: dark;

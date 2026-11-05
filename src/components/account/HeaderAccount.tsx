@@ -33,7 +33,7 @@ export function HeaderAccount({
   }, [account.error]);
 
   const identity = account.auth.status === "in" ? account.auth.account : null;
-  const signedInAs = identity ? (identity.email ?? identity.displayName) : null;
+  const signedInAs = identity !== null;
   // Phase 9c: a small dot for the sync state (nothing when sync is off or not set up).
   const dotFor: Record<string, string> = {
     idle: "bg-success",
@@ -49,7 +49,7 @@ export function HeaderAccount({
     error: "sync problem",
   };
   const word = dot ? `, ${statusWord[sync.status] ?? ""}` : "";
-  const label = signedInAs ? `Account (signed in as ${signedInAs}${word})` : "Profile and account";
+  const label = signedInAs ? `Profile and account, signed in${word}` : "Profile and account";
 
   // Until mounted the stored profile is not known, so draw the neutral icon: server and first client render agree.
   const avatar = mounted ? avatarFor(profile, identity) : ({ kind: "none" } as const);

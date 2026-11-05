@@ -109,14 +109,15 @@ export function clearFriendsStorage(uid?: string): void {
 /** Called only by the mounted controller, from the existing account context. */
 export function setFriendsAccount(uid: string | null): void {
   if (active?.uid === uid) return;
-  if (active || !uid) {
+  if (active) {
     clearFriendsStorage();
   } else {
     // Reload may reuse this account's own draft/cache, never another account's bucket.
     for (const key of [STORAGE_KEYS.friends, STORAGE_KEYS.friendsCache]) {
       try {
         const row = record(JSON.parse(localStorage.getItem(key) ?? "null") as unknown);
-        if (row?.["uid"] !== uid) localStorage.removeItem(key);
+        if (row?.["uid"] !== uid || (uid === null && key === STORAGE_KEYS.friendsCache))
+          localStorage.removeItem(key);
       } catch {
         /* Optional device storage. */
       }
@@ -728,7 +729,7 @@ export function publishFriendCard(
 /** Called only after the UI selects a published ph=true card. No background photo reads. */
 export async function readFriendPhoto(uid: string, peer: string, revision: string) {
   const token = tokenFor(uid);
-  if (!isUid(peer) || peer === uid) throw new FriendsError("Not connected.");
+  if (!isUid(peer)) throw new FriendsError("Not connected.");
   const photo = decodeFriendPhoto(await read(token, `photos/${peer}`));
   if (!photo || photo.rev !== revision) return { kind: "refresh" as const };
   return { kind: "photo" as const, photo };

@@ -9,6 +9,8 @@ import {
   publicName,
   buildFriendPublication,
   friendCardSource,
+  decodeDecoration,
+  type FriendDecoration,
   type FriendSettings,
   type FriendPublication,
   type FriendCardState,
@@ -168,6 +170,13 @@ export function useFriendsController({
   const [selectedPhoto, setSelectedPhoto] = useState<{ peer: string; photo: FriendPhoto } | null>(
     null,
   );
+  const [decoration, setDecoration] = useState<{
+    uid: string | null;
+    value: FriendDecoration | null;
+  }>({ uid: null, value: null });
+  const [previewPhoto, setPreviewPhoto] = useState<FriendPhoto | null>(null);
+  const previewPhotoSequence = useRef(0);
+  const previewMismatch = useRef<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
   const [sourceTick, setSourceTick] = useState(0);
   const latestStudy = useRef(study);
@@ -293,6 +302,17 @@ export function useFriendsController({
   useEffect(() => {
     if (!resolved) return;
     setFriendsAccount(uid);
+    let draftDeco: FriendDecoration | null = null;
+    try {
+      draftDeco =
+        decodeFriendsLocal(localStorage.getItem(STORAGE_KEYS.friends), uid)?.decoDraft ?? null;
+    } catch {
+      /* Optional local draft. */
+    }
+    setDecoration({ uid, value: draftDeco });
+    setPreviewPhoto(null);
+    ++previewPhotoSequence.current;
+    previewMismatch.current = null;
     const captured = uid ? { uid, generation: ++generation.current } : null;
     current.current = captured;
     sessionStartedAt.current = Date.now();
@@ -329,6 +349,9 @@ export function useFriendsController({
       setActivity(next);
       if (next.busy) lastOutcome = null;
       if (next.deleting) {
+        setDecoration({ uid, value: null });
+        setPreviewPhoto(null);
+        ++previewPhotoSequence.current;
         cancelPublish();
         sourceUid.current = null;
         cosmeticPending.current = false;
@@ -480,6 +503,8 @@ export function useFriendsController({
   const applySharing = (value: SharingRead) => {
     if (!uid || current.current?.uid !== uid || friendsActivity(uid).deleting) return;
     ++sharingSequence.current;
+    ++previewPhotoSequence.current;
+    setPreviewPhoto(null);
     sharingRef.current = { ...value, uid, loaded: true, error: null };
     setSharing(sharingRef.current);
   };
@@ -504,6 +529,63 @@ export function useFriendsController({
     }
   };
   refreshSharingRef.current = refreshSharing;
+
+  const setDecoDraft = (value: FriendDecoration | null) => {
+    if (
+      (uid !== null && current.current?.uid !== uid) ||
+      (uid === null && current.current !== null)
+    )
+      return false;
+    if (uid && friendsActivity(uid).deleting) return false;
+    const parsed = value === null ? null : decodeDecoration(value);
+    if (value !== null && !parsed) return false;
+    try {
+      const saved = decodeFriendsLocal(localStorage.getItem(STORAGE_KEYS.friends), uid) ?? {
+        v: 1,
+        uid,
+      };
+      const { decoDraft: _old, ...rest } = saved;
+      localStorage.setItem(
+        STORAGE_KEYS.friends,
+        JSON.stringify({ ...rest, ...(parsed ? { decoDraft: parsed } : {}) }),
+      );
+    } catch {
+      /* The in-memory draft still works when storage is blocked. */
+    }
+    setDecoration({ uid, value: parsed });
+    return true;
+  };
+
+  const loadPreviewPhoto = useCallback(async () => {
+    const captured = current.current;
+    const card = sharingRef.current.card;
+    if (
+      !uid ||
+      captured?.uid !== uid ||
+      friendsActivity(uid).deleting ||
+      card.kind !== "published" ||
+      !card.card.ph
+    )
+      return;
+    if (!sharingRef.current.settings?.on || sharingRef.current.settings.rev !== card.card.rev)
+      return;
+    const key = `${card.card.rev}:${card.card.t}`;
+    if (previewMismatch.current === key) return;
+    const sequence = ++previewPhotoSequence.current;
+    setPreviewPhoto(null);
+    try {
+      const result = await readFriendPhoto(uid, uid, card.card.rev);
+      if (current.current !== captured || sequence !== previewPhotoSequence.current) return;
+      if (result.kind === "photo") setPreviewPhoto(result.photo);
+      else {
+        previewMismatch.current = key;
+        await refreshSharingRef.current();
+      }
+    } catch {
+      if (current.current === captured && sequence === previewPhotoSequence.current)
+        setPreviewPhoto(null);
+    }
+  }, [uid]);
 
   const acknowledge = (
     captured: NonNullable<typeof current.current>,
@@ -872,6 +954,10 @@ export function useFriendsController({
     invite: uid ? invite : null,
     suggestedName,
     sharing: sharing.uid === uid ? sharing : emptySharing(uid),
+    decoDraft: decoration.uid === uid ? decoration.value : null,
+    setDecoDraft,
+    previewPhoto: sharing.uid === uid ? previewPhoto : null,
+    loadPreviewPhoto,
     readyToPublish: getSource() !== null,
     readyToUpdate: getSource(false, true) !== null,
     uploadedPhotoAvailable: Boolean(getSource(true)?.photo),

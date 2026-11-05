@@ -1,9 +1,10 @@
 // Phases 9a-9c: the account body (status, sign in / sign out, sync, errors). Purely presentational: it renders what
 // the shared controllers say. Phase 19a: it now lives only on the Profile page (the header popover and the Progress
 // card are gone), and its two long explanatory paragraphs sit behind a "How syncing works" disclosure.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { LogIn, LogOut, RefreshCw } from "lucide-react";
 import { timeAgo } from "@/lib/sync";
+import { maskEmail } from "@/lib/friends";
 import type { AccountSyncValue } from "./AccountSyncContext";
 import type { SyncController } from "./useSync";
 
@@ -27,7 +28,7 @@ function HowSyncingWorks({ children }: { children: ReactNode }) {
 function StatusLine({ sync }: { sync: SyncController }) {
   const ago = sync.lastSyncedAt ? timeAgo(sync.lastSyncedAt) : "";
   if (!sync.linked) {
-    return <>Not synced yet. Nothing has left this device.</>;
+    return <>Lessons and progress are not linked to this account yet.</>;
   }
   if (!sync.auto) {
     return <>Last synced {ago}. Automatic sync is off.</>;
@@ -51,6 +52,11 @@ export function AccountPanel({ account, sync }: AccountSyncValue) {
   const { auth, error } = account;
   const working = account.busy || sync.busy;
   const [wipe, setWipe] = useState(false);
+  const [shownForUid, setShownForUid] = useState<string | null>(null);
+  const signedUid = auth.status === "in" ? auth.account.uid : null;
+  useEffect(() => {
+    setShownForUid(null);
+  }, [signedUid]);
   return (
     <>
       {auth.status === "loading" && (
@@ -75,9 +81,40 @@ export function AccountPanel({ account, sync }: AccountSyncValue) {
       )}
       {auth.status === "in" && (
         <>
-          <p className="mt-2 break-all text-xs">
-            Signed in as {auth.account.email ?? auth.account.displayName ?? "your Google account"}.
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <p className="min-w-0 break-all">
+              Signed in as{" "}
+              <span
+                aria-label={
+                  shownForUid === auth.account.uid
+                    ? undefined
+                    : `Masked email: ${maskEmail(auth.account.email)}`
+                }
+              >
+                {shownForUid === auth.account.uid
+                  ? (auth.account.email ?? "Email unavailable")
+                  : maskEmail(auth.account.email)}
+              </span>
+              .
+            </p>
+            {auth.account.email && (
+              <button
+                type="button"
+                className={`min-h-11 px-2 ${linkClass} focus-visible:outline-2 focus-visible:outline-ring`}
+                aria-expanded={shownForUid === auth.account.uid}
+                aria-label={
+                  shownForUid === auth.account.uid ? "Hide email address" : "Show email address"
+                }
+                onClick={() =>
+                  setShownForUid((previous) =>
+                    previous === auth.account.uid ? null : auth.account.uid,
+                  )
+                }
+              >
+                {shownForUid === auth.account.uid ? "Hide" : "Show"}
+              </button>
+            )}
+          </div>
           {sync.configured ? (
             <>
               <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">

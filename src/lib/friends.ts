@@ -39,8 +39,9 @@ export type FriendsSnapshot = {
 };
 export type FriendsLocal = {
   v: 1;
-  uid: string;
+  uid: string | null;
   publicName?: string;
+  decoDraft?: FriendDecoration;
   publishSourceUid?: string;
   publishedAt?: number;
   fp?: string;
@@ -227,16 +228,18 @@ export function friendsDeletionPaths(
   return paths;
 }
 
-export function decodeFriendsLocal(raw: string | null, uid: string): FriendsLocal | null {
+export function decodeFriendsLocal(raw: string | null, uid: string | null): FriendsLocal | null {
   try {
     const row = record(JSON.parse(raw ?? "null") as unknown);
     if (row?.["v"] !== 1 || row["uid"] !== uid) return null;
     const name = row["publicName"];
+    const decoDraft = decodeDecoration(row["decoDraft"]);
     return {
       v: 1,
       uid,
       ...(typeof name === "string" && cleanName(name) ? { publicName: cleanName(name) } : {}),
-      ...(row["publishSourceUid"] === uid ? { publishSourceUid: uid } : {}),
+      ...(decoDraft ? { decoDraft } : {}),
+      ...(uid !== null && row["publishSourceUid"] === uid ? { publishSourceUid: uid } : {}),
       ...(typeof row["publishedAt"] === "number" && Number.isFinite(row["publishedAt"])
         ? { publishedAt: row["publishedAt"] }
         : {}),
@@ -391,7 +394,7 @@ const dayValid = (value: unknown): value is string => {
 function member<T extends string>(value: unknown, values: readonly T[]): value is T {
   return typeof value === "string" && values.includes(value as T);
 }
-function pins(value: unknown, earned?: Record<string, string>): string | undefined {
+function pins(value: unknown, earned?: Readonly<Record<string, string>>): string | undefined {
   if (typeof value !== "string") return undefined;
   const ids = [...new Set(value.split(","))].filter(
     (id) => knownBadges.has(id) && (!earned || earned[id]),
@@ -486,8 +489,9 @@ export function buildFriendPublication(
   source: FriendCardSource,
 ): FriendPublication {
   const s = source.stats;
+  const deco = resolveDeco(settings.deco, source.badges);
   const photo = settings.photo && source.photo ? { rev: settings.rev, data: source.photo } : null;
-  const pin = pins(settings.deco.pin, source.badges);
+  const pin = pins(deco.pin, source.badges);
   // Explicit public allowlist: never spread profile, account, lessons or progress here.
   const card: Omit<FriendCard, "t"> = {
     v: 1,
@@ -509,11 +513,11 @@ export function buildFriendPublication(
     ...(pin ? { pin } : {}),
     acc: source.acc,
     st: source.st,
-    fr: settings.deco.fr,
-    fx: settings.deco.fx,
-    ...(settings.deco.bk !== undefined ? { bk: settings.deco.bk } : {}),
-    ...(settings.deco.tg !== undefined ? { tg: settings.deco.tg } : {}),
-    ...(settings.deco.sb !== undefined ? { sb: settings.deco.sb } : {}),
+    fr: deco.fr,
+    fx: deco.fx,
+    ...(deco.bk !== undefined ? { bk: deco.bk } : {}),
+    ...(deco.tg !== undefined ? { tg: deco.tg } : {}),
+    ...(deco.sb !== undefined ? { sb: deco.sb } : {}),
     sh: settings.since ?? source.day,
   };
   const serialized = JSON.stringify([card, photo]);
@@ -606,4 +610,70 @@ export function friendCardAge(timestamp: number | null, now = Date.now()): strin
   if (hours < 24) return `Updated ${hours} ${hours === 1 ? "hour" : "hours"} ago`;
   const days = Math.floor(hours / 24);
   return `Updated ${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+export type CardScene = { name: string; url: string };
+export const FRAME_BADGES: Readonly<Record<string, string>> = {
+  gold: "first-answer",
+  stitch: "streak-3",
+  moss: "streak-7",
+  double: "lessons-10",
+  seal: "first-carve",
+};
+export const EFFECT_BADGES: Readonly<Record<string, string>> = {
+  vines: "streak-30",
+  petals: "carved-10",
+  fireflies: "mastered-20",
+};
+export const FRIEND_STATUS_LABELS: Readonly<Record<NonNullable<FriendDecoration["sb"]>, string>> = {
+  adding: "Adding to my notebook",
+  reviewing: "Reviewing a few words",
+  writing: "Writing a page by hand",
+  carving: "Carving kanji today",
+  quiet: "Taking a quiet study day",
+};
+export const FRIEND_TAG_LABELS: Readonly<Record<NonNullable<FriendDecoration["tg"]>, string>> = {
+  n5: "N5",
+  n4: "N4",
+  n3: "N3",
+  n2: "N2",
+  n1: "N1",
+  kanji: "漢字",
+  self: "独学",
+  reading: "読書",
+};
+
+/** Unlocks affect rendering/selection only. Never rewrite a saved locked choice. */
+export function decorationUnlocked(
+  slot: "frame" | "effect",
+  id: string,
+  badges: Readonly<Record<string, string>>,
+): boolean {
+  if (slot === "effect") return id === "none"; // Animated effects are implemented in F6.
+  if (id === "plain") return true;
+  const required = FRAME_BADGES[id];
+  return required !== undefined && dayValid(badges[required]);
+}
+
+export function resolveDeco(
+  value: unknown,
+  badges: Readonly<Record<string, string>>,
+): FriendDecoration {
+  const stored = decodeDecoration(value) ?? { fr: "plain", fx: "none" };
+  const pin = pins(stored.pin, badges);
+  return {
+    fr: decorationUnlocked("frame", stored.fr, badges) ? stored.fr : "plain",
+    fx: "none",
+    ...(stored.bk !== undefined ? { bk: stored.bk } : {}),
+    ...(stored.tg !== undefined ? { tg: stored.tg } : {}),
+    ...(stored.sb !== undefined ? { sb: stored.sb } : {}),
+    ...(pin ? { pin } : {}),
+  };
+}
+
+export function maskEmail(email: string | null): string {
+  if (!email) return "Email unavailable";
+  const at = email.lastIndexOf("@");
+  if (at <= 0 || at === email.length - 1) return "Email unavailable";
+  return `${[...email.slice(0, at)][0] ?? ""}•••@${email.slice(at + 1)}`;
 }

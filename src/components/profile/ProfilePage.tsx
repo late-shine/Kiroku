@@ -14,6 +14,7 @@ import {
 } from "react";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { AccountCard } from "@/components/account/AccountCard";
+import { FriendsPanel } from "@/components/friends/FriendsPanel";
 import { Avatar } from "@/components/profile/Avatar";
 import { AccentChooser } from "@/components/profile/AccentChooser";
 import { AvatarCropper } from "@/components/profile/AvatarCropper";
@@ -374,6 +375,8 @@ export function ProfilePage({
           </p>
         )}
       </Section>
+
+      <FriendsPanel />
 
       <Section label="鍵 · GEMINI KEY" delay="150ms">
         <GeminiKeyControls />

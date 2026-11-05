@@ -201,6 +201,17 @@ function loadDb(): Promise<DbLoaded> {
   return loadingDb;
 }
 
+/** Friends shares the lazy SDK and current auth session; no additional auth observer. */
+export async function getDb(uid: string): Promise<DbLoaded & { token: string }> {
+  const { auth } = await load();
+  const loaded = await loadDb();
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid) throw new Error("The signed-in account changed.");
+  const token = await user.getIdToken();
+  if (auth.currentUser?.uid !== uid) throw new Error("The signed-in account changed.");
+  return { ...loaded, token };
+}
+
 class SyncTimeoutError extends Error {
   constructor() {
     super("The request took too long.");
@@ -256,10 +267,22 @@ export async function writeCloud(uid: string, tree: Record<string, unknown>): Pr
 }
 
 /** Removes everything stored for this person. Nothing on this device is touched. */
+const pendingCloudDeletions = new Map<string, Promise<void>>();
+
 export async function deleteCloud(uid: string): Promise<void> {
   requireOnline();
   const { db, mod } = await loadDb();
-  await withTimeout(mod.remove(mod.ref(db, `users/${uid}`)), 30000);
+  // A timeout does not cancel remove(). A later explicit retry joins its acknowledgement.
+  let pending = pendingCloudDeletions.get(uid);
+  if (!pending) {
+    pending = mod.remove(mod.ref(db, `users/${uid}`));
+    pendingCloudDeletions.set(uid, pending);
+    const clear = () => {
+      if (pendingCloudDeletions.get(uid) === pending) pendingCloudDeletions.delete(uid);
+    };
+    void pending.then(clear, clear);
+  }
+  await withTimeout(pending, 30000);
 }
 
 /** True when a sync failed only because there is no connection (the status line says "Offline", not "error"). */

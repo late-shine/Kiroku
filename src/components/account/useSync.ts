@@ -24,6 +24,12 @@ import {
 } from "react";
 import { downloadBackupFile } from "@/lib/backup-download";
 import {
+  deleteFriendsData,
+  describeFriendsError,
+  finishFriendsDeletion,
+  isFriendsUncertain,
+} from "@/lib/friends-db";
+import {
   deleteCloud,
   describeSyncError,
   isOfflineError,
@@ -579,12 +585,48 @@ export function useSync({
   const deleteCloudData = () =>
     run(async () => {
       if (!uid) return;
-      await deleteCloud(uid);
+      try {
+        await deleteFriendsData(uid);
+      } catch (error) {
+        if (uidRef.current !== uid) return;
+        const text = describeFriendsError(error);
+        setLastError({ text });
+        setNotice({ kind: "error", text });
+        return;
+      }
+      if (uidRef.current !== uid) return;
+      try {
+        await deleteCloud(uid);
+      } catch (error) {
+        if (uidRef.current !== uid) return;
+        const uncertain =
+          isFriendsUncertain(error) ||
+          (error instanceof Error && error.name === "SyncTimeoutError");
+        const text = uncertain
+          ? "Friends data was removed. The cloud lesson deletion may still be processing. Reconnect to check its status."
+          : "Friends data was removed, but cloud lesson deletion did not finish. Try again.";
+        setLastError({ text });
+        setNotice({ kind: "error", text });
+        return;
+      }
+      if (uidRef.current !== uid) return;
       setLink(null);
       lastKey.current = null;
       startedFor.current = null;
       setActivity(null);
       setLastError(null);
+      try {
+        await finishFriendsDeletion(uid);
+      } catch (error) {
+        if (uidRef.current !== uid) return;
+        const text = isFriendsUncertain(error)
+          ? "Your main cloud data was removed. Cleanup may still be processing. Reconnect to check its status."
+          : "Your main cloud data was removed, but Friends cleanup still needs retry. Choose Finish deleting cloud data.";
+        setLastError({ text });
+        setNotice({ kind: "error", text });
+        return;
+      }
+      if (uidRef.current !== uid) return;
       setNotice({
         kind: "success",
         text: "Your cloud data is deleted. Lessons and progress on this device are untouched.",

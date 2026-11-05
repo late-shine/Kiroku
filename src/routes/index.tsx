@@ -86,6 +86,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ProfilePage } from "@/components/profile/ProfilePage";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
 import { AccountSyncProvider } from "@/components/account/AccountSyncProvider";
+import { FriendsProvider } from "@/components/friends/FriendsProvider";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 
 export const Route = createFileRoute("/")({
@@ -405,201 +406,203 @@ function JapaneseDesk() {
       }
       onClearDevice={resetAll}
     >
-      {/* Phase 20: `overflow-clip`, not `overflow-hidden` — `hidden` makes this div a scroll
-          container, and a scroll container in the ancestor chain captures `position: sticky`
-          (the Studio's step row), silently breaking it. `clip` keeps the same clipping without
-          becoming a scroll container. Nothing ever scrolled this div programmatically. */}
-      <div className="relative min-h-dvh overflow-clip bg-background text-foreground">
-        <SceneBackdrop
-          backgrounds={backgrounds}
-          activeIndex={visibleIndex}
-          cycling={atmosphere.cycle}
-          darkness={atmosphere.darkness}
-          motion={progress.bgZoomSpeed}
-          particles={atmosphere.particles}
-        />
+      <FriendsProvider onOpenProfile={() => setTab("profile")}>
+        {/* Phase 20: `overflow-clip`, not `overflow-hidden` — `hidden` makes this div a scroll
+            container, and a scroll container in the ancestor chain captures `position: sticky`
+            (the Studio's step row), silently breaking it. `clip` keeps the same clipping without
+            becoming a scroll container. Nothing ever scrolled this div programmatically. */}
+        <div className="relative min-h-dvh overflow-clip bg-background text-foreground">
+          <SceneBackdrop
+            backgrounds={backgrounds}
+            activeIndex={visibleIndex}
+            cycling={atmosphere.cycle}
+            darkness={atmosphere.darkness}
+            motion={progress.bgZoomSpeed}
+            particles={atmosphere.particles}
+          />
 
-        <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1520px] flex-col p-3 pb-22 md:p-5 md:pb-22">
-          <Header
-            tab={tab}
-            setTab={setTab}
-            positionLabel={
-              activeDay !== null && position !== null
-                ? dayPositionLabel(activeDay, position, lessons.length)
-                : null
-            }
-            onPrev={() => {
-              if (prevDay !== null) setDay(prevDay);
-            }}
-            onNext={() => {
-              if (nextDay !== null) setDay(nextDay);
-            }}
-            canPrev={prevDay !== null}
-            canNext={nextDay !== null}
-            quizDue={quizDue}
-            showWrite={questsOn || tab === "write"}
-            writeReady={writeReady}
-            onAI={() => (tab === "studio" ? closeStudio() : openStudio())}
-            onSound={() => setSoundOpen((v) => !v)}
-            onHelp={() => setHelpOpen(true)}
-            onProfile={() => setTab("profile")}
-          />
-          {/* Phase 20: no `overflow-y-auto` here. This column grows with its content
-              (`min-h-dvh`), so main never scrolled itself — the window does. The declaration only
-              made main a scroll container, which would capture the Studio's sticky step row. */}
-          <main className="flex-1 py-5 md:py-7">
-            {mounted &&
-              tab === "lesson" &&
-              (lesson ? (
-                <LessonWorkspace
-                  lesson={lesson}
-                  lessons={lessons}
-                  progress={progress}
-                  completion={completion}
-                  lessonTab={lessonTab}
-                  setLessonTab={setLessonTab}
-                  selectDay={selectDay}
-                  complete={complete}
-                  setProgress={setProgress}
-                  onQuiz={() => setTab("quiz")}
-                  onDeleteDays={deleteDays}
-                />
-              ) : welcomeSkipped ? (
-                <EmptyLessons onAI={openStudio} onRestore={() => setTab("profile")} />
-              ) : (
-                <WelcomePanel
-                  onAI={openStudio}
-                  onRestore={() => setTab("profile")}
-                  onSkip={() => setWelcomeSkipped(true)}
-                />
-              ))}
-            {mounted && tab === "quiz" && (
-              <>
-                {tips.isVisible("quiz") && (
-                  <TipCard id="quiz" onDismiss={tips.dismiss} className="mb-4 max-w-3xl" />
-                )}
-                <QuizView
-                  lessons={lessons}
-                  day={activeDay ?? day}
-                  memory={progress.vocabMemory}
-                  setProgress={setProgress}
-                  onBack={() => setTab("lesson")}
-                  onOpenStudio={openStudio}
-                />
-              </>
-            )}
-            {mounted && tab === "progress" && (
-              <>
-                {tips.isVisible("progress") && (
-                  <TipCard id="progress" onDismiss={tips.dismiss} className="mb-4 max-w-5xl" />
-                )}
-                <ProgressView
-                  lessons={lessons}
-                  progress={progress}
-                  setProgress={setProgress}
-                  onAI={openStudio}
-                  onRestore={() => setTab("profile")}
-                />
-              </>
-            )}
-            {mounted && tab === "profile" && (
-              <>
-                {tips.isVisible("profile") && (
-                  <TipCard id="profile" onDismiss={tips.dismiss} className="mb-4 max-w-5xl" />
-                )}
-                <ProfilePage
-                  lessons={lessons}
-                  progress={progress}
-                  setLessons={setLessons}
-                  setProgress={setProgress}
-                  emptyProgress={emptyProgress}
-                  onRestored={setDay}
-                  onResetAll={resetAll}
-                  due={quizDue}
-                  mastered={countMastered(
-                    lessons.flatMap((l) => l.vocab),
-                    progress.masteredVocabIds,
-                    progress.vocabMemory,
+          <div className="relative z-10 mx-auto flex min-h-dvh max-w-[1520px] flex-col p-3 pb-22 md:p-5 md:pb-22">
+            <Header
+              tab={tab}
+              setTab={setTab}
+              positionLabel={
+                activeDay !== null && position !== null
+                  ? dayPositionLabel(activeDay, position, lessons.length)
+                  : null
+              }
+              onPrev={() => {
+                if (prevDay !== null) setDay(prevDay);
+              }}
+              onNext={() => {
+                if (nextDay !== null) setDay(nextDay);
+              }}
+              canPrev={prevDay !== null}
+              canNext={nextDay !== null}
+              quizDue={quizDue}
+              showWrite={questsOn || tab === "write"}
+              writeReady={writeReady}
+              onAI={() => (tab === "studio" ? closeStudio() : openStudio())}
+              onSound={() => setSoundOpen((v) => !v)}
+              onHelp={() => setHelpOpen(true)}
+              onProfile={() => setTab("profile")}
+            />
+            {/* Phase 20: no `overflow-y-auto` here. This column grows with its content
+                (`min-h-dvh`), so main never scrolled itself — the window does. The declaration only
+                made main a scroll container, which would capture the Studio's sticky step row. */}
+            <main className="flex-1 py-5 md:py-7">
+              {mounted &&
+                tab === "lesson" &&
+                (lesson ? (
+                  <LessonWorkspace
+                    lesson={lesson}
+                    lessons={lessons}
+                    progress={progress}
+                    completion={completion}
+                    lessonTab={lessonTab}
+                    setLessonTab={setLessonTab}
+                    selectDay={selectDay}
+                    complete={complete}
+                    setProgress={setProgress}
+                    onQuiz={() => setTab("quiz")}
+                    onDeleteDays={deleteDays}
+                  />
+                ) : welcomeSkipped ? (
+                  <EmptyLessons onAI={openStudio} onRestore={() => setTab("profile")} />
+                ) : (
+                  <WelcomePanel
+                    onAI={openStudio}
+                    onRestore={() => setTab("profile")}
+                    onSkip={() => setWelcomeSkipped(true)}
+                  />
+                ))}
+              {mounted && tab === "quiz" && (
+                <>
+                  {tips.isVisible("quiz") && (
+                    <TipCard id="quiz" onDismiss={tips.dismiss} className="mb-4 max-w-3xl" />
                   )}
-                  onOpenProgress={() => setTab("progress")}
-                  onOpenQuiz={() => setTab("quiz")}
-                  onOpenAtmosphere={() => setTab("atmosphere")}
-                  onShowTipsAgain={tips.showAgain}
-                  questsOn={questsOn}
-                  onSetQuestsOn={quests.setOn}
-                  quests={quests}
-                />
-              </>
-            )}
-            {mounted && tab === "write" && (
-              <WritePage
-                lessons={lessons}
-                progress={progress}
-                setProgress={setProgress}
-                quests={quests}
-                onOpenStudio={openStudio}
-                onOpenProfile={() => setTab("profile")}
-                onBack={() => setTab("lesson")}
-              />
-            )}
-            {mounted && tab === "atmosphere" && (
-              <>
-                {tips.isVisible("atmosphere") && (
-                  <TipCard id="atmosphere" onDismiss={tips.dismiss} className="mb-4 max-w-4xl" />
-                )}
-                <AtmosphereView
-                  backgrounds={backgrounds}
-                  active={visibleIndex}
-                  setActive={handleChooseScene}
-                  darkness={atmosphere.darkness}
-                  setDarkness={(darkness) => setAtmosphere((a) => ({ ...a, darkness }))}
-                  cycle={atmosphere.cycle}
-                  onToggleCycle={handleToggleCycleThemes}
-                  motion={progress.bgZoomSpeed}
-                  setMotion={(bgZoomSpeed) => setProgress((p) => ({ ...p, bgZoomSpeed }))}
-                  particles={atmosphere.particles}
-                  setParticles={(particles) => setAtmosphere((a) => ({ ...a, particles }))}
-                />
-              </>
-            )}
-            {/* Phase 20: the Studio is a mode like the others. Once opened it stays mounted and is
-                only hidden, so the pasted reply, the step and an in-flight Gemini call survive a
-                trip to another mode and back. `studioVisited` keeps it out of the DOM until the
-                first open. The `studio` tip card stays inside Configure, as before. */}
-            {mounted && studioVisited && (
-              <div className={tab === "studio" ? "" : "hidden"}>
-                <LessonStudio
+                  <QuizView
+                    lessons={lessons}
+                    day={activeDay ?? day}
+                    memory={progress.vocabMemory}
+                    setProgress={setProgress}
+                    onBack={() => setTab("lesson")}
+                    onOpenStudio={openStudio}
+                  />
+                </>
+              )}
+              {mounted && tab === "progress" && (
+                <>
+                  {tips.isVisible("progress") && (
+                    <TipCard id="progress" onDismiss={tips.dismiss} className="mb-4 max-w-5xl" />
+                  )}
+                  <ProgressView
+                    lessons={lessons}
+                    progress={progress}
+                    setProgress={setProgress}
+                    onAI={openStudio}
+                    onRestore={() => setTab("profile")}
+                  />
+                </>
+              )}
+              {mounted && tab === "profile" && (
+                <>
+                  {tips.isVisible("profile") && (
+                    <TipCard id="profile" onDismiss={tips.dismiss} className="mb-4 max-w-5xl" />
+                  )}
+                  <ProfilePage
+                    lessons={lessons}
+                    progress={progress}
+                    setLessons={setLessons}
+                    setProgress={setProgress}
+                    emptyProgress={emptyProgress}
+                    onRestored={setDay}
+                    onResetAll={resetAll}
+                    due={quizDue}
+                    mastered={countMastered(
+                      lessons.flatMap((l) => l.vocab),
+                      progress.masteredVocabIds,
+                      progress.vocabMemory,
+                    )}
+                    onOpenProgress={() => setTab("progress")}
+                    onOpenQuiz={() => setTab("quiz")}
+                    onOpenAtmosphere={() => setTab("atmosphere")}
+                    onShowTipsAgain={tips.showAgain}
+                    questsOn={questsOn}
+                    onSetQuestsOn={quests.setOn}
+                    quests={quests}
+                  />
+                </>
+              )}
+              {mounted && tab === "write" && (
+                <WritePage
                   lessons={lessons}
                   progress={progress}
-                  showTip={tips.isVisible("studio")}
-                  onDismissTip={() => tips.dismiss("studio")}
-                  onClose={closeStudio}
-                  onImport={(newLesson) => {
-                    // The Studio has already asked before a replacement. A replaced day starts over: its old word
-                    // records, starred/weak ids and "done" mark go, so they cannot attach to new words at the same ids.
-                    const replacing = isReplacement(lessons, newLesson.dayNumber);
-                    setLessons((old) => upsertLesson(old, newLesson));
-                    if (replacing) setProgress((p) => clearDayWordState(p, newLesson.dayNumber));
-                    setDay(newLesson.dayNumber);
-                    setTab("lesson");
-                  }}
+                  setProgress={setProgress}
+                  quests={quests}
+                  onOpenStudio={openStudio}
+                  onOpenProfile={() => setTab("profile")}
+                  onBack={() => setTab("lesson")}
                 />
-              </div>
-            )}
-          </main>
+              )}
+              {mounted && tab === "atmosphere" && (
+                <>
+                  {tips.isVisible("atmosphere") && (
+                    <TipCard id="atmosphere" onDismiss={tips.dismiss} className="mb-4 max-w-4xl" />
+                  )}
+                  <AtmosphereView
+                    backgrounds={backgrounds}
+                    active={visibleIndex}
+                    setActive={handleChooseScene}
+                    darkness={atmosphere.darkness}
+                    setDarkness={(darkness) => setAtmosphere((a) => ({ ...a, darkness }))}
+                    cycle={atmosphere.cycle}
+                    onToggleCycle={handleToggleCycleThemes}
+                    motion={progress.bgZoomSpeed}
+                    setMotion={(bgZoomSpeed) => setProgress((p) => ({ ...p, bgZoomSpeed }))}
+                    particles={atmosphere.particles}
+                    setParticles={(particles) => setAtmosphere((a) => ({ ...a, particles }))}
+                  />
+                </>
+              )}
+              {/* Phase 20: the Studio is a mode like the others. Once opened it stays mounted and is
+                  only hidden, so the pasted reply, the step and an in-flight Gemini call survive a
+                  trip to another mode and back. `studioVisited` keeps it out of the DOM until the
+                  first open. The `studio` tip card stays inside Configure, as before. */}
+              {mounted && studioVisited && (
+                <div className={tab === "studio" ? "" : "hidden"}>
+                  <LessonStudio
+                    lessons={lessons}
+                    progress={progress}
+                    showTip={tips.isVisible("studio")}
+                    onDismissTip={() => tips.dismiss("studio")}
+                    onClose={closeStudio}
+                    onImport={(newLesson) => {
+                      // The Studio has already asked before a replacement. A replaced day starts over: its old word
+                      // records, starred/weak ids and "done" mark go, so they cannot attach to new words at the same ids.
+                      const replacing = isReplacement(lessons, newLesson.dayNumber);
+                      setLessons((old) => upsertLesson(old, newLesson));
+                      if (replacing) setProgress((p) => clearDayWordState(p, newLesson.dayNumber));
+                      setDay(newLesson.dayNumber);
+                      setTab("lesson");
+                    }}
+                  />
+                </div>
+              )}
+            </main>
+          </div>
+          {helpOpen && (
+            <HelpCard
+              onOpenStudio={() => {
+                setHelpOpen(false);
+                openStudio();
+              }}
+              onShowTipsAgain={tips.showAgain}
+              onClose={() => setHelpOpen(false)}
+            />
+          )}
+          <MusicPanel expanded={soundOpen} onToggleExpanded={() => setSoundOpen((v) => !v)} />
         </div>
-        {helpOpen && (
-          <HelpCard
-            onOpenStudio={() => {
-              setHelpOpen(false);
-              openStudio();
-            }}
-            onShowTipsAgain={tips.showAgain}
-            onClose={() => setHelpOpen(false)}
-          />
-        )}
-        <MusicPanel expanded={soundOpen} onToggleExpanded={() => setSoundOpen((v) => !v)} />
-      </div>
+      </FriendsProvider>
     </AccountSyncProvider>
   );
 }

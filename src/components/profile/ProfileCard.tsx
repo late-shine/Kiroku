@@ -36,7 +36,7 @@ type Props = SharedProps &
     | {
         mode: "self";
         privateAvatar: AvatarData;
-        onEdit: () => void;
+        onEdit?: () => void;
         onStat?: (metric: "streak" | "carved" | "mastered") => void;
       }
     | { mode: "friend"; photo?: FriendPhoto | null; onRemove?: () => void; onBlock?: () => void }
@@ -120,15 +120,21 @@ export function ProfileCard(props: Props) {
     <article
       aria-labelledby={heading}
       data-card-accent={accent}
-      className="profile-card glass-panel-strong relative w-full max-w-[min(420px,100%)] overflow-hidden rounded-xl lg:w-[22rem]"
+      className="profile-card relative w-full overflow-hidden rounded-2xl"
     >
       {props.renderDefs !== false && <BadgeArtDefs />}
-      <div aria-hidden="true" className="relative h-24 overflow-hidden bg-secondary lg:h-28">
+      <div
+        aria-hidden="true"
+        className={`profile-card-banner relative overflow-hidden bg-secondary ${scene ? "" : "profile-card-banner-ink"}`}
+      >
         {scene && <img src={scene.url} alt="" className="size-full object-cover" />}
         <div className="absolute inset-0 bg-gradient-to-t from-scrim/70 to-transparent" />
+        <span className="profile-card-wordmark">
+          記録 <span>CALLING CARD</span>
+        </span>
       </div>
       {menu}
-      {props.mode === "self" && (
+      {props.mode === "self" && props.onEdit && (
         <button
           type="button"
           className={`absolute right-3 top-3 min-h-11 rounded-lg border border-border bg-glass-strong px-3 text-xs ${focus}`}
@@ -137,9 +143,9 @@ export function ProfileCard(props: Props) {
           Edit card
         </button>
       )}
-      <div className="px-5 pb-5">
-        <div className="flex items-start gap-5">
-          <Frame frame={data ? deco.fr : "plain"} className="-mt-[39px]">
+      <div className="profile-card-body">
+        <div className="profile-card-avatar-row flex items-start gap-5">
+          <Frame frame={data ? deco.fr : "plain"} className="profile-card-avatar-frame -mt-[39px]">
             <Avatar
               avatar={avatar}
               fallbackChar={initialOf(name)}
@@ -147,7 +153,7 @@ export function ProfileCard(props: Props) {
             />
           </Frame>
           {data && deco.sb && (
-            <div className="relative mt-3 min-w-0 rounded-2xl border border-border bg-glass-strong px-3 py-2 text-xs text-foreground">
+            <div className="profile-card-status relative mt-3 min-w-0 rounded-2xl border border-border bg-glass-strong px-3 py-2 text-xs text-foreground">
               <span
                 aria-hidden="true"
                 className="absolute -left-3 top-3 size-2 rounded-full border border-border bg-glass-strong"
@@ -160,10 +166,10 @@ export function ProfileCard(props: Props) {
             </div>
           )}
         </div>
-        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2">
+        <div className="profile-card-name-row mt-4 flex min-w-0 flex-wrap items-center gap-2">
           <h2
             id={heading}
-            className="min-w-0 break-words font-display text-xl text-foreground [overflow-wrap:anywhere]"
+            className="min-w-0 break-words font-display text-2xl text-foreground [overflow-wrap:anywhere]"
           >
             {name}
           </h2>
@@ -173,19 +179,21 @@ export function ProfileCard(props: Props) {
             </span>
           )}
         </div>
-        {props.draft && <p className="mt-2 text-xs font-medium text-primary">Draft preview</p>}
+        {props.draft && (
+          <p className="profile-card-draft mt-2 text-xs font-medium text-primary">Draft preview</p>
+        )}
         {!data ? (
           <p className="mt-3 text-sm text-muted-foreground">Desk closed</p>
         ) : (
           <>
             {active && (
               <>
-                <div className="mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground [&>[data-stamp]]:size-6 [&>[data-stamp]]:text-[10px]">
+                <div className="profile-card-rank mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground [&>[data-stamp]]:size-6 [&>[data-stamp]]:text-[10px]">
                   {rank && <RankStamp glyph={rank.glyph} stamp={resolveStamp(data.st, data.r)} />}
                   <span>{rank ? `${rank.glyph} ${rank.name}` : "No rank yet"}</span>
                 </div>
                 {earned.length > 0 && (
-                  <div className="mt-3 flex min-h-7 flex-wrap items-center gap-1.5">
+                  <div className="profile-card-pins mt-4 flex min-h-7 flex-wrap items-center gap-2">
                     {pins.map((id) => (
                       <span
                         key={id}
@@ -209,7 +217,7 @@ export function ProfileCard(props: Props) {
                     )}
                   </div>
                 )}
-                <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="profile-card-stats mt-5 grid grid-cols-3">
                   {(
                     [
                       ["streak", data.s],
@@ -227,8 +235,7 @@ export function ProfileCard(props: Props) {
                         </span>
                       </>
                     );
-                    const cls =
-                      "min-w-0 rounded-lg border border-border/60 bg-glass/50 p-3 text-left";
+                    const cls = "profile-card-stat min-w-0 py-3 text-center";
                     return onStat ? (
                       <button
                         key={label}
@@ -247,28 +254,26 @@ export function ProfileCard(props: Props) {
                   })}
                 </div>
                 {shelfOpen && (
-                  <BadgeShelf badges={badges} today={data.d} includeDefs={false} className="mt-4" />
+                  <BadgeShelf
+                    badges={badges}
+                    today={data.d}
+                    includeDefs={false}
+                    className="profile-card-shelf mt-4"
+                  />
                 )}
               </>
             )}
-            {props.mode === "self" && (
-              <p className="mt-3 text-[11px] text-muted-foreground">
-                {earned.length
-                  ? "Customise below to use your earned frames and pins."
-                  : "Your first badge opens card customisation."}
-              </p>
-            )}
-            <p className="mt-4 text-[11px] text-muted-foreground">
+            <p className="profile-card-footer mt-4 text-[11px] text-muted-foreground">
               {props.draft
                 ? "Only you can see this draft."
                 : props.mode === "friend"
                   ? friendCardAge(data.t)
                   : props.sharing
                     ? `Sharing since ${sharingDay(data.sh)}`
-                    : "Your profile view"}
+                    : "Made yours, one day at a time."}
             </p>
             {props.mode === "friend" && !props.draft && (
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="profile-card-footer mt-1 text-[11px] text-muted-foreground">
                 Sharing since {sharingDay(data.sh)}
               </p>
             )}

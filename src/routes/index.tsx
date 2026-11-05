@@ -406,7 +406,13 @@ function JapaneseDesk() {
       }
       onClearDevice={resetAll}
     >
-      <FriendsProvider onOpenProfile={() => setTab("profile")}>
+      <FriendsProvider
+        onOpenProfile={() => setTab("profile")}
+        lessons={lessons}
+        progress={progress}
+        hydrated={mounted && quests.loaded}
+        prefs={quests.prefs}
+      >
         {/* Phase 20: `overflow-clip`, not `overflow-hidden` — `hidden` makes this div a scroll
             container, and a scroll container in the ancestor chain captures `position: sticky`
             (the Studio's step row), silently breaking it. `clip` keeps the same clipping without

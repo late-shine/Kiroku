@@ -6,13 +6,11 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid && (newData.exists() || (!root.child('friends').child('links/' + $uid).exists() && !root.child('friends').child('inbox/' + $uid).exists() && !root.child('friends').child('blocks/' + $uid).exists() && !root.child('friends').child('settings/' + $uid).exists() && !root.child('friends').child('cards/' + $uid).exists() && !root.child('friends').child('photos/' + $uid).exists() && !root.child('friends').child('cheers/' + $uid).exists() && (!root.child('friends/own/' + $uid).exists() || (root.child('friends/own/' + $uid + '/deleting').val() === true && !root.child('friends/codes').child(root.child('friends/own/' + $uid + '/code').val()).exists()))))",
-
         "lessons": {
           "$day": {
             ".validate": "$day.matches(/^d[0-9]{1,5}$/) && newData.isString() && newData.val().length <= 500000"
           }
         },
-
         "progress": {
           "completedDays": {
             "$day": {
@@ -44,7 +42,9 @@
               "c": {
                 ".validate": "newData.isNumber() && newData.val() >= 0"
               },
-              "$other": { ".validate": false }
+              "$other": {
+                ".validate": false
+              }
             }
           },
           "writing": {
@@ -59,7 +59,9 @@
               "v": {
                 ".validate": "newData.val() === true"
               },
-              "$other": { ".validate": false }
+              "$other": {
+                ".validate": false
+              }
             }
           },
           "writingLog": {
@@ -74,7 +76,9 @@
               "p": {
                 ".validate": "newData.isNumber() && newData.val() >= 0"
               },
-              "$other": { ".validate": false }
+              "$other": {
+                ".validate": false
+              }
             }
           },
           "badges": {
@@ -82,9 +86,10 @@
               ".validate": "$id.matches(/^[a-z0-9-]{1,40}$/) && newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
             }
           },
-          "$other": { ".validate": false }
+          "$other": {
+            ".validate": false
+          }
         },
-
         "memory": {
           "$id": {
             ".validate": "$id.matches(/^d[0-9]{1,5}-[0-9]{1,5}$/) && newData.hasChildren(['japanese', 'box', 'due', 'right', 'wrong', 'lastAnswered'])",
@@ -109,10 +114,11 @@
             "streak": {
               ".validate": "newData.isNumber() && newData.val() >= 0"
             },
-            "$other": { ".validate": false }
+            "$other": {
+              ".validate": false
+            }
           }
         },
-
         "prefs": {
           "backgroundIndex": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
@@ -137,21 +143,20 @@
           "photo": {
             ".validate": "newData.isString() && (newData.val() === '' || (newData.val().length <= 16000 && newData.val().matches(/^data:image\\/(jpeg|webp);base64,[A-Za-z0-9+\\/]+={0,2}$/)))"
           },
-          "$other": { ".validate": false }
+          "$other": {
+            ".validate": false
+          }
         },
-
         "deleted": {
           "$day": {
             ".validate": "$day.matches(/^d[0-9]{1,5}$/) && newData.isString() && newData.val().length <= 40"
           }
         },
-
         "replaced": {
           "$day": {
             ".validate": "$day.matches(/^d[0-9]{1,5}$/) && newData.isString() && newData.val().length <= 40"
           }
         },
-
         "meta": {
           "schema": {
             ".validate": "newData.isNumber()"
@@ -159,10 +164,13 @@
           "updatedAt": {
             ".validate": "newData.isString() && newData.val().length <= 40"
           },
-          "$other": { ".validate": false }
+          "$other": {
+            ".validate": false
+          }
         },
-
-        "$other": { ".validate": false }
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "friends": {
@@ -256,20 +264,163 @@
       },
       "settings": {
         "$uid": {
+          ".validate": "newData.hasChildren([\"v\", \"rev\", \"prev\", \"on\", \"photo\", \"n\", \"deco\"]) && (newData.child('on').val() === true || (!newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists())) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.child('rev').val()) && (!newData.parent().parent().child('photos/' + $uid).exists() || (newData.child('on').val() === true && newData.child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val())) && (newData.child('on').val() !== true || newData.child('since').exists())",
+          "v": {
+            ".validate": "newData.val() === 1"
+          },
+          "rev": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
+          },
+          "prev": {
+            ".validate": "newData.isString() && newData.val().matches(/^([a-f0-9]{32})?$/)"
+          },
+          "on": {
+            ".validate": "newData.isBoolean()"
+          },
+          "photo": {
+            ".validate": "newData.isBoolean()"
+          },
+          "n": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+          },
+          "since": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+          },
+          "deco": {
+            ".validate": "newData.hasChildren([\"fr\", \"fx\"])",
+            "fr": {
+              ".validate": "newData.isString() && newData.val().matches(/^(plain|gold|stitch|moss|double|seal)$/)"
+            },
+            "fx": {
+              ".validate": "newData.isString() && newData.val().matches(/^(none|vines|petals|fireflies)$/)"
+            },
+            "bk": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0"
+            },
+            "tg": {
+              ".validate": "newData.isString() && newData.val().matches(/^(n5|n4|n3|n2|n1|kanji|self|reading)$/)"
+            },
+            "sb": {
+              ".validate": "newData.isString() && newData.val().matches(/^(adding|reviewing|writing|carving|quiet)$/)"
+            },
+            "pin": {
+              ".validate": "newData.isString() && newData.val().matches(/^(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)(,(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)){0,2}$/)"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "$other": {
+            ".validate": false
+          },
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists()) || (newData.exists() && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.child('rev').val() !== data.child('rev').val() && ((!data.exists() && newData.child('prev').val() === '') || (data.exists() && newData.child('prev').val() === data.child('rev').val()))))"
         }
       },
       "cards": {
         "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+          ".validate": "newData.hasChildren([\"v\", \"rev\", \"ph\", \"t\", \"d\", \"n\", \"g\", \"r\", \"c\", \"s\", \"m\", \"l\", \"k\", \"vc\", \"a\", \"w\", \"acc\", \"st\", \"fr\", \"fx\", \"sh\"]) && newData.child('n').val() === newData.parent().parent().child('settings/' + $uid).child('n').val() && ((newData.child('ph').val() === true && newData.parent().parent().child('settings/' + $uid).child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val()) || (newData.child('ph').val() === false && !newData.parent().parent().child('photos/' + $uid).exists()))",
+          "v": {
+            ".validate": "newData.val() === 1"
+          },
+          "rev": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
+          },
+          "ph": {
+            ".validate": "newData.isBoolean()"
+          },
+          "t": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= now"
+          },
+          "d": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+          },
+          "n": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
+          },
+          "g": {
+            ".validate": "newData.isString() && newData.val().matches(/^(|ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/)"
+          },
+          "r": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0"
+          },
+          "c": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999 && newData.val() % 1 === 0"
+          },
+          "s": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9999 && newData.val() % 1 === 0"
+          },
+          "m": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999 && newData.val() % 1 === 0"
+          },
+          "l": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999 && newData.val() % 1 === 0"
+          },
+          "k": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999 && newData.val() % 1 === 0"
+          },
+          "vc": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999 && newData.val() % 1 === 0"
+          },
+          "a": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{1,4}(,[0-9]{1,4}){6}$/)"
+          },
+          "w": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{1,4}(,[0-9]{1,4}){6}$/)"
+          },
+          "bd": {
+            "$id": {
+              ".validate": "$id.matches(/^(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)$/) && newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+            }
+          },
+          "pin": {
+            ".validate": "newData.isString() && newData.val().matches(/^(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)(,(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)){0,2}$/)"
+          },
+          "acc": {
+            ".validate": "newData.isString() && newData.val().matches(/^(amber|sakura|moss|sky)$/)"
+          },
+          "st": {
+            ".validate": "newData.isString() && newData.val().matches(/^(ink|moss|paper)$/)"
+          },
+          "fr": {
+            ".validate": "newData.isString() && newData.val().matches(/^(plain|gold|stitch|moss|double|seal)$/)"
+          },
+          "fx": {
+            ".validate": "newData.isString() && newData.val().matches(/^(none|vines|petals|fireflies)$/)"
+          },
+          "bk": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0"
+          },
+          "tg": {
+            ".validate": "newData.isString() && newData.val().matches(/^(n5|n4|n3|n2|n1|kanji|self|reading)$/)"
+          },
+          "sb": {
+            ".validate": "newData.isString() && newData.val().matches(/^(adding|reviewing|writing|carving|quiet)$/)"
+          },
+          "sh": {
+            ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+          },
+          "$other": {
+            ".validate": false
+          },
+          ".read": "auth != null && (auth.uid === $uid || (root.child('friends').child('links/' + $uid + '/' + auth.uid).child('t').exists() && !root.child('friends').child('links/' + $uid + '/' + auth.uid).child('p').exists() && root.child('friends').child('links/' + auth.uid + '/' + $uid).child('t').exists() && !root.child('friends').child('links/' + auth.uid + '/' + $uid).child('p').exists() && !root.child('friends').child('blocks/' + $uid + '/' + auth.uid).exists() && !root.child('friends').child('blocks/' + auth.uid + '/' + $uid).exists() && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && root.child('friends').child('own/' + auth.uid).child('code').exists() && !root.child('friends').child('own/' + auth.uid).child('deleting').exists()))",
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('on').val() === true && newData.parent().parent().child('settings/' + $uid).child('rev').val() === newData.child('rev').val()))"
         }
       },
       "photos": {
         "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+          ".validate": "newData.hasChildren([\"rev\", \"data\"])",
+          "rev": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
+          },
+          "data": {
+            ".validate": "newData.isString() && newData.val().length <= 16000 && newData.val().matches(/^data:image\\/(jpeg|webp);base64,[A-Za-z0-9+\\/]+={0,2}$/)"
+          },
+          "$other": {
+            ".validate": false
+          },
+          ".read": "auth != null && (auth.uid === $uid || (root.child('friends').child('links/' + $uid + '/' + auth.uid).child('t').exists() && !root.child('friends').child('links/' + $uid + '/' + auth.uid).child('p').exists() && root.child('friends').child('links/' + auth.uid + '/' + $uid).child('t').exists() && !root.child('friends').child('links/' + auth.uid + '/' + $uid).child('p').exists() && !root.child('friends').child('blocks/' + $uid + '/' + auth.uid).exists() && !root.child('friends').child('blocks/' + auth.uid + '/' + $uid).exists() && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && root.child('friends').child('own/' + auth.uid).child('code').exists() && !root.child('friends').child('own/' + auth.uid).child('deleting').exists()))",
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('on').val() === true && newData.parent().parent().child('settings/' + $uid).child('rev').val() === newData.child('rev').val() && newData.parent().parent().child('settings/' + $uid).child('photo').val() === true && newData.parent().parent().child('cards/' + $uid).child('ph').val() === true && newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.child('rev').val()))"
         }
       },
       "cheers": {

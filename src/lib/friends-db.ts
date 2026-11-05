@@ -16,6 +16,17 @@ import {
   publicGlyph,
   publicName,
   record,
+  buildFriendPublication,
+  decodeDecoration,
+  decodeFriendCard,
+  decodeFriendPhoto,
+  decodeFriendSettings,
+  newFriendRevision,
+  type FriendCardSource,
+  type FriendCardState,
+  type FriendDecoration,
+  type FriendPublication,
+  type FriendSettings,
   type FriendPeer,
   type FriendsSnapshot,
   type PublicIdentity,
@@ -56,7 +67,9 @@ export function isFriendsDenied(error: unknown): boolean {
   const code = record(error)?.["code"];
   return (
     (error instanceof FriendsError && error.kind === "denied") ||
-    String(code ?? "").toLowerCase().includes("permission")
+    String(code ?? "")
+      .toLowerCase()
+      .includes("permission")
   );
 }
 
@@ -153,10 +166,7 @@ function online(): void {
 
 function bounded<T>(promise: Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new FriendsError(PENDING_COPY, "uncertain")),
-      TIMEOUT_MS,
-    );
+    const timer = setTimeout(() => reject(new FriendsError(PENDING_COPY, "uncertain")), TIMEOUT_MS);
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -177,10 +187,7 @@ async function read(token: Token, path: string): Promise<unknown> {
   const { db, mod, token: idToken } = await getDb(token.uid);
   assertCurrent(token);
   const base = mod.ref(db).toString();
-  const url = new URL(
-    `friends/${path.split("/").map(encodeURIComponent).join("/")}.json`,
-    base,
-  );
+  const url = new URL(`friends/${path.split("/").map(encodeURIComponent).join("/")}.json`, base);
   url.searchParams.set("auth", idToken);
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
@@ -201,11 +208,19 @@ async function read(token: Token, path: string): Promise<unknown> {
   }
 }
 
-async function update(token: Token, paths: Record<string, unknown>): Promise<void> {
+async function update(
+  token: Token,
+  paths: Record<string, unknown>,
+  canCommit: () => boolean = () => true,
+): Promise<void> {
   assertCurrent(token);
   online();
   const { db, mod } = await getDb(token.uid);
   assertCurrent(token);
+  if (!canCommit())
+    throw new FriendsError(
+      "Your progress changed or is still syncing. Review it before updating your card.",
+    );
   const rootPaths = Object.fromEntries(
     Object.entries(paths).map(([path, value]) => [`friends/${path}`, value]),
   );
@@ -214,11 +229,7 @@ async function update(token: Token, paths: Record<string, unknown>): Promise<voi
   assertCurrent(token);
 }
 
-function mutate<T>(
-  uid: string,
-  job: (token: Token) => Promise<T>,
-  deletion = false,
-): Promise<T> {
+function mutate<T>(uid: string, job: (token: Token) => Promise<T>, deletion = false): Promise<T> {
   const token = tokenFor(uid);
   const state = session(uid);
   if (state.pending) {
@@ -306,7 +317,10 @@ async function pair(token: Token, peer: string) {
   };
 }
 
-export async function fetchFriends(uid: string): Promise<FriendsSnapshot> {
+export async function fetchFriends(
+  uid: string,
+  cachedCards: Record<string, FriendCardState> = {},
+): Promise<FriendsSnapshot> {
   const token = tokenFor(uid);
   const own = decodeOwn(await read(token, `own/${uid}`));
   if (own?.deleting) {
@@ -334,8 +348,7 @@ export async function fetchFriends(uid: string): Promise<FriendsSnapshot> {
       async (peer): Promise<FriendPeer> => {
         const ownLink = decodeLink(links[peer] ?? null);
         const incoming = decodeRequest(inbox[peer] ?? null);
-        const name =
-          incoming?.n ?? (ownLink && "n" in ownLink ? ownLink.n : "Person you invited");
+        const name = incoming?.n ?? (ownLink && "n" in ownLink ? ownLink.n : "Person you invited");
         const glyph = incoming?.g ?? (ownLink && "g" in ownLink ? ownLink.g : "");
         if (blocks[peer] === true) return { uid: peer, state: "unavailable", name, glyph };
         try {
@@ -356,8 +369,28 @@ export async function fetchFriends(uid: string): Promise<FriendsSnapshot> {
       },
     ),
   );
+  const cards: Record<string, FriendCardState> = {};
+  await Promise.all(
+    peers.map(async (peer) => {
+      if (peer.state !== "final") return;
+      try {
+        cards[peer.uid] = decodeFriendCard(await read(token, `cards/${peer.uid}`));
+      } catch (error) {
+        if (isFriendsDenied(error)) {
+          peer.state = "unavailable";
+          cards[peer.uid] = { kind: "unavailable", cached: false, fetchedAt: Date.now() };
+        } else {
+          const cached = cachedCards[peer.uid];
+          cards[peer.uid] =
+            cached?.kind === "published"
+              ? { ...cached, cached: true }
+              : { kind: "unavailable", cached: true, fetchedAt: Date.now() };
+        }
+      }
+    }),
+  );
   assertCurrent(token);
-  return { own, peers, blocks: Object.keys(blocks), fetchedAt: Date.now(), cached: false };
+  return { own, peers, blocks: Object.keys(blocks), fetchedAt: Date.now(), cached: false, cards };
 }
 
 /** A denied read is never a collision. Only an occupied candidate permits another candidate. */
@@ -438,7 +471,9 @@ export function requestFriend(
       current = await pair(token, peer);
     } catch (error) {
       if (isFriendsDenied(error)) {
-        throw new FriendsError("Not connected. Ask them for their current code or try again later.");
+        throw new FriendsError(
+          "Not connected. Ask them for their current code or try again later.",
+        );
       }
       throw error;
     }
@@ -571,4 +606,130 @@ export async function finishFriendsDeletion(uid: string): Promise<void> {
     true,
   );
   notify();
+}
+
+const SETTINGS_CONFLICT =
+  "Your sharing settings changed on another device. Review them before saving.";
+export type SharingRead = { settings: FriendSettings | null; card: FriendCardState };
+export type SharingEdit = { on?: boolean; photo?: boolean; n?: string; deco?: FriendDecoration };
+
+export async function readFriendSharing(uid: string): Promise<SharingRead> {
+  const token = tokenFor(uid);
+  await requireSetup(token);
+  const [settings, card] = await Promise.all([
+    read(token, `settings/${uid}`),
+    read(token, `cards/${uid}`),
+  ]);
+  return { settings: decodeFriendSettings(settings), card: decodeFriendCard(card) };
+}
+
+async function publicationPaths(token: Token, publication: FriendPublication | null) {
+  const { mod } = await getDb(token.uid);
+  assertCurrent(token);
+  return {
+    [`cards/${token.uid}`]: publication ? { ...publication.card, t: mod.serverTimestamp() } : null,
+    [`photos/${token.uid}`]: publication?.photo ?? null,
+  };
+}
+
+export function saveFriendSharing(
+  uid: string,
+  expectedRevision: string | null,
+  edit: SharingEdit,
+  source: () => FriendCardSource | null,
+  requireReady = false,
+  onAcknowledged?: (result: {
+    settings: FriendSettings;
+    publication: FriendPublication | null;
+  }) => void,
+): Promise<{ settings: FriendSettings; publication: FriendPublication | null }> {
+  return mutate(uid, async (token) => {
+    await requireSetup(token);
+    const current = decodeFriendSettings(await read(token, `settings/${uid}`));
+    if ((current?.rev ?? null) !== expectedRevision)
+      throw new FriendsError(SETTINGS_CONFLICT, "conflict");
+    const n = publicName(edit.n ?? current?.n ?? "", null);
+    if (!n) throw new FriendsError("Choose a public name first.");
+    const deco = decodeDecoration(edit.deco ?? current?.deco ?? { fr: "plain", fx: "none" });
+    if (!deco) throw new FriendsError("Choose supported decorations before saving.");
+    const on = edit.on ?? current?.on ?? false;
+    const snapshot = on ? source() : null;
+    if (on && requireReady && !snapshot)
+      throw new FriendsError(
+        "Wait for progress to finish loading or syncing, then review the sharing preview again.",
+      );
+    const settings: FriendSettings = {
+      v: 1,
+      rev: newFriendRevision(),
+      prev: current?.rev ?? "",
+      on,
+      photo: on ? (edit.photo ?? current?.photo ?? false) : false,
+      n,
+      deco,
+      ...(current?.since
+        ? { since: current.since }
+        : on
+          ? { since: snapshot?.day ?? localDay() }
+          : {}),
+    };
+    const publication = snapshot ? buildFriendPublication(settings, snapshot) : null;
+    const paths = {
+      [`settings/${uid}`]: settings,
+      ...(await publicationPaths(token, publication)),
+    };
+    try {
+      await update(token, paths, () => {
+        if (!publication) return true;
+        const latest = source();
+        return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
+      });
+    } catch (error) {
+      // A rejected CAS is reconciled, never replayed with a newer consent revision.
+      const latest = decodeFriendSettings(await read(token, `settings/${uid}`));
+      if ((latest?.rev ?? null) !== expectedRevision)
+        throw new FriendsError(SETTINGS_CONFLICT, "conflict");
+      throw error;
+    }
+    const result = { settings, publication };
+    if (!session(uid).deleting) onAcknowledged?.(result);
+    return result;
+  });
+}
+
+/** Ordinary publishing cannot create or change settings, consent or a revision. */
+export function publishFriendCard(
+  uid: string,
+  expectedRevision: string,
+  source: () => FriendCardSource | null,
+  onAcknowledged?: (publication: FriendPublication) => void,
+): Promise<FriendPublication> {
+  return mutate(uid, async (token) => {
+    await requireSetup(token);
+    const settings = decodeFriendSettings(await read(token, `settings/${uid}`));
+    if (!settings || settings.rev !== expectedRevision)
+      throw new FriendsError(SETTINGS_CONFLICT, "conflict");
+    if (!settings.on)
+      throw new FriendsError("Sharing is off. Review the preview to start sharing.");
+    const snapshot = source();
+    if (!snapshot)
+      throw new FriendsError(
+        "Your progress is not ready for this account. Review this device before publishing.",
+      );
+    const publication = buildFriendPublication(settings, snapshot);
+    await update(token, await publicationPaths(token, publication), () => {
+      const latest = source();
+      return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
+    });
+    if (!session(uid).deleting) onAcknowledged?.(publication);
+    return publication;
+  });
+}
+
+/** Called only after the UI selects a published ph=true card. No background photo reads. */
+export async function readFriendPhoto(uid: string, peer: string, revision: string) {
+  const token = tokenFor(uid);
+  if (!isUid(peer) || peer === uid) throw new FriendsError("Not connected.");
+  const photo = decodeFriendPhoto(await read(token, `photos/${peer}`));
+  if (!photo || photo.rev !== revision) return { kind: "refresh" as const };
+  return { kind: "photo" as const, photo };
 }

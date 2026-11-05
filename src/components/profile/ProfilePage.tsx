@@ -368,7 +368,14 @@ export function ProfilePage({
 
       <Section label="同期 · ACCOUNT & SYNC" delay="120ms">
         {account.configured ? (
-          <AccountCard />
+          <>
+            <AccountCard />
+            {identity && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Signing out doesn&apos;t hide your card. Turn sharing off first.
+              </p>
+            )}
+          </>
         ) : (
           <p className="mt-3 text-xs text-muted-foreground">
             Sign-in isn&apos;t set up in this build. Everything else on this page still works.

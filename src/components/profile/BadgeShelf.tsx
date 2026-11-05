@@ -13,7 +13,7 @@ import { BADGES, RANK_RULE, isNewBadge, nextRank, rankOf, type BadgeDef } from "
  * A stored day ("2026-10-31") as a short date in the reader's own language ("Oct 31"); the year is added only when it
  * is not the current one. Anything unreadable is shown as it is.
  */
-function formatDay(day: string, today: string): string {
+export function formatDay(day: string, today: string): string {
   const [y, m, d] = day.split("-").map(Number);
   if (y === undefined || m === undefined || d === undefined || Number.isNaN(y + m + d)) return day;
   const sameYear = y === Number(today.slice(0, 4));

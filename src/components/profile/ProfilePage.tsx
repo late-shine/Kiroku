@@ -1,7 +1,7 @@
 /**
  * Phase 19a — the Profile page: a MODE of the shell (like a tab), not a route and not a floating sheet. Opened from the
- * avatar button in the header. F3 redesign: live card studio and a separate Desk & Account view.
- * One column on phones, two from `lg`. It owns no app state: lessons and progress come in as props, the profile
+ * avatar button in the header. F3 redesign: live card studio and a separate Desk & Account view. F3b: Kiroku's own
+ * glass utilities (no opaque studio panels) and the existing `pane-in` entry. One column on phones, two from 900px. It owns no app state: lessons and progress come in as props, the profile
  * (name, avatar, last backup) comes from `useProfile`, the account from the shared account/sync context.
  */
 import {
@@ -33,7 +33,6 @@ import { Avatar } from "@/components/profile/Avatar";
 import { AccentChooser } from "@/components/profile/AccentChooser";
 import { AvatarCropper } from "@/components/profile/AvatarCropper";
 import { BackupControls } from "@/components/profile/BackupControls";
-import { BadgeShelf } from "@/components/profile/BadgeShelf";
 import { GeminiKeyControls } from "@/components/profile/GeminiKeyControls";
 import { ResetControl } from "@/components/profile/ResetControl";
 import { useProfile } from "@/components/profile/useProfile";
@@ -58,21 +57,34 @@ const DEFAULT_DECO: FriendDecoration = { fr: "plain", fx: "none" };
 
 const labelClass = "font-display text-xs font-semibold tracking-wider text-primary";
 
+/** A Desk & Account panel. Glass on the element itself; `strong` where the panel holds an input that needs contrast. */
 function Section({
   label,
   delay = "0ms",
   className = "",
+  strong = false,
+  danger = false,
   children,
 }: {
   label: string;
   delay?: string;
   className?: string;
+  strong?: boolean;
+  danger?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
-      className={`studio-panel rounded-2xl p-5 md:p-6 ${className}`}
-      style={{ "--tilt": "0deg", animationDelay: delay } as CSSProperties}
+      className={`${strong ? "glass-panel-strong" : "glass-panel"} pane-in rounded-2xl p-5 md:p-6 ${className}`}
+      style={
+        {
+          "--tilt": "0deg",
+          animationDelay: delay,
+          ...(danger
+            ? { borderColor: "color-mix(in oklab, var(--destructive) 35%, transparent)" }
+            : {}),
+        } as CSSProperties
+      }
     >
       <span className={labelClass}>{label}</span>
       {children}
@@ -248,10 +260,7 @@ export function ProfilePage({
     requestAnimationFrame(() => sharingSection.current?.scrollIntoView({ block: "start" }));
   };
   const friendPreview = previewUnavailable ? (
-    <article
-      aria-label="Friend preview unavailable"
-      className="studio-panel rounded-2xl p-6 text-sm text-muted-foreground"
-    >
+    <article aria-label="Friend preview unavailable" className="studio-note-box">
       {friends.activity.deleting
         ? "Cloud deletion is in progress."
         : publicState.kind === "unsupported"
@@ -273,16 +282,10 @@ export function ProfilePage({
   );
 
   return (
-    <div className="profile-workspace mx-auto max-w-6xl">
+    <div className="profile-workspace">
       <BadgeArtDefs />
-      <header className="profile-workspace-heading">
-        <div>
-          <p className="studio-eyebrow">記録 · A notebook of your own</p>
-          <h1 className="font-display text-2xl sm:text-3xl">Your corner of Kiroku</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            A little personality. A record of your progress.
-          </p>
-        </div>
+      <header className="profile-workspace-heading glass-panel pane-in rounded-2xl">
+        <h1 className="font-display text-xl sm:text-2xl">Your corner of Kiroku</h1>
         <div className="profile-workspace-tabs" role="tablist" aria-label="Profile sections">
           {(
             [
@@ -337,6 +340,7 @@ export function ProfilePage({
           disabled={friends.activity.busy || friends.activity.deleting}
           scenes={scenes}
           badges={source.badges}
+          today={today}
           onDraft={friends.setDecoDraft}
           onSave={(deco, revision) => friends.saveSharing({ deco }, revision)}
           previewAsFriend={previewAsFriend}
@@ -345,6 +349,22 @@ export function ProfilePage({
           friendPreview={friendPreview}
           saveError={friends.sharing.error ?? friends.error}
           onManageSharing={openSharing}
+          cropActive={cropSource !== null}
+          rankLine={
+            questsOn ? <StampedRankLine carved={carved} saved={quests.prefs.stamp} /> : null
+          }
+          cardLinks={
+            <>
+              <button type="button" className="studio-text-button" onClick={onOpenQuiz}>
+                {due > 0 ? `${due} words to revisit` : "Practice a few words"}
+                <ArrowUpRight aria-hidden="true" className="size-3.5" />
+              </button>
+              <button type="button" className="studio-text-button" onClick={onOpenProgress}>
+                View progress
+                <ArrowUpRight aria-hidden="true" className="size-3.5" />
+              </button>
+            </>
+          }
           renderPreview={(deco, dirty) => {
             const publication = buildFriendPublication(cardSettings(deco), source);
             const liveName = publication.card.n;
@@ -394,10 +414,6 @@ export function ProfilePage({
                   />
                 </div>
               </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Name saves when you leave the field. Leave it empty to use your Google name.
-              </p>
-
               <p className="mt-5 text-xs text-muted-foreground">Avatar</p>
               <div role="group" aria-label="Avatar" className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -505,8 +521,8 @@ export function ProfilePage({
               )}
               <p className="mt-3 text-[11px] text-muted-foreground">
                 {account.configured
-                  ? "Name and avatar save separately from your look. Your uploaded picture is shared with friends only if you choose to share it."
-                  : "Name and avatar are saved on this device. You choose the crop before saving a picture."}
+                  ? "Name and avatar save as you go, apart from Save look. A picture reaches friends only if you share it."
+                  : "Name and avatar are saved on this device."}
               </p>
             </div>
           }
@@ -517,7 +533,8 @@ export function ProfilePage({
             ref={sharingSection}
             open={friendsOpen}
             onToggle={(event) => setFriendsOpen(event.currentTarget.open)}
-            className="profile-sharing-section studio-panel group mt-6 rounded-2xl"
+            className="profile-sharing-section glass-panel pane-in group mt-5 rounded-2xl"
+            style={{ animationDelay: "140ms" }}
           >
             <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 p-5 focus-visible:outline-2 focus-visible:outline-ring">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-border text-primary">
@@ -542,54 +559,6 @@ export function ProfilePage({
           </details>
         )}
 
-        <section
-          className="studio-panel mt-6 rounded-2xl p-5 md:p-6"
-          aria-label="Your study notebook"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="studio-eyebrow">One page at a time</p>
-              <h2 className="font-display text-lg">Your notebook</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="studio-button studio-button-quiet"
-                onClick={onOpenQuiz}
-              >
-                {due > 0 ? `${due} words to revisit` : "Practice a few words"}
-                <ArrowUpRight aria-hidden="true" className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                className="studio-button studio-button-quiet"
-                onClick={onOpenProgress}
-              >
-                View progress
-                <ArrowUpRight aria-hidden="true" className="size-3.5" />
-              </button>
-            </div>
-          </div>
-          {questsOn && (
-            <StampedRankLine carved={carved} saved={quests.prefs.stamp} className="mt-5" />
-          )}
-          {showRewards && (
-            <details className="studio-achievements mt-5">
-              <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm">
-                <span>Your badge collection</span>
-                <span className="text-xs text-muted-foreground">
-                  {Object.keys(source.badges).length} earned
-                </span>
-              </summary>
-              <BadgeShelf
-                includeDefs={false}
-                badges={progress.badges}
-                today={today}
-                className="mt-4"
-              />
-            </details>
-          )}
-        </section>
       </div>
 
       {profileTab === "desk" && (
@@ -599,113 +568,111 @@ export function ProfilePage({
           aria-labelledby="profile-tab-desk"
           className="profile-desk-grid"
         >
-          <div className="min-w-0">
-            <Section label="設定 · PREFERENCES" delay="240ms">
-              <div className="mt-4 space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p id="pref-furigana" className="text-sm">
-                      Furigana
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Show readings above kanji in your lessons.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={progress.showFurigana}
-                    aria-labelledby="pref-furigana"
-                    onClick={() => setProgress((p) => ({ ...p, showFurigana: !p.showFurigana }))}
-                    className={`hit-area relative h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                      progress.showFurigana ? "bg-primary" : "bg-input"
+          <Section label="設定 · PREFERENCES" delay="0ms">
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p id="pref-furigana" className="text-sm">
+                    Furigana
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Show readings above kanji in your lessons.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={progress.showFurigana}
+                  aria-labelledby="pref-furigana"
+                  onClick={() => setProgress((p) => ({ ...p, showFurigana: !p.showFurigana }))}
+                  className={`hit-area relative h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    progress.showFurigana ? "bg-primary" : "bg-input"
+                  }`}
+                >
+                  <span
+                    className={`block size-4 rounded-full bg-background shadow transition-transform ${
+                      progress.showFurigana ? "translate-x-4" : "translate-x-0"
                     }`}
-                  >
-                    <span
-                      className={`block size-4 rounded-full bg-background shadow transition-transform ${
-                        progress.showFurigana ? "translate-x-4" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p id="pref-writing" className="text-sm">
-                      Writing practice
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {
-                        "Short pen-and-paper pages for kanji you can read but can't yet write. Off by default."
-                      }
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={questsOn}
-                    aria-labelledby="pref-writing"
-                    onClick={() => onSetQuestsOn(!questsOn)}
-                    className={`hit-area relative h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors motion-reduce:transition-none ${
-                      questsOn ? "bg-primary" : "bg-input"
-                    }`}
-                  >
-                    <span
-                      className={`block size-4 rounded-full bg-background shadow transition-transform motion-reduce:transition-none ${
-                        questsOn ? "translate-x-4" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-                {questsOn && (
-                  <StampChooser
-                    carved={carved}
-                    saved={quests.prefs.stamp}
-                    onChoose={(stamp) => quests.update((p) => withStamp(p, stamp))}
                   />
-                )}
-                {showRewards && (
-                  <AccentChooser
-                    badges={progress.badges}
-                    saved={quests.prefs.accent}
-                    onChoose={(accent) => quests.update((p) => withAccent(p, accent))}
-                  />
-                )}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm">Tips</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {tipsReset
-                        ? "The tips will show again."
-                        : "Bring back the tips you dismissed."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onShowTipsAgain();
-                      setTipsReset(true);
-                    }}
-                    className="hit-area shrink-0 rounded-md border border-border px-3 py-2 text-xs hover:bg-accent"
-                  >
-                    Show tips again
-                  </button>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  The voice that reads Japanese aloud is chosen in{" "}
-                  <button
-                    type="button"
-                    onClick={onOpenAtmosphere}
-                    className="underline underline-offset-2 hover:text-primary"
-                  >
-                    Atmosphere
-                  </button>
-                  .
-                </p>
+                </button>
               </div>
-            </Section>
-          </div>
-          <div className="grid min-w-0 items-start gap-5">
-            <Section label="同期 · ACCOUNT & SYNC" delay="120ms">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p id="pref-writing" className="text-sm">
+                    Writing practice
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {
+                      "Short pen-and-paper pages for kanji you can read but can't yet write. Off by default."
+                    }
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={questsOn}
+                  aria-labelledby="pref-writing"
+                  onClick={() => onSetQuestsOn(!questsOn)}
+                  className={`hit-area relative h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors motion-reduce:transition-none ${
+                    questsOn ? "bg-primary" : "bg-input"
+                  }`}
+                >
+                  <span
+                    className={`block size-4 rounded-full bg-background shadow transition-transform motion-reduce:transition-none ${
+                      questsOn ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {questsOn && (
+                <StampChooser
+                  carved={carved}
+                  saved={quests.prefs.stamp}
+                  onChoose={(stamp) => quests.update((p) => withStamp(p, stamp))}
+                />
+              )}
+              {showRewards && (
+                <AccentChooser
+                  badges={progress.badges}
+                  saved={quests.prefs.accent}
+                  onChoose={(accent) => quests.update((p) => withAccent(p, accent))}
+                />
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm">Tips</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {tipsReset
+                      ? "The tips will show again."
+                      : "Bring back the tips you dismissed."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onShowTipsAgain();
+                    setTipsReset(true);
+                  }}
+                  className="hit-area shrink-0 rounded-md border border-border px-3 py-2 text-xs hover:bg-accent"
+                >
+                  Show tips again
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The voice that reads Japanese aloud is chosen in{" "}
+                <button
+                  type="button"
+                  onClick={onOpenAtmosphere}
+                  className="underline underline-offset-2 hover:text-primary"
+                >
+                  Atmosphere
+                </button>
+                .
+              </p>
+            </div>
+          </Section>
+          <div className="profile-desk-stack">
+            <Section label="同期 · ACCOUNT & SYNC" delay="60ms">
               {account.configured ? (
                 <>
                   <AccountCard />
@@ -721,7 +688,7 @@ export function ProfilePage({
                 </p>
               )}
             </Section>
-            <Section label="鍵 · GEMINI KEY" delay="150ms">
+            <Section label="鍵 · GEMINI KEY" delay="120ms" strong>
               <GeminiKeyControls />
             </Section>
             <Section label="データ · YOUR DATA" delay="180ms">
@@ -750,20 +717,21 @@ export function ProfilePage({
                 )
               )}
             </Section>
-            <Section
-              label="危険 · DANGER ZONE"
-              delay="300ms"
-              className="border border-destructive/30"
-            >
-              <p className="mt-3 text-xs text-muted-foreground">
-                Erases every lesson and all progress on this device. Export first if you might want
-                them back.
-              </p>
-              <div className="mt-4">
-                <ResetControl onReset={onResetAll} disabled={!hasData} />
-              </div>
-            </Section>
           </div>
+          <Section
+            label="危険 · DANGER ZONE"
+            delay="240ms"
+            danger
+            className="profile-desk-danger"
+          >
+            <p className="mt-3 text-xs text-muted-foreground">
+              Erases every lesson and all progress on this device. Export first if you might want
+              them back.
+            </p>
+            <div className="mt-4">
+              <ResetControl onReset={onResetAll} disabled={!hasData} />
+            </div>
+          </Section>
         </div>
       )}
     </div>

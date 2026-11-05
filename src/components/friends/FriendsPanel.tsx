@@ -286,7 +286,7 @@ export function FriendsPanel() {
     <section
       id="friends-beta"
       aria-labelledby="friends-title"
-      className="glass-panel min-w-0 rounded-xl p-5 md:p-6"
+      className="min-w-0 border-t border-border p-5 md:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="friends-title" className="font-display text-base">

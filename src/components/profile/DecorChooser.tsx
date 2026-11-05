@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Award, Check, Eye, Lock, Palette, UserRound } from "lucide-react";
+import { Award, Check, ChevronDown, ChevronUp, Eye, Lock, Palette, UserRound } from "lucide-react";
 import { BADGES } from "@/lib/rewards";
 import {
   FRIEND_FRAMES,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/friends";
 import { Frame } from "./Frame";
 import { BadgeArt } from "./BadgeArt";
+import { formatDay } from "./BadgeShelf";
 
 const DEFAULT: FriendDecoration = { fr: "plain", fx: "none" };
 const FRAME_NAMES: Record<FriendDecoration["fr"], string> = {
@@ -26,13 +27,17 @@ const FRAME_NAMES: Record<FriendDecoration["fr"], string> = {
   seal: "Personal seal",
 };
 const PANELS = [
-  { id: "details", label: "Details", icon: UserRound },
-  { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "about", label: "About", icon: UserRound },
+  { id: "style", label: "Style", icon: Palette },
   { id: "badges", label: "Badges", icon: Award },
 ] as const;
 type Panel = (typeof PANELS)[number]["id"];
 
-/** One live preview, one editor section. Existing draft and revisioned-save ownership is preserved. */
+/**
+ * One live preview, one editor with About / Style / Badges sections. Existing draft and revisioned-save ownership is
+ * preserved. This component stays mounted while the Profile switches between Calling Card and Desk & Account, so the
+ * draft, the captured settings revision and the open crop editor all survive that switch.
+ */
 export function DecorChooser({
   saved,
   localDraft,
@@ -42,10 +47,14 @@ export function DecorChooser({
   disabled,
   scenes,
   badges,
+  today,
   onDraft,
   onSave,
   renderPreview,
   identityEditor,
+  rankLine,
+  cardLinks,
+  cropActive,
   previewAsFriend,
   onPreviewChange,
   friendPreview,
@@ -61,10 +70,18 @@ export function DecorChooser({
   disabled: boolean;
   scenes: readonly CardScene[];
   badges: Readonly<Record<string, string>>;
+  /** Local day (YYYY-MM-DD), used only to word the "Earned <date>" captions. */
+  today: string;
   onDraft: (value: FriendDecoration | null) => unknown;
   onSave: (value: FriendDecoration, revision: string | null) => Promise<boolean>;
   renderPreview: (value: FriendDecoration, dirty: boolean) => ReactNode;
   identityEditor: ReactNode;
+  /** The writing rank line (null while Writing practice is off); shown at the top of Badges. */
+  rankLine: ReactNode;
+  /** Two small shortcut links drawn below the card. */
+  cardLinks: ReactNode;
+  /** True while the avatar crop editor is open: the preview then stops being sticky. */
+  cropActive: boolean;
   previewAsFriend: boolean;
   onPreviewChange: (value: boolean) => void;
   friendPreview: ReactNode;
@@ -72,7 +89,11 @@ export function DecorChooser({
   saveError: string | null;
   onManageSharing: () => void;
 }) {
-  const [panel, setPanel] = useState<Panel>("appearance");
+  const [panel, setPanel] = useState<Panel>("about");
+  // The entry animation replays on a section only after the learner has switched sections, so the first section does
+  // not animate twice (the whole panel already rose in). A choice inside a section never changes its class or display.
+  const [sectionsAnimate, setSectionsAnimate] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState(localDraft ?? saved);
   const [dirty, setDirty] = useState(localDraft !== null);
   const [baseRevision, setBaseRevision] = useState(revision);
@@ -99,6 +120,16 @@ export function DecorChooser({
   const resolved = resolveDeco(draft, badges);
   const changedElsewhere = accountMode && loaded && dirty && revision !== baseRevision;
   const selectedPins = resolved.pin?.split(",") ?? [];
+  const sectionClass = sectionsAnimate ? "pane-in" : undefined;
+  const stateText = previewAsFriend
+    ? "As your friends see it"
+    : !accountMode
+      ? "Kept on this device"
+      : saving
+        ? "Saving…"
+        : dirty
+          ? "Unsaved changes"
+          : "Saved";
   const earned = BADGES.filter((badge) => Boolean(badges[badge.id]));
   const lockedBadges = BADGES.filter((badge) => !badges[badge.id]);
   const change = (next: FriendDecoration) => {
@@ -119,46 +150,72 @@ export function DecorChooser({
   };
   return (
     <div className="card-studio">
-      <aside className="card-studio-preview" aria-label="Card preview">
-        <div className="studio-preview-bar">
-          <span className="studio-eyebrow">
-            {previewAsFriend ? "Published view" : "Your calling card"}
-          </span>
-          <label className="studio-preview-switch">
-            <Eye aria-hidden="true" className="size-3.5" />
-            <span>Friend view</span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={previewAsFriend}
-              disabled={!previewAvailable}
-              onChange={(event) => onPreviewChange(event.target.checked)}
-              aria-label="Preview the last confirmed card your friends see"
-            />
-          </label>
-        </div>
-        {previewAsFriend ? friendPreview : renderPreview(draft, dirty)}
-        <p className="studio-preview-note">
-          {previewAsFriend
-            ? "Your last confirmed friend view. Unsaved changes stay private."
-            : accountMode && dirty
-              ? "Live preview · save your look when it feels right."
-              : accountMode
-                ? "Make it yours. Your changes appear here as you choose."
-                : "Your look stays on this device. Sharing is a separate choice."}
-        </p>
-      </aside>
-
-      <section className="studio-panel card-studio-editor" aria-labelledby="studio-editor-title">
-        <header className="studio-editor-heading">
-          <div>
-            <p className="studio-eyebrow">A little more you</p>
-            <h2 id="studio-editor-title" className="font-display text-xl">
-              Make your mark
-            </h2>
+      <div className="card-studio-side">
+        <aside
+          className="card-studio-preview glass-panel pane-in rounded-2xl"
+          aria-label="Card preview"
+          data-expanded={expanded}
+          data-crop={cropActive}
+        >
+          <div className="studio-preview-bar">
+            <div className="studio-preview-heading">
+              <span className="studio-eyebrow">
+                {previewAsFriend ? "Published view" : "Your calling card"}
+              </span>
+              <span className="studio-preview-state" role="status">
+                {stateText}
+              </span>
+            </div>
+            <div className="studio-preview-tools">
+              <label className="studio-preview-switch">
+                <Eye aria-hidden="true" className="size-3.5" />
+                <span>Friend view</span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={previewAsFriend}
+                  disabled={!previewAvailable}
+                  onChange={(event) => onPreviewChange(event.target.checked)}
+                  aria-label="Preview the last confirmed card your friends see"
+                />
+              </label>
+              <button
+                type="button"
+                className="studio-preview-toggle"
+                aria-expanded={expanded}
+                aria-controls="studio-card-preview"
+                aria-label={expanded ? "Show the compact card" : "Show the full card"}
+                title={expanded ? "Show the compact card" : "Show the full card"}
+                onClick={() => setExpanded((open) => !open)}
+              >
+                {expanded ? (
+                  <ChevronUp aria-hidden="true" className="size-4" />
+                ) : (
+                  <ChevronDown aria-hidden="true" className="size-4" />
+                )}
+              </button>
+            </div>
           </div>
-          {accountMode && dirty && <span className="studio-draft-label">Unsaved look</span>}
-        </header>
+          <div id="studio-card-preview">
+            {previewAsFriend ? friendPreview : renderPreview(draft, dirty)}
+          </div>
+        </aside>
+        {cardLinks && (
+          <nav
+            className="card-studio-links glass-panel pane-in rounded-xl"
+            style={{ animationDelay: "60ms" }}
+            aria-label="Study shortcuts"
+          >
+            {cardLinks}
+          </nav>
+        )}
+      </div>
+
+      <section
+        className="card-studio-editor glass-panel-strong pane-in rounded-2xl"
+        style={{ animationDelay: "90ms" }}
+        aria-label="Edit your card"
+      >
         <div className="studio-section-picker" role="group" aria-label="Card editor section">
           {PANELS.map(({ id, label, icon: Icon }) => (
             <button
@@ -168,6 +225,7 @@ export function DecorChooser({
               aria-controls={`studio-section-${id}`}
               onClick={() => {
                 setPanel(id);
+                setSectionsAnimate(true);
                 onPreviewChange(false);
               }}
             >
@@ -183,7 +241,7 @@ export function DecorChooser({
             if (previewAsFriend) onPreviewChange(false);
           }}
         >
-          <div id="studio-section-details" hidden={panel !== "details"}>
+          <div id="studio-section-about" hidden={panel !== "about"} className={sectionClass}>
             {identityEditor}
             <fieldset disabled={disabled || saving} className="studio-fieldset">
               <legend className="studio-field-label">Study tag</legend>
@@ -214,8 +272,8 @@ export function DecorChooser({
               </div>
             </fieldset>
             <fieldset disabled={disabled || saving} className="studio-fieldset">
-              <legend className="studio-field-label">A thought for today</legend>
-              <p className="studio-field-hint">Choose a quiet note for your card.</p>
+              <legend className="studio-field-label">Status</legend>
+              <p className="studio-field-hint">A quiet note on your card.</p>
               <div className="studio-status-options" role="group" aria-label="Card status">
                 <button
                   type="button"
@@ -244,10 +302,10 @@ export function DecorChooser({
             </fieldset>
           </div>
 
-          <div id="studio-section-appearance" hidden={panel !== "appearance"}>
+          <div id="studio-section-style" hidden={panel !== "style"} className={sectionClass}>
             <fieldset disabled={disabled || saving} className="studio-fieldset">
-              <legend className="studio-field-label">A scene for your notebook</legend>
-              <p className="studio-field-hint">A little atmosphere, just for your card.</p>
+              <legend className="studio-field-label">Banner</legend>
+              <p className="studio-field-hint">A little atmosphere behind your name.</p>
               <div className="studio-scene-grid">
                 <button
                   type="button"
@@ -288,8 +346,8 @@ export function DecorChooser({
               </div>
             </fieldset>
             <fieldset disabled={disabled || saving} className="studio-fieldset">
-              <legend className="studio-field-label">Frame your signature</legend>
-              <p className="studio-field-hint">Small details, earned along the way.</p>
+              <legend className="studio-field-label">Frame</legend>
+              <p className="studio-field-hint">Frames are earned along the way.</p>
               <div className="studio-frame-grid">
                 {FRIEND_FRAMES.map((id) => {
                   const locked = !decorationUnlocked("frame", id, badges);
@@ -335,9 +393,10 @@ export function DecorChooser({
             </fieldset>
           </div>
 
-          <div id="studio-section-badges" hidden={panel !== "badges"}>
+          <div id="studio-section-badges" hidden={panel !== "badges"} className={sectionClass}>
+            {rankLine && <div className="studio-rank-block">{rankLine}</div>}
             <fieldset disabled={disabled || saving} className="studio-fieldset">
-              <legend className="studio-field-label">Little milestones, worth keeping</legend>
+              <legend className="studio-field-label">Pinned badges</legend>
               <p className="studio-field-hint">
                 Pin up to three badges. Select a pinned badge to remove it.
               </p>
@@ -370,7 +429,7 @@ export function DecorChooser({
                       className="studio-badge-choice"
                       aria-pressed={selected}
                       aria-disabled={full}
-                      title={full ? "Unpin another badge to make room." : badge.how}
+                      title={full ? "Unpin another badge to make room." : `${badge.how} Select to pin.`}
                       onClick={() => {
                         if (full) return;
                         const next = selected
@@ -383,7 +442,11 @@ export function DecorChooser({
                       <BadgeArt id={badge.id} className="size-12 shrink-0" />
                       <span className="studio-choice-name">{badge.name}</span>
                       <span className="studio-choice-caption">
-                        {selected ? "Pinned" : full ? "All three places filled" : "Pin to card"}
+                        {selected
+                          ? "Pinned"
+                          : full
+                            ? "All three places filled"
+                            : `Earned ${formatDay(badges[badge.id] ?? today, today)}`}
                       </span>
                       {selected && (
                         <Check aria-hidden="true" className="studio-badge-tick size-4" />
@@ -443,20 +506,11 @@ export function DecorChooser({
             </p>
           )}
           <div className="studio-savebar-row">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium">
-                {accountMode
-                  ? dirty
-                    ? "Ready when you are"
-                    : "Your look is saved"
-                  : "Kept on this device"}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {accountMode
-                  ? "Saving your look does not turn sharing on."
-                  : "You can set up sharing whenever you like."}
-              </p>
-            </div>
+            <p className="studio-savebar-hint">
+              {accountMode
+                ? "Saving your look does not turn sharing on."
+                : "Your look stays on this device. Sharing is a separate choice."}
+            </p>
             {dirty && (
               <button
                 type="button"
@@ -479,13 +533,15 @@ export function DecorChooser({
                     if (ok) {
                       setDirty(false);
                       onDraft(null);
-                      setNotice("Your look is saved.");
+                      setNotice(null);
                     } else
                       setNotice(
-                        "Your draft is safe here. Review sharing settings before trying again.",
+                        "Couldn't save your look. Your draft is kept here. Check Friends & sharing, then try again.",
                       );
                   } catch {
-                    setNotice("Couldn't save your look. Your draft is kept on this device.");
+                    setNotice(
+                      "Couldn't save your look. Your draft is kept on this device. Try again in a moment.",
+                    );
                   } finally {
                     setSaving(false);
                   }

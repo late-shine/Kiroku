@@ -326,7 +326,7 @@ export function useFriendsController({
   const lastRefresh = useRef(0);
   const isSetUp = useRef(false);
   const closedCovers = useRef(new Map<string, FriendsCache["links"][number]>());
-  const refreshRef = useRef<() => Promise<void>>(async () => {});
+  const refreshRef = useRef<(acknowledged?: string) => Promise<void>>(async () => {});
   const openProfileRef = useRef(onOpenProfile);
   openProfileRef.current = onOpenProfile;
 
@@ -506,139 +506,150 @@ export function useFriendsController({
   );
   loadCheerPaneRef.current = loadCheerPane;
 
-  const refresh = useCallback(async () => {
-    const captured = current.current;
-    if (
-      !uid ||
-      captured?.uid !== uid ||
-      refreshing.current ||
-      document.visibilityState === "hidden" ||
-      friendsActivity(uid).busy
-    ) {
-      return;
-    }
-    const sequence = ++readSequence.current;
-    ++cheerPaneSequence.current;
-    cheerReading.current = null;
-    cheerPanesRef.current = Object.fromEntries(
-      Object.entries(cheerPanesRef.current).map(([peer, pane]) => [
-        peer,
-        { ...pane, loading: false },
-      ]),
-    );
-    setCheerPanes(cheerPanesRef.current);
-    lastRefresh.current = Date.now();
-    refreshing.current = true;
-    setView((value) => ({ ...value, loading: true }));
-    try {
-      const snapshot = await fetchFriends(uid, cardCache.current);
-      if (current.current !== captured || sequence !== readSequence.current) return;
+  const refresh = useCallback(
+    async (acknowledged?: string) => {
+      const captured = current.current;
+      if (
+        !uid ||
+        captured?.uid !== uid ||
+        refreshing.current ||
+        document.visibilityState === "hidden" ||
+        friendsActivity(uid).busy
+      ) {
+        return;
+      }
+      const sequence = ++readSequence.current;
+      ++cheerPaneSequence.current;
+      cheerReading.current = null;
+      cheerPanesRef.current = Object.fromEntries(
+        Object.entries(cheerPanesRef.current).map(([peer, pane]) => [
+          peer,
+          { ...pane, loading: false },
+        ]),
+      );
+      setCheerPanes(cheerPanesRef.current);
       lastRefresh.current = Date.now();
-      isSetUp.current = Boolean(snapshot.own && !snapshot.own.deleting);
-      reconcileCheers(snapshot);
-      cardCache.current = snapshot.cards ?? {};
-      ++selectedBannerSequence.current;
-      setBannerRead((old) => (old ? { ...old, loading: false } : null));
-      setSelectedBanner((old) => {
-        const entry = old ? snapshot.cards?.[old.peer] : null;
-        return old &&
-          entry?.kind === "published" &&
-          entry.card.bannerId === old.banner.id &&
-          snapshot.peers.some((peer) => peer.uid === old.peer && peer.state === "final")
-          ? old
-          : null;
-      });
-      ++photoSequence.current;
-      setSelectedPhoto((old) => {
-        const entry = old ? snapshot.cards?.[old.peer] : null;
-        return old &&
-          entry?.kind === "published" &&
-          !entry.cached &&
-          entry.card.ph &&
-          entry.card.rev === old.photo.rev &&
-          snapshot.peers.some((peer) => peer.uid === old.peer && peer.state === "final")
-          ? old
-          : null;
-      });
-      if (snapshot.own?.deleting) {
-        clearFriendsStorage(uid);
-      } else if (snapshot.own) {
-        for (const peer of snapshot.peers) closedCovers.current.set(peer.uid, peer);
-        const covers = snapshot.blocks
-          .map((peer) => closedCovers.current.get(peer))
-          .filter((peer) => peer !== undefined);
-        saveCache(
-          uid,
-          snapshot,
-          covers.map((peer) => ({ ...peer, state: "unavailable" })),
-        );
-      } else {
-        cancelPublish();
-        sourceUid.current = null;
-        cosmeticPending.current = false;
-        sharingRef.current = emptySharing(uid);
-        setPreviewBanner(null);
-        setPreviewBannerError(null);
-        ++previewBannerSequence.current;
-        setSharing(sharingRef.current);
-        ++sharingSequence.current;
-        clearFriendsStorage(uid, true);
-      }
-      setView((value) => ({ ...value, uid, snapshot, loading: false, error: null }));
-      if (snapshot.own && !snapshot.own.deleting) {
-        await refreshSharingRef.current();
-        if (current.current === captured) schedulePublishRef.current(true);
-      }
-    } catch (error) {
-      if (current.current !== captured || sequence !== readSequence.current) return;
-      cheerRelationsFresh.current = false;
-      const failedInbox = {
-        ...cheerInboxRef.current,
-        stale: true,
-        error: "Couldn't refresh cheers. Last-known indicators are kept.",
-      };
-      cheerInboxRef.current = failedInbox;
-      setCheerInbox(failedInbox);
-      if (isFriendsDenied(error)) {
-        reconcileCheers({ own: null, peers: [], blocks: [], fetchedAt: Date.now(), cached: false });
-        setSelectedBanner(null);
-        setPreviewBanner(null);
+      refreshing.current = true;
+      setView((value) => ({ ...value, loading: true }));
+      try {
+        const snapshot = await fetchFriends(uid, cardCache.current);
+        if (current.current !== captured || sequence !== readSequence.current) return;
+        lastRefresh.current = Date.now();
+        isSetUp.current = Boolean(snapshot.own && !snapshot.own.deleting);
+        reconcileCheers(snapshot);
+        cardCache.current = snapshot.cards ?? {};
         ++selectedBannerSequence.current;
-        ++previewBannerSequence.current;
-        cancelPublish();
-        isSetUp.current = false;
-        sharingRef.current = {
-          ...sharingRef.current,
-          loaded: false,
-          error: describeFriendsError(error),
+        setBannerRead((old) => (old ? { ...old, loading: false } : null));
+        setSelectedBanner((old) => {
+          const entry = old ? snapshot.cards?.[old.peer] : null;
+          return old &&
+            entry?.kind === "published" &&
+            entry.card.bannerId === old.banner.id &&
+            snapshot.peers.some((peer) => peer.uid === old.peer && peer.state === "final")
+            ? old
+            : null;
+        });
+        ++photoSequence.current;
+        setSelectedPhoto((old) => {
+          const entry = old ? snapshot.cards?.[old.peer] : null;
+          return old &&
+            entry?.kind === "published" &&
+            !entry.cached &&
+            entry.card.ph &&
+            entry.card.rev === old.photo.rev &&
+            snapshot.peers.some((peer) => peer.uid === old.peer && peer.state === "final")
+            ? old
+            : null;
+        });
+        if (snapshot.own?.deleting) {
+          clearFriendsStorage(uid);
+        } else if (snapshot.own) {
+          for (const peer of snapshot.peers) closedCovers.current.set(peer.uid, peer);
+          const covers = snapshot.blocks
+            .map((peer) => closedCovers.current.get(peer))
+            .filter((peer) => peer !== undefined);
+          saveCache(
+            uid,
+            snapshot,
+            covers.map((peer) => ({ ...peer, state: "unavailable" })),
+          );
+        } else {
+          cancelPublish();
+          sourceUid.current = null;
+          cosmeticPending.current = false;
+          sharingRef.current = emptySharing(uid);
+          setPreviewBanner(null);
+          setPreviewBannerError(null);
+          ++previewBannerSequence.current;
+          setSharing(sharingRef.current);
+          ++sharingSequence.current;
+          clearFriendsStorage(uid, true);
+        }
+        setView((value) => ({ ...value, uid, snapshot, loading: false, error: null }));
+        if (snapshot.own && !snapshot.own.deleting) {
+          await refreshSharingRef.current();
+          if (current.current === captured) schedulePublishRef.current(true);
+        }
+      } catch (error) {
+        if (current.current !== captured || sequence !== readSequence.current) return;
+        cheerRelationsFresh.current = false;
+        const failedInbox = {
+          ...cheerInboxRef.current,
+          stale: true,
+          error: "Couldn't refresh cheers. Last-known indicators are kept.",
         };
-        setSharing(sharingRef.current);
-        cardCache.current = {};
-        setSelectedPhoto(null);
-        try {
-          localStorage.removeItem(STORAGE_KEYS.friendsCache);
-        } catch {
-          /* Optional. */
+        cheerInboxRef.current = failedInbox;
+        setCheerInbox(failedInbox);
+        if (isFriendsDenied(error)) {
+          reconcileCheers({
+            own: null,
+            peers: [],
+            blocks: [],
+            fetchedAt: Date.now(),
+            cached: false,
+          });
+          setSelectedBanner(null);
+          setPreviewBanner(null);
+          ++selectedBannerSequence.current;
+          ++previewBannerSequence.current;
+          cancelPublish();
+          isSetUp.current = false;
+          sharingRef.current = {
+            ...sharingRef.current,
+            loaded: false,
+            error: describeFriendsError(error),
+          };
+          setSharing(sharingRef.current);
+          cardCache.current = {};
+          setSelectedPhoto(null);
+          try {
+            localStorage.removeItem(STORAGE_KEYS.friendsCache);
+          } catch {
+            /* Optional. */
+          }
+        }
+        setView((value) => {
+          const previous = value.uid === uid ? value.snapshot : null;
+          const cached = isFriendsDenied(error) ? null : (previous ?? readCache(uid));
+          return {
+            ...value,
+            uid,
+            loading: false,
+            error: acknowledged
+              ? `Your action succeeded, but the list couldn't refresh. ${describeFriendsError(error)}`
+              : describeFriendsError(error),
+            snapshot: cached ? { ...cached, cached: true } : null,
+          };
+        });
+      } finally {
+        if (current.current === captured && sequence === readSequence.current) {
+          refreshing.current = false;
+          if (activeCheerPeer.current) void loadCheerPaneRef.current(activeCheerPeer.current);
         }
       }
-      setView((value) => {
-        const previous = value.uid === uid ? value.snapshot : null;
-        const cached = isFriendsDenied(error) ? null : (previous ?? readCache(uid));
-        return {
-          ...value,
-          uid,
-          loading: false,
-          error: describeFriendsError(error),
-          snapshot: cached ? { ...cached, cached: true } : null,
-        };
-      });
-    } finally {
-      if (current.current === captured && sequence === readSequence.current) {
-        refreshing.current = false;
-        if (activeCheerPeer.current) void loadCheerPaneRef.current(activeCheerPeer.current);
-      }
-    }
-  }, [uid, cancelPublish, reconcileCheers]);
+    },
+    [uid, cancelPublish, reconcileCheers],
+  );
   refreshRef.current = refresh;
 
   useEffect(() => {
@@ -1649,7 +1660,17 @@ export function useFriendsController({
   const perform = async (job: () => Promise<string>, identity?: PublicIdentity) => {
     const captured = current.current;
     if (!uid || captured?.uid !== uid) return false;
-    if (friendsActivity(uid).busy || friendsActivity(uid).deleting) return false;
+    const activity = friendsActivity(uid);
+    if (activity.busy || activity.deleting) {
+      // A background save can start after a confirmation was opened. Don't silently drop its action.
+      const error = activity.deleting
+        ? "Cloud deletion is in progress. Finish it before using Friends again."
+        : activity.uncertain
+          ? "An earlier change may still be processing. Wait for its status before trying again."
+          : "Another Friends change is saving. Wait for it to finish, then try again.";
+      setView((value) => ({ ...value, notice: null, error }));
+      return false;
+    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       setView((value) => ({ ...value, error: "You're offline. Try again when you're back." }));
       return false;
@@ -1663,7 +1684,7 @@ export function useFriendsController({
       if (current.current !== captured || friendsActivity(uid).deleting) return false;
       if (identity) rememberIdentity(identity);
       setView((value) => ({ ...value, notice }));
-      await refreshRef.current();
+      await refreshRef.current(notice);
       return true;
     } catch (error) {
       if (current.current !== captured) return false;

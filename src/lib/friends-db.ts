@@ -72,6 +72,7 @@ export class FriendsError extends Error {
   constructor(
     message: string,
     readonly kind = "operation",
+    readonly reference?: string,
   ) {
     super(message);
     this.name = "FriendsError";
@@ -96,6 +97,45 @@ export function describeFriendsError(error: unknown): string {
   if (error instanceof UnsupportedFriendSettingsError) return error.message;
   if (error instanceof FriendsError) return error.message;
   return "Couldn't access Friends. Try again or check the setup.";
+}
+
+/** Only static operation names/codes reach the UI; never URLs, tokens, UIDs or raw SDK errors. */
+async function friendStep<T>(step: string, action: string, job: () => Promise<T>): Promise<T> {
+  try {
+    return await job();
+  } catch (error) {
+    if (
+      error instanceof FriendsError &&
+      (error.reference || !["denied", "network"].includes(error.kind))
+    )
+      throw error;
+    const sdkCode = String(record(error)?.["code"] ?? "").toLowerCase();
+    const kind = isFriendsDenied(error)
+      ? "denied"
+      : sdkCode.startsWith("auth/")
+        ? "account"
+        : error instanceof FriendsError
+          ? error.kind
+          : error instanceof Error && error.name === "AbortError"
+            ? "timeout"
+            : error instanceof TypeError || sdkCode.includes("network")
+              ? "network"
+              : "unexpected";
+    const detail =
+      kind === "denied"
+        ? "Access wasn't allowed. Refresh Friends; if it continues, share the reference below."
+        : kind === "account"
+          ? "Your sign-in couldn't be confirmed. Sign in again."
+          : kind === "network" || kind === "timeout"
+            ? "Check your connection and refresh Friends."
+            : "Refresh Friends; if it continues, share the reference below.";
+    const reference = `${step}/${kind}`;
+    throw new FriendsError(
+      `Couldn't ${action}. ${detail} Reference: ${reference}.`,
+      kind,
+      reference,
+    );
+  }
 }
 
 function notify(): void {
@@ -212,6 +252,25 @@ function bounded<T>(promise: Promise<T>): Promise<T> {
 
 /** REST GET avoids the SDK get() offline-cache fallback during reconciliation. Writes use the SDK. */
 async function read(token: Token, path: string): Promise<unknown> {
+  // The route category is fixed below; no user-supplied path segment is disclosed.
+  const steps: Record<string, [string, string]> = {
+    own: ["setup-read", "check your Friends setup"],
+    codes: ["code-lookup", "look up that friend code"],
+    blocks: ["blocks-read", "read your blocked list"],
+    links: ["links-read", "check this connection"],
+    inbox: ["inbox-read", "read friend requests"],
+    settings: ["settings-read", "read sharing settings"],
+    cards: ["card-read", "read this card"],
+    photos: ["photo-read", "read this picture"],
+    banners: ["banner-read", "read this banner"],
+    bannerAssets: ["banner-source-read", "read your editable banner"],
+    cheers: ["cheers-read", "read cheers"],
+  };
+  const [step, action] = steps[path.split("/")[0] ?? ""] ?? ["friends-read", "read Friends"];
+  return friendStep(step, action, () => readValue(token, path));
+}
+
+async function readValue(token: Token, path: string): Promise<unknown> {
   assertCurrent(token);
   online();
   const { db, mod, token: idToken } = await getDb(token.uid);
@@ -531,7 +590,7 @@ export function requestFriend(
     if (!code) {
       throw new FriendsError("Enter a ten-character friend code, such as K7F2M-9XQ4T.");
     }
-    await requireSetup(token);
+    await friendStep("setup-check", "check your Friends setup", () => requireSetup(token));
     const match = record(await read(token, `codes/${code}`));
     if (!match || !isUid(match["u"])) {
       throw new FriendsError("No active friend code found. Ask them for their current code.");
@@ -542,17 +601,7 @@ export function requestFriend(
     if (blocks[peer] === true) {
       throw new FriendsError("Unblock this person before sending a request.");
     }
-    let current;
-    try {
-      current = await pair(token, peer);
-    } catch (error) {
-      if (isFriendsDenied(error)) {
-        throw new FriendsError(
-          "Not connected. Ask them for their current code or try again later.",
-        );
-      }
-      throw error;
-    }
+    const current = await pair(token, peer);
     if (current.state === "final") return { kind: "already-friends", peer };
     if (current.state === "incoming-pending" || current.state === "crossing") {
       return { kind: "incoming", peer };
@@ -575,10 +624,12 @@ export function requestFriend(
     }
     state.lastRequest = Date.now();
     const t = localDay();
-    await update(token, {
-      [`links/${uid}/${peer}`]: { t, p: true },
-      [`inbox/${peer}/${uid}`]: { t, ...who, c: code },
-    });
+    await friendStep("request-send", "send your friend request", () =>
+      update(token, {
+        [`links/${uid}/${peer}`]: { t, p: true },
+        [`inbox/${peer}/${uid}`]: { t, ...who, c: code },
+      }),
+    );
     return { kind: "sent", peer };
   });
 }
@@ -601,12 +652,14 @@ export function acceptFriend(uid: string, peer: string, identity: PublicIdentity
       );
     }
     const t = localDay();
-    await update(token, {
-      [`links/${uid}/${peer}`]: { t, n: request.n, g: request.g },
-      [`links/${peer}/${uid}`]: { t, ...who },
-      [`inbox/${uid}/${peer}`]: null,
-      [`inbox/${peer}/${uid}`]: null,
-    });
+    await friendStep("request-accept", "accept this friend request", () =>
+      update(token, {
+        [`links/${uid}/${peer}`]: { t, n: request.n, g: request.g },
+        [`links/${peer}/${uid}`]: { t, ...who },
+        [`inbox/${uid}/${peer}`]: null,
+        [`inbox/${peer}/${uid}`]: null,
+      }),
+    );
   });
 }
 

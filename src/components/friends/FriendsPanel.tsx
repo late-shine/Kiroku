@@ -1,9 +1,10 @@
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Copy, Link } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { useScrollLock } from "@/hooks/use-scroll-lock";
 import {
   groupedFriendCode,
+  normalizeFriendCode,
   INBOX_BATCH,
   publicName,
   friendCardAge,
@@ -103,7 +104,22 @@ export function FriendsPanel({
   const [batch, setBatch] = useState(INBOX_BATCH);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [copyPending, setCopyPending] = useState(false);
+  const copySequence = useRef(0);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const codeInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    ++copySequence.current;
+    setCopied(null);
+    setCopyPending(false);
+    setCopyNotice(null);
+    return () => {
+      ++copySequence.current;
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    };
+  }, [friends.uid, friends.snapshot?.own?.code, friends.activity.deleting]);
 
   useEffect(() => {
     setNameDraft(null);
@@ -147,6 +163,23 @@ export function FriendsPanel({
   const deleting = friends.activity.deleting || snapshot?.own?.deleting;
   const disabled =
     friends.activity.busy || friends.loading || Boolean(snapshot?.cached) || Boolean(deleting);
+  const hasAddForm = Boolean(snapshot?.own && !snapshot.cached && !deleting);
+  const validCode = normalizeFriendCode(code);
+  const feedback = (
+    <div className="space-y-2 text-sm" aria-live="polite" aria-atomic="true">
+      {friends.loading && <p className="text-muted-foreground">Refreshing Friends…</p>}
+      {friends.activity.busy && (
+        <p className="text-muted-foreground">
+          {friends.activity.uncertain
+            ? "The request may still be processing. Reconnect to check its status."
+            : "Saving Friends…"}
+        </p>
+      )}
+      {friends.activity.outcome && <p>{friends.activity.outcome}</p>}
+      {friends.notice && <p>{friends.notice}</p>}
+      {friends.error && <p className="break-words text-destructive">{friends.error}</p>}
+    </div>
+  );
   const chosenName = nameDraft ?? friends.suggestedName;
   const clean = publicName(chosenName, null);
   const identity = { n: clean ?? "", g: friends.glyph };
@@ -172,13 +205,28 @@ export function FriendsPanel({
   const copy = async (invite: boolean) => {
     const ownCode = snapshot?.own?.code;
     if (!ownCode) return;
+    const sequence = ++copySequence.current;
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    setCopyPending(true);
+    setCopied(null);
+    setCopyNotice(null);
     try {
       await navigator.clipboard.writeText(
         invite ? `${location.origin}/#friend=${ownCode}` : groupedFriendCode(ownCode),
       );
+      if (sequence !== copySequence.current) return;
+      setCopied(invite ? "link" : "code");
       setCopyNotice(invite ? "Invite link copied." : "Friend code copied.");
+      copyTimer.current = setTimeout(() => {
+        if (sequence !== copySequence.current) return;
+        setCopied(null);
+        setCopyNotice(null);
+      }, 2_000);
     } catch {
+      if (sequence !== copySequence.current) return;
       setCopyNotice("Couldn't copy. Select your friend code and copy it manually.");
+    } finally {
+      if (sequence === copySequence.current) setCopyPending(false);
     }
   };
 
@@ -311,28 +359,7 @@ export function FriendsPanel({
           Refresh
         </button>
       </div>
-      <div
-        aria-live="polite"
-        role="status"
-        className="mt-3 space-y-2 text-sm text-muted-foreground"
-      >
-        {friends.loading && <p>Loading Friends…</p>}
-        {friends.activity.busy && (
-          <p>
-            {friends.activity.uncertain
-              ? "The request may still be processing. Reconnect to check its status."
-              : "Saving Friends…"}
-          </p>
-        )}
-        {friends.activity.outcome && <p>{friends.activity.outcome}</p>}
-        {friends.notice && <p>{friends.notice}</p>}
-        {copyNotice && <p>{copyNotice}</p>}
-      </div>
-      {friends.error && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          {friends.error}
-        </p>
-      )}
+      {!hasAddForm && <div className="mt-3">{feedback}</div>}
       {deleting ? (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -391,9 +418,8 @@ export function FriendsPanel({
                   autoComplete="off"
                 />
               </label>
-              <p className="break-words text-sm text-muted-foreground">
-                Avatar symbol: {symbol}. To change it, choose a symbol in your profile above. Your
-                uploaded picture is shared only if you choose that separately.
+              <p className="break-words text-xs text-muted-foreground">
+                Avatar: {symbol}. Change it in your profile. Picture sharing is a separate choice.
               </p>
               {!clean && (
                 <p className="text-sm text-muted-foreground">Enter a name to use Friends.</p>
@@ -436,84 +462,106 @@ export function FriendsPanel({
                   friendCount={connected.length}
                 />
               )}
-              <div>
-                <p className="text-sm text-muted-foreground">Your friend code</p>
-                <p
-                  className={`mt-2 select-all break-all ${managementOnly ? "font-display" : "font-mono"} text-xl tracking-wider`}
-                  aria-label={`Friend code: ${snapshot.own.code.slice(0, 5)}, ${snapshot.own.code.slice(5)}`}
-                >
-                  {groupedFriendCode(snapshot.own.code)}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={buttonClass}
-                    disabled={disabled}
-                    onClick={() => {
-                      void copy(false);
-                    }}
+              <div className={`grid gap-4 ${managementOnly ? "" : "lg:grid-cols-2"}`}>
+                <div className="min-w-0 rounded-xl border border-border bg-background/20 p-4">
+                  <h3 className="font-display text-base">Your code</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Share it with someone you know.
+                  </p>
+                  <p
+                    className={`mt-2 select-all break-all ${managementOnly ? "font-display" : "font-mono"} text-xl tracking-wider`}
+                    aria-label={`Friend code: ${snapshot.own.code.slice(0, 5)}, ${snapshot.own.code.slice(5)}`}
                   >
-                    Copy code
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonClass}
-                    disabled={disabled}
-                    onClick={() => {
-                      void copy(true);
-                    }}
+                    {groupedFriendCode(snapshot.own.code)}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className={`${buttonClass} inline-flex min-w-32 items-center justify-center gap-2`}
+                      disabled={copyPending}
+                      onClick={() => {
+                        void copy(false);
+                      }}
+                    >
+                      {copied === "code" ? (
+                        <Check aria-hidden="true" className="size-4" />
+                      ) : (
+                        <Copy aria-hidden="true" className="size-4" />
+                      )}
+                      {copied === "code" ? "Copied!" : "Copy code"}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${buttonClass} inline-flex min-w-40 items-center justify-center gap-2`}
+                      disabled={copyPending}
+                      onClick={() => {
+                        void copy(true);
+                      }}
+                    >
+                      {copied === "link" ? (
+                        <Check aria-hidden="true" className="size-4" />
+                      ) : (
+                        <Link aria-hidden="true" className="size-4" />
+                      )}
+                      {copied === "link" ? "Copied!" : "Copy invite link"}
+                    </button>
+                  </div>
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="mt-2 min-h-5 text-xs text-muted-foreground"
                   >
-                    Copy invite link
-                  </button>
-                  <button
-                    type="button"
-                    className={buttonClass}
-                    disabled={disabled}
-                    onClick={confirmRotation}
-                  >
-                    Change code
-                  </button>
+                    {copyNotice}
+                  </p>
                 </div>
-              </div>
-              <form
-                className="space-y-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (disabled || !clean) return;
-                  setConfirmation({
-                    title: "Send friend request?",
-                    body: consent,
-                    label: "Send request",
-                    run: () => {
-                      void friends.request(code, identity);
-                    },
-                  });
-                }}
-              >
-                <label className="block space-y-2 text-sm">
-                  <span>Add someone by code</span>
-                  <input
-                    ref={codeInput}
-                    className={inputClass}
-                    value={code}
-                    disabled={disabled}
-                    onChange={(event) => setCode(event.target.value)}
-                    placeholder="K7F2M-9XQ4T"
-                    autoCapitalize="characters"
-                    autoComplete="off"
-                    spellCheck={false}
-                    maxLength={40}
-                  />
-                </label>
-                <p className="text-xs text-muted-foreground">{requestDisclosure}</p>
-                <button
-                  type="submit"
-                  className={primaryClass}
-                  disabled={disabled || !clean || !code.trim()}
+                <form
+                  className="min-w-0 space-y-3 rounded-xl border border-border bg-background/20 p-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (disabled || !clean || !validCode) return;
+                    setConfirmation({
+                      title: "Send friend request?",
+                      body: consent,
+                      label: "Send request",
+                      run: () => {
+                        void friends.request(code, identity);
+                      },
+                    });
+                  }}
                 >
-                  Review request
-                </button>
-              </form>
+                  <h3 className="font-display text-base">Add a friend</h3>
+                  <label className="block space-y-2 text-sm">
+                    <span>Their friend code</span>
+                    <input
+                      ref={codeInput}
+                      className={inputClass}
+                      value={code}
+                      disabled={disabled}
+                      onChange={(event) => setCode(event.target.value)}
+                      placeholder="K7F2M-9XQ4T"
+                      autoCapitalize="characters"
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={40}
+                      aria-invalid={Boolean(code.trim() && !validCode)}
+                    />
+                  </label>
+                  {code.trim() && !validCode && (
+                    <p className="text-xs text-muted-foreground">
+                      Use their 10-character code. Spaces and the dash are optional.
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">{requestDisclosure}</p>
+                  <button
+                    type="submit"
+                    className={primaryClass}
+                    disabled={disabled || !clean || !validCode}
+                  >
+                    Review request
+                  </button>
+                  {feedback}
+                </form>
+              </div>
             </div>
           )}
           {snapshot && (snapshot.own || snapshot.cached) && (
@@ -557,34 +605,54 @@ export function FriendsPanel({
                   <ul>{unavailable.map((peer) => peerRow(peer, "unavailable"))}</ul>
                 </div>
               )}
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold">Blocked people</h3>
-                {snapshot.blocks.length ? (
-                  <ul>
-                    {snapshot.blocks.map((peer, index) => (
-                      <li
-                        key={peer}
-                        className="mt-2 flex flex-wrap items-center justify-between gap-2"
-                      >
-                        <span className="text-sm">{friends.blockedName(peer)}</span>
-                        <button
-                          type="button"
-                          className={buttonClass}
-                          disabled={disabled}
-                          aria-label={`Unblock ${friends.blockedName(peer)}, entry ${index + 1}`}
-                          onClick={() => {
-                            void friends.unblock(peer);
-                          }}
+              <details className="min-w-0 border-t border-border pt-3 xl:col-span-2">
+                <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
+                  More options · code & blocked people
+                </summary>
+                <div className="space-y-4 pb-2">
+                  <div>
+                    <button
+                      type="button"
+                      className={buttonClass}
+                      disabled={disabled || Boolean(snapshot.cached)}
+                      onClick={confirmRotation}
+                    >
+                      Change friend code
+                    </button>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Replaces old invite links. Existing friends stay connected.
+                    </p>
+                  </div>
+                  <h3 className="text-sm font-semibold">
+                    Blocked people ({snapshot.blocks.length})
+                  </h3>
+                  {snapshot.blocks.length ? (
+                    <ul>
+                      {snapshot.blocks.map((peer, index) => (
+                        <li
+                          key={peer}
+                          className="mt-2 flex flex-wrap items-center justify-between gap-2"
                         >
-                          Unblock
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">No blocked people.</p>
-                )}
-              </div>
+                          <span className="text-sm">{friends.blockedName(peer)}</span>
+                          <button
+                            type="button"
+                            className={buttonClass}
+                            disabled={disabled}
+                            aria-label={`Unblock ${friends.blockedName(peer)}, entry ${index + 1}`}
+                            onClick={() => {
+                              void friends.unblock(peer);
+                            }}
+                          >
+                            Unblock
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">No blocked people.</p>
+                  )}
+                </div>
+              </details>
             </div>
           )}
         </>

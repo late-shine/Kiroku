@@ -20,6 +20,7 @@ import { FriendTabs } from "./FriendTabs";
 import { FriendAvatar } from "./FriendAvatar";
 import { SideBySide } from "./SideBySide";
 import { CheerRow } from "./CheerRow";
+import { studyThreadRun, type StudyThreadRun } from "@/lib/comparison-motion";
 import { friendButton } from "./friends-ui";
 
 export function FriendsView({
@@ -42,7 +43,9 @@ export function FriendsView({
   const prefix = useId();
   const motionAllowed = useMotionPreference();
   const snapshot = friends.snapshot;
-  const today = localDay(new Date(clock));
+  // A newly acknowledged card must not look future-dated against an older UI clock tick.
+  const comparisonNow = Math.max(clock, snapshot && !snapshot.cached ? snapshot.fetchedAt : clock);
+  const today = localDay(new Date(comparisonNow));
   const people = snapshot?.peers ?? [];
   const peers = people
     .filter((peer) => ["final", "unavailable", "inconsistent"].includes(peer.state))
@@ -227,7 +230,10 @@ export function FriendsView({
                 {friends.loading
                   ? "Refreshing Friends…"
                   : snapshot
-                    ? friendCardAge(snapshot.fetchedAt, clock).replace("Updated", "Refreshed")
+                    ? friendCardAge(snapshot.fetchedAt, comparisonNow).replace(
+                        "Updated",
+                        "Refreshed",
+                      )
                     : "No confirmed snapshot yet."}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -259,7 +265,7 @@ export function FriendsView({
                 onSelect={setSelected}
                 prefix={prefix}
                 today={today}
-                now={clock}
+                now={comparisonNow}
                 activityKnown={online && !snapshot?.cached}
                 unread={friends.unreadCheers}
                 cheersStale={friends.cheersStale}
@@ -311,7 +317,7 @@ export function FriendsView({
                     peer={peer}
                     scenes={scenes}
                     today={today}
-                    now={clock}
+                    now={comparisonNow}
                     offline={!online}
                     imageRefresh={imageRefresh}
                     onRemove={() => remove(peer)}
@@ -360,6 +366,10 @@ function SelectedDesk({
   const entry = friends.snapshot?.cards?.[peer.uid];
   const card = peer.state === "final" && entry?.kind === "published" ? entry.card : null;
   const cached = Boolean(friends.snapshot?.cached || entry?.cached || offline);
+  const threadScope = useRef<{ day: string; run: StudyThreadRun } | null>(null);
+  if (!threadScope.current || threadScope.current.day !== today)
+    threadScope.current = { day: today, run: studyThreadRun() };
+  const threadRun = threadScope.current.run;
   const [run, setRun] = useState<CardEffectRun | null>(null);
   const entered = useRef(false);
   const attempted = useRef<string | null>(null);
@@ -506,6 +516,8 @@ function SelectedDesk({
           now={now}
           cached={cached}
           photo={photo?.data ?? null}
+          threadRun={threadRun}
+          rankChange={!cached ? (friends.snapshot?.rankIncreases?.[peer.uid] ?? null) : null}
         />
       ) : (
         <p className="glass-panel rounded-xl p-5 text-sm text-muted-foreground">

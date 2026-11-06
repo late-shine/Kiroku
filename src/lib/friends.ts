@@ -4,7 +4,7 @@ import { BADGES, RANKS } from "./rewards";
 import { profileStats } from "./writing-stats";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 import { isBannerId } from "./friend-banner";
-import { addDays } from "./word-memory";
+import { addDays, localDay } from "./word-memory";
 import {
   decorationDefinition,
   decorationIds,
@@ -49,6 +49,7 @@ export type FriendsSnapshot = {
   cached: boolean;
   cards?: Record<string, FriendCardState>;
   cheers?: CheerInboxRead;
+  rankIncreases?: Record<string, FriendRankIncrease>;
 };
 export type FriendsLocal = {
   v: 1;
@@ -1024,4 +1025,36 @@ export function canCheerToday(
 }
 export function cheerUnread(cheer: Cheer | null | undefined, seen: number | undefined): boolean {
   return Boolean(cheer && cheer.t > (seen ?? -1));
+}
+
+// F6: evidence for this refreshed view only; never part of a stored/public card.
+export type FriendRankIncrease = { from: number; to: number; publishedAt: number };
+export function freshRankIncrease(
+  previous: FriendCardState | undefined,
+  current: FriendCardState,
+  now: number,
+): FriendRankIncrease | null {
+  if (
+    previous?.kind !== "published" ||
+    current.kind !== "published" ||
+    current.cached ||
+    !friendSnapshotFresh(previous.card, now) ||
+    !friendSnapshotFresh(current.card, now) ||
+    previous.card.t === null ||
+    current.card.t === null ||
+    current.card.t <= previous.card.t ||
+    current.card.r <= previous.card.r ||
+    (previous.card.r !== 0 && !RANKS.some((rank) => rank.level === previous.card.r)) ||
+    !RANKS.some((rank) => rank.level === current.card.r)
+  )
+    return null;
+  const today = localDay(new Date(now));
+  const beforeWeek = alignFriendWeek(previous.card, today);
+  const afterWeek = alignFriendWeek(current.card, today);
+  if (
+    !beforeWeek?.some((day) => day.answers !== null && day.writing !== null) ||
+    !afterWeek?.some((day) => day.answers !== null && day.writing !== null)
+  )
+    return null;
+  return { from: previous.card.r, to: current.card.r, publishedAt: current.card.t };
 }

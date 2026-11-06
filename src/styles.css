@@ -1830,7 +1830,7 @@ rt {
     animation: bar-grow 700ms ease-out 1 both;
     transform-origin: top;
   }
-  .friends-view[data-motion-allowed="true"] .friends-thread-shared {
+  .friends-view[data-motion-allowed="true"] .friends-thread-shared[data-thread-phase="running"] {
     animation: thread-draw 600ms ease-out 1 both;
     transform-origin: left;
   }

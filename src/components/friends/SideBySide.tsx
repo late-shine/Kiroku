@@ -12,6 +12,7 @@ import {
   type FriendCardSource,
   type FriendDecoration,
   type NotebookSummary,
+  type FriendRankIncrease,
 } from "@/lib/friends";
 import type { Avatar } from "@/lib/profile";
 import { FriendAvatar } from "./FriendAvatar";
@@ -19,6 +20,8 @@ import { MirrorBars } from "./MirrorBars";
 import { MasteryRings } from "./MasteryRings";
 import { RankLadder } from "./RankLadder";
 import { BadgeOverlap } from "./BadgeOverlap";
+import { StudyThread } from "./StudyThread";
+import type { StudyThreadRun } from "@/lib/comparison-motion";
 
 export function SideBySide({
   source,
@@ -31,6 +34,8 @@ export function SideBySide({
   now,
   cached,
   photo,
+  threadRun,
+  rankChange,
 }: {
   source: FriendCardSource;
   previousAnswers: number;
@@ -42,6 +47,8 @@ export function SideBySide({
   now: number;
   cached: boolean;
   photo: string | null;
+  threadRun: StudyThreadRun;
+  rankChange: FriendRankIncrease | null;
 }) {
   const stats = source.stats;
   const ownDeco = resolveDeco(ownDecoration, source.badges);
@@ -81,6 +88,16 @@ export function SideBySide({
     fresh && fullCoverage && otherWeek.every((day) => day.answers === 0 && day.writing === 0);
   const ownRank = RANKS.find((rank) => rank.level === own.r);
   const otherRank = RANKS.find((rank) => rank.level === other.r);
+  const reachedRank =
+    fresh &&
+    hasCoverage &&
+    ownWeek &&
+    rankChange &&
+    rankChange.from < card.r &&
+    rankChange.to === card.r &&
+    rankChange.publishedAt === card.t
+      ? otherRank
+      : null;
   const delta = stats.answersThisWeek - previousAnswers;
   const ownWeekSentence =
     delta > 0
@@ -97,12 +114,13 @@ export function SideBySide({
         </p>
       ) : null}
       {fresh && hasCoverage && (
-        <div className="glass-panel rounded-xl p-4">
-          <div className="flex items-center gap-4" aria-hidden="true">
+        <StudyThread
+          run={threadRun}
+          active={bothToday}
+          ownAvatar={
             <FriendAvatar name={own.n} glyph={own.g} frame={own.fr} size={48} avatar={ownAvatar} />
-            <span
-              className={`friends-thread h-px flex-1 ${bothToday ? "friends-thread-shared bg-primary" : "bg-border"}`}
-            />
+          }
+          friendAvatar={
             <span data-card-accent={other.acc}>
               <FriendAvatar
                 name={other.n}
@@ -112,13 +130,13 @@ export function SideBySide({
                 photo={photo}
               />
             </span>
-          </div>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            {bothToday
-              ? "You both studied today, as of the shared update."
-              : "Two notebooks, one week."}
-          </p>
-        </div>
+          }
+        />
+      )}
+      {reachedRank && (
+        <p className="text-xs font-medium text-primary">
+          {card.n} reached a new rank: {reachedRank.name}.
+        </p>
       )}
       {quiet && <p className="text-sm text-muted-foreground">Quiet this week.</p>}
       {(!fullCoverage || !fresh) && (

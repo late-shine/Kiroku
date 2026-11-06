@@ -4,6 +4,8 @@ import {
   decodeCheer,
   isCheerId,
   canCheerToday,
+  freshRankIncrease,
+  type FriendRankIncrease,
   type Cheer,
   type CheerId,
   type CheerInboxRead,
@@ -422,6 +424,14 @@ export async function fetchFriends(
     }),
   );
   assertCurrent(token);
+  const rankIncreases: Record<string, FriendRankIncrease> = {};
+  const refreshedAt = Date.now();
+  for (const peer of peers) {
+    const card = cards[peer.uid];
+    if (peer.state !== "final" || !card) continue;
+    const increase = freshRankIncrease(cachedCards[peer.uid], card, refreshedAt);
+    if (increase) rankIncreases[peer.uid] = increase;
+  }
   const cheers: CheerInboxRead = {
     loaded: cheerResult.error === null,
     records: {},
@@ -455,6 +465,7 @@ export async function fetchFriends(
     cached: false,
     cards,
     cheers,
+    rankIncreases,
   };
 }
 

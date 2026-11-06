@@ -1788,11 +1788,13 @@ export function useFriendsController({
       const stamp = ownCheerLocal.sentDay[peer];
       const outgoing = pane.outgoing;
       const chosen =
-        outgoing && outgoing.d >= day && (!stamp || outgoing.d >= stamp)
-          ? outgoing.k
-          : stamp && stamp >= day
-            ? (ownCheerLocal.sentCheer[peer] ?? null)
-            : null;
+        day === null
+          ? null
+          : outgoing && outgoing.d >= day && (!stamp || outgoing.d >= stamp)
+            ? outgoing.k
+            : stamp && stamp >= day
+              ? (ownCheerLocal.sentCheer[peer] ?? null)
+              : null;
       return {
         incoming,
         outgoing,
@@ -1801,13 +1803,21 @@ export function useFriendsController({
         cached,
         error: pane.error ?? (!pane.loaded ? ownInbox.error : null),
         canSend:
+          day !== null &&
           fresh &&
           pane.loaded &&
           !pane.loading &&
           !pane.error &&
           canCheerToday(day, stamp, outgoing),
         sentKind: chosen,
-        sentDay: stamp && stamp >= day ? stamp : outgoing && outgoing.d >= day ? outgoing.d : null,
+        sentDay:
+          day === null
+            ? null
+            : stamp && stamp >= day
+              ? stamp
+              : outgoing && outgoing.d >= day
+                ? outgoing.d
+                : null,
       };
     },
     markCheerSeen: (peer: string, time: number) => {

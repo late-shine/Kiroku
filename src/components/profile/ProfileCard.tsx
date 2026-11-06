@@ -3,6 +3,7 @@ import { Avatar } from "./Avatar";
 import { BadgeArt, BadgeArtDefs } from "./BadgeArt";
 import { BadgeShelf } from "./BadgeShelf";
 import { Frame } from "./Frame";
+import { CardBorder, LittleDetail } from "./CardOrnaments";
 import { RankStamp } from "@/components/write/RankStamp";
 import { BADGES, RANKS } from "@/lib/rewards";
 import { resolveAccent, resolveStamp } from "@/lib/quest-prefs";
@@ -144,26 +145,30 @@ export function ProfileCard(props: Props) {
       className="profile-card relative w-full overflow-hidden rounded-2xl"
     >
       {props.renderDefs !== false && <BadgeArtDefs />}
-      <div
-        aria-hidden="true"
-        data-uploaded={Boolean(visibleUpload)}
-        className={`profile-card-banner relative overflow-hidden bg-secondary ${scene || visibleUpload ? "" : "profile-card-banner-ink"}`}
-      >
-        {visibleUpload ? (
-          <img
-            src={visibleUpload}
-            alt=""
-            className="profile-card-upload size-full object-contain"
-            onError={() => setFailedBanner(visibleUpload)}
-          />
-        ) : (
-          scene && <img src={scene.url} alt="" className="size-full object-cover" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-scrim/70 to-transparent" />
-        <span className="profile-card-wordmark">
-          記録 <span>CALLING CARD</span>
-        </span>
+      <div className="profile-card-banner-shell">
+        <div
+          aria-hidden="true"
+          data-uploaded={Boolean(visibleUpload)}
+          className={`profile-card-banner relative overflow-hidden bg-secondary ${scene || visibleUpload ? "" : "profile-card-banner-ink"}`}
+        >
+          {visibleUpload ? (
+            <img
+              src={visibleUpload}
+              alt=""
+              className="profile-card-upload size-full object-contain"
+              onError={() => setFailedBanner(visibleUpload)}
+            />
+          ) : (
+            scene && <img src={scene.url} alt="" className="size-full object-cover" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-scrim/70 to-transparent" />
+          <span className="profile-card-wordmark">
+            記録 <span>CALLING CARD</span>
+          </span>
+        </div>
+        {data && <LittleDetail charm={deco.charm} />}
       </div>
+      {data && <CardBorder border={deco.border} />}
       {(props.bannerError || (upload && failedBanner === upload)) && (
         <div className="px-4 pt-2 text-xs text-muted-foreground" role="status">
           <p>{props.bannerError ?? "Couldn't display this banner."}</p>

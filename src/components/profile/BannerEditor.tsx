@@ -117,6 +117,13 @@ export function BannerEditor({
         onChange={picked}
         aria-label="Choose a banner image"
       />
+      {draft && !removing && (
+        <img
+          src={draft.data}
+          alt="Your cropped banner"
+          className="mb-3 aspect-[8/3] w-36 rounded-lg border border-border object-contain"
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

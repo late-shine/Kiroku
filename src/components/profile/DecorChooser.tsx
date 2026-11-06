@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Award, Check, ChevronDown, ChevronUp, Eye, Lock, Palette, UserRound } from "lucide-react";
+import { Award, Check, ChevronDown, ChevronUp, Eye, Palette, UserRound } from "lucide-react";
 import { BADGES } from "@/lib/rewards";
 import {
-  FRIEND_FRAMES,
   FRIEND_TAGS,
   FRIEND_STATUSES,
   FRIEND_STATUS_LABELS,
   FRIEND_TAG_LABELS,
-  FRAME_BADGES,
-  decorationUnlocked,
   resolveDeco,
   MAX_STATUS_LENGTH,
   normalizeStatusInput,
@@ -17,20 +14,14 @@ import {
   type FriendDecoration,
 } from "@/lib/friends";
 import { Frame } from "./Frame";
+import { DecorationCollection } from "./DecorationCollection";
+import { OrnamentSample } from "./CardOrnaments";
+import { decorationDefinition } from "@/lib/friend-decorations";
 import { BadgeArt } from "./BadgeArt";
 import { formatDay } from "./BadgeShelf";
 import { BannerEditor } from "./BannerEditor";
 import type { BannerDraft, BannerScope } from "@/lib/friend-banner";
 
-const DEFAULT: FriendDecoration = { fr: "plain", fx: "none" };
-const FRAME_NAMES: Record<FriendDecoration["fr"], string> = {
-  plain: "Quiet ink",
-  gold: "Golden brush",
-  stitch: "Sashiko",
-  moss: "Little garden",
-  double: "Bookplate",
-  seal: "Personal seal",
-};
 const PANELS = [
   { id: "about", label: "About", icon: UserRound },
   { id: "style", label: "Style", icon: Palette },
@@ -186,6 +177,41 @@ export function DecorChooser({
     onPreviewChange(false);
     setNotice(accountMode ? "Back to your saved look." : "Back to the original look.");
   };
+  const uploadSelected = !bannerRemoving && Boolean(bannerDraft?.selected || draft.bannerId);
+  const uploadEditor = (
+    <BannerEditor
+      key={bannerScope ? `${bannerScope.uid ?? "local"}:${bannerScope.generation}` : "waiting"}
+      draft={bannerDraft}
+      scope={bannerScope}
+      disabled={disabled || saving}
+      storageError={bannerError}
+      active={panel === "style"}
+      accountMode={accountMode}
+      loading={bannerLoading}
+      loadError={bannerLoadError}
+      removing={bannerRemoving}
+      onLoad={onBannerLoad}
+      onRemove={() => {
+        onBannerRemove();
+        const { bannerId: _upload, ...rest } = draft;
+        change(rest);
+      }}
+      onChange={(value, scope) => {
+        onPreviewChange(false);
+        return onBannerChange(value, scope);
+      }}
+      onCropActive={setBannerCropActive}
+    />
+  );
+  const bannerChoices = [
+    { index: undefined as number | undefined, name: "Quiet ink", url: null as string | null },
+    ...scenes.slice(0, 4).map((scene, index) => ({ index, name: scene.name, url: scene.url })),
+  ];
+  bannerChoices.sort(
+    (a, b) =>
+      Number(!uploadSelected && b.index === draft.bk) -
+      Number(!uploadSelected && a.index === draft.bk),
+  );
   return (
     <div className="card-studio">
       <div className="card-studio-side">
@@ -403,133 +429,84 @@ export function DecorChooser({
             <fieldset disabled={disabled || saving} className="studio-fieldset">
               <legend className="studio-field-label">Banner</legend>
               <p className="studio-field-hint">A little atmosphere behind your name.</p>
+              {uploadSelected && uploadEditor}
               <div className="studio-scene-grid">
-                <button
-                  type="button"
-                  className="studio-scene studio-scene-ink"
-                  aria-pressed={
-                    (!bannerDraft?.selected || bannerRemoving) &&
-                    !draft.bannerId &&
-                    draft.bk === undefined
-                  }
-                  onClick={() => {
-                    const { bk: _old, bannerId: _upload, ...rest } = draft;
-                    onBannerDeselect();
-                    change(rest);
-                  }}
-                >
-                  <span aria-hidden="true" className="studio-ink-mark">
-                    記
-                  </span>
-                  <span className="studio-scene-name">Quiet ink</span>
-                  {(!bannerDraft?.selected || bannerRemoving) &&
-                    !draft.bannerId &&
-                    draft.bk === undefined && (
-                      <span className="studio-choice-check">
-                        <Check aria-hidden="true" className="size-3" />
-                      </span>
-                    )}
-                </button>
-                {scenes.slice(0, 4).map((scene, index) => (
-                  <button
-                    key={scene.name}
-                    type="button"
-                    className="studio-scene"
-                    aria-pressed={
-                      (!bannerDraft?.selected || bannerRemoving) &&
-                      !draft.bannerId &&
-                      draft.bk === index
-                    }
-                    onClick={() => {
-                      onBannerDeselect();
-                      const { bannerId: _upload, ...rest } = draft;
-                      change({ ...rest, bk: index });
-                    }}
-                  >
-                    <img src={scene.url} alt="" loading="lazy" />
-                    <span className="studio-scene-name">{scene.name}</span>
-                    {(!bannerDraft?.selected || bannerRemoving) &&
-                      !draft.bannerId &&
-                      draft.bk === index && (
+                {bannerChoices.map((scene) => {
+                  const selected = !uploadSelected && draft.bk === scene.index;
+                  return (
+                    <button
+                      key={scene.index ?? "flat"}
+                      type="button"
+                      className={`studio-scene ${scene.url ? "" : "studio-scene-ink"}`}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        onBannerDeselect();
+                        const { bannerId: _upload, bk: _old, ...rest } = draft;
+                        change(scene.index === undefined ? rest : { ...rest, bk: scene.index });
+                      }}
+                    >
+                      {scene.url ? (
+                        <img src={scene.url} alt="" loading="lazy" />
+                      ) : (
+                        <span aria-hidden="true" className="studio-ink-mark">
+                          記
+                        </span>
+                      )}
+                      <span className="studio-scene-name">{scene.name}</span>
+                      {selected && (
                         <span className="studio-choice-check">
                           <Check aria-hidden="true" className="size-3" />
                         </span>
                       )}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <BannerEditor
-              key={
-                bannerScope ? `${bannerScope.uid ?? "local"}:${bannerScope.generation}` : "waiting"
-              }
-              draft={bannerDraft}
-              scope={bannerScope}
-              disabled={disabled || saving}
-              storageError={bannerError}
-              active={panel === "style"}
-              accountMode={accountMode}
-              loading={bannerLoading}
-              loadError={bannerLoadError}
-              removing={bannerRemoving}
-              onLoad={onBannerLoad}
-              onRemove={() => {
-                onBannerRemove();
-                const { bannerId: _upload, ...rest } = draft;
-                change(rest);
-              }}
-              onChange={(value, scope) => {
-                onPreviewChange(false);
-                return onBannerChange(value, scope);
-              }}
-              onCropActive={setBannerCropActive}
-            />
-            <fieldset disabled={disabled || saving} className="studio-fieldset">
-              <legend className="studio-field-label">Frame</legend>
-              <p className="studio-field-hint">Frames are earned along the way.</p>
-              <div className="studio-frame-grid">
-                {FRIEND_FRAMES.map((id) => {
-                  const locked = !decorationUnlocked("frame", id, badges);
-                  const badge = BADGES.find((item) => item.id === FRAME_BADGES[id]);
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className="studio-frame-choice"
-                      aria-disabled={locked}
-                      aria-pressed={resolved.fr === id}
-                      title={locked && badge ? `${badge.name}: ${badge.how}` : FRAME_NAMES[id]}
-                      aria-label={`${FRAME_NAMES[id]}${locked && badge ? `. Locked. ${badge.how}` : ""}`}
-                      onClick={() => {
-                        if (!locked) change({ ...draft, fr: id });
-                      }}
-                    >
-                      <Frame frame={id}>
-                        <span aria-hidden="true" className="profile-avatar studio-frame-sample">
-                          記
-                        </span>
-                      </Frame>
-                      <span className="studio-choice-name">{FRAME_NAMES[id]}</span>
-                      <span className="studio-choice-caption">
-                        {locked ? (
-                          <>
-                            <Lock aria-hidden="true" className="size-3" />
-                            {badge?.name ?? "Locked"}
-                          </>
-                        ) : resolved.fr === id ? (
-                          <>
-                            <Check aria-hidden="true" className="size-3" />
-                            Selected
-                          </>
-                        ) : (
-                          "Available"
-                        )}
-                      </span>
                     </button>
                   );
                 })}
               </div>
+              {!uploadSelected && uploadEditor}
             </fieldset>
+
+            <DecorationCollection
+              slot="frame"
+              label="Avatar frame"
+              hint="A small collection, earned as you study."
+              selected={draft.fr}
+              badges={badges}
+              disabled={disabled || saving}
+              onSelect={(fr) => change({ ...draft, fr })}
+              thumbnail={(id) => (
+                <Frame frame={id}>
+                  <span aria-hidden="true" className="profile-avatar studio-frame-sample">
+                    記
+                  </span>
+                </Frame>
+              )}
+            />
+            <DecorationCollection
+              slot="border"
+              label="Card border"
+              hint="A quiet edge around your card."
+              selected={draft.border ?? "none"}
+              badges={badges}
+              disabled={disabled || saving}
+              onSelect={(border) => {
+                const { border: _old, ...rest } = draft;
+                change(border === "none" ? rest : { ...rest, border });
+              }}
+              thumbnail={(id) => <OrnamentSample border={id} />}
+            />
+            <DecorationCollection
+              slot="charm"
+              label="Little detail"
+              hint="One small finishing touch."
+              selected={draft.charm ?? "none"}
+              badges={badges}
+              disabled={disabled || saving}
+              onSelect={(charm) => {
+                const { charm: _old, ...rest } = draft;
+                change(charm === "none" ? rest : { ...rest, charm });
+              }}
+              thumbnail={(id) => <OrnamentSample charm={id} />}
+            />
           </div>
 
           <div id="studio-section-badges" hidden={panel !== "badges"} className={sectionClass}>
@@ -629,7 +606,7 @@ export function DecorChooser({
             <div className="studio-inline-message">
               <p>Your saved look changed on another device.</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {FRAME_NAMES[saved.fr]} ·{" "}
+                {decorationDefinition("frame", saved.fr)?.name ?? "Quiet ink"} ·{" "}
                 {saved.bannerId
                   ? "Uploaded banner"
                   : saved.bk === undefined

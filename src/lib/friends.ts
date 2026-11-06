@@ -4,6 +4,16 @@ import { BADGES } from "./rewards";
 import { profileStats } from "./writing-stats";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 import { isBannerId } from "./friend-banner";
+import {
+  decorationDefinition,
+  decorationIds,
+  isDecorationId,
+  type DecorationSlot,
+  type FrameId,
+  type BorderId,
+  type CharmId,
+  type EffectId,
+} from "./friend-decorations";
 
 export const FRIEND_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const FRIEND_LIMIT = 12;
@@ -315,11 +325,13 @@ export function decodeFriendsCache(raw: string | null, uid: string): FriendsCach
   }
 }
 
-export const FRIEND_FRAMES = ["plain", "gold", "stitch", "moss", "double", "seal"] as const;
-export const FRIEND_EFFECTS = ["none", "vines", "petals", "fireflies"] as const;
+export const FRIEND_FRAMES = decorationIds("frame");
+export const FRIEND_EFFECTS = decorationIds("effect");
+export const FRIEND_BORDERS = decorationIds("border");
+export const FRIEND_CHARMS = decorationIds("charm");
 export const FRIEND_TAGS = ["n5", "n4", "n3", "n2", "n1", "kanji", "self", "reading"] as const;
 export const FRIEND_STATUSES = ["adding", "reviewing", "writing", "carving", "quiet"] as const;
-export const FRIEND_SCHEMA_VERSION = 3;
+export const FRIEND_SCHEMA_VERSION = 4;
 export const MAX_STATUS_LENGTH = 60;
 export class UnsupportedFriendSettingsError extends Error {
   constructor() {
@@ -350,7 +362,15 @@ export function canonicalStatus(value: unknown): string | null {
     ? value
     : null;
 }
-const decoKeys = ["fr", "fx", "bk", "tg", "sb", "pin", "statusText", "bannerId"];
+const decoKeys = ["fr", "fx", "bk", "tg", "sb", "pin", "statusText", "bannerId", "border", "charm"];
+function validDecorationVersion(row: Record<string, unknown>, version: number): boolean {
+  return (
+    (row["border"] === undefined || version >= 4) &&
+    (row["charm"] === undefined || version >= 4) &&
+    (decorationDefinition("frame", row["fr"])?.minVersion ?? 1) <= version &&
+    (decorationDefinition("effect", row["fx"])?.minVersion ?? 1) <= version
+  );
+}
 function validSavedBanner(row: Record<string, unknown>, version: number): boolean {
   return (
     row["bannerId"] === undefined ||
@@ -364,8 +384,10 @@ function validSavedStatus(row: Record<string, unknown>, version: number): boolea
   );
 }
 export type FriendDecoration = {
-  fr: (typeof FRIEND_FRAMES)[number];
-  fx: (typeof FRIEND_EFFECTS)[number];
+  fr: FrameId;
+  fx: EffectId;
+  border?: Exclude<BorderId, "none">;
+  charm?: Exclude<CharmId, "none">;
   bk?: number;
   tg?: (typeof FRIEND_TAGS)[number];
   sb?: (typeof FRIEND_STATUSES)[number];
@@ -374,7 +396,7 @@ export type FriendDecoration = {
   pin?: string;
 };
 export type FriendSettings = {
-  v: 1 | 2 | 3;
+  v: 1 | 2 | 3 | 4;
   rev: string;
   prev: string;
   on: boolean;
@@ -384,7 +406,7 @@ export type FriendSettings = {
   deco: FriendDecoration;
 };
 export type FriendCard = {
-  v: 1 | 2 | 3;
+  v: 1 | 2 | 3 | 4;
   rev: string;
   ph: boolean;
   t: number | null;
@@ -406,6 +428,8 @@ export type FriendCard = {
   st: "ink" | "moss" | "paper";
   fr: FriendDecoration["fr"];
   fx: FriendDecoration["fx"];
+  border?: FriendDecoration["border"];
+  charm?: FriendDecoration["charm"];
   bk?: number;
   tg?: FriendDecoration["tg"];
   sb?: FriendDecoration["sb"];
@@ -454,6 +478,11 @@ function pins(value: unknown, earned?: Readonly<Record<string, string>>): string
 export function decodeDecoration(value: unknown, draft = false): FriendDecoration | null {
   const row = record(value);
   if (!row || !member(row["fr"], FRIEND_FRAMES) || !member(row["fx"], FRIEND_EFFECTS)) return null;
+  if (
+    (row["border"] !== undefined && !isDecorationId("border", row["border"])) ||
+    (row["charm"] !== undefined && !isDecorationId("charm", row["charm"]))
+  )
+    return null;
   const pin = pins(row["pin"]);
   if (row["bannerId"] !== undefined && (!isBannerId(row["bannerId"]) || row["bk"] !== undefined))
     return null;
@@ -470,6 +499,12 @@ export function decodeDecoration(value: unknown, draft = false): FriendDecoratio
   return {
     fr: row["fr"],
     fx: row["fx"],
+    ...(isDecorationId("border", row["border"]) && row["border"] !== "none"
+      ? { border: row["border"] }
+      : {}),
+    ...(isDecorationId("charm", row["charm"]) && row["charm"] !== "none"
+      ? { charm: row["charm"] }
+      : {}),
     ...(Number.isInteger(row["bk"]) && Number(row["bk"]) >= 0 && Number(row["bk"]) <= 3
       ? { bk: Number(row["bk"]) }
       : {}),
@@ -483,18 +518,19 @@ export function decodeDecoration(value: unknown, draft = false): FriendDecoratio
 export function decodeFriendSettings(value: unknown): FriendSettings | null {
   if (value === null) return null;
   const row = record(value);
-  if (row && row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3)
+  if (row && row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3 && row["v"] !== 4)
     throw new UnsupportedFriendSettingsError();
   const deco = decodeDecoration(row?.["deco"]);
   if (
     !row ||
-    (row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3) ||
+    (row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3 && row["v"] !== 4) ||
     Object.keys(row).some(
       (key) => !["v", "rev", "prev", "on", "photo", "n", "since", "deco"].includes(key),
     ) ||
     Object.keys(record(row["deco"]) ?? {}).some((key) => !decoKeys.includes(key)) ||
     !validSavedStatus(record(row["deco"]) ?? {}, row["v"]) ||
     !validSavedBanner(record(row["deco"]) ?? {}, row["v"]) ||
+    !validDecorationVersion(record(row["deco"]) ?? {}, row["v"]) ||
     !revisionValid(row["rev"]) ||
     (row["prev"] !== "" && !revisionValid(row["prev"])) ||
     typeof row["on"] !== "boolean" ||
@@ -561,7 +597,8 @@ export function buildFriendPublication(
   source: FriendCardSource,
 ): FriendPublication {
   const s = source.stats;
-  const deco = resolveDeco(settings.deco, source.badges);
+  // Persist the saved choices. Renderers apply badge fallbacks without erasing intent.
+  const deco = settings.deco;
   const photo = settings.photo && source.photo ? { rev: settings.rev, data: source.photo } : null;
   const pin = pins(deco.pin, source.badges);
   const statusText = settings.v >= 2 ? canonicalStatus(deco.statusText?.trim()) : null;
@@ -588,6 +625,8 @@ export function buildFriendPublication(
     st: source.st,
     fr: deco.fr,
     fx: deco.fx,
+    ...(settings.v >= 4 && deco.border ? { border: deco.border } : {}),
+    ...(settings.v >= 4 && deco.charm ? { charm: deco.charm } : {}),
     ...(deco.bk !== undefined ? { bk: deco.bk } : {}),
     ...(deco.tg !== undefined ? { tg: deco.tg } : {}),
     ...(deco.sb !== undefined ? { sb: deco.sb } : {}),
@@ -606,14 +645,15 @@ export function decodeFriendCard(value: unknown): FriendCardState {
   const base = { cached: false, fetchedAt: Date.now() };
   if (value === null) return { ...base, kind: "closed" };
   const row = record(value);
-  if (row && row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3)
+  if (row && row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3 && row["v"] !== 4)
     return { ...base, kind: "unsupported" };
   const who = row ? identity(row) : null;
   if (
     !row ||
-    (row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3) ||
+    (row["v"] !== 1 && row["v"] !== 2 && row["v"] !== 3 && row["v"] !== 4) ||
     !validSavedStatus(row, row["v"]) ||
     !validSavedBanner(row, row["v"]) ||
+    !validDecorationVersion(row, row["v"]) ||
     Object.keys(row).some(
       (key) =>
         ![
@@ -644,6 +684,8 @@ export function decodeFriendCard(value: unknown): FriendCardState {
           "sb",
           "statusText",
           "bannerId",
+          "border",
+          "charm",
           "sh",
         ].includes(key),
     ) ||
@@ -672,6 +714,8 @@ export function decodeFriendCard(value: unknown): FriendCardState {
     ...row,
     fr: member(row["fr"], FRIEND_FRAMES) ? row["fr"] : "plain",
     fx: member(row["fx"], FRIEND_EFFECTS) ? row["fx"] : "none",
+    border: isDecorationId("border", row["border"]) ? row["border"] : undefined,
+    charm: isDecorationId("charm", row["charm"]) ? row["charm"] : undefined,
   })!;
   const pin = pins(row["pin"], bd);
   const card: FriendCard = {
@@ -702,6 +746,8 @@ export function decodeFriendCard(value: unknown): FriendCardState {
     ...(deco.sb ? { sb: deco.sb } : {}),
     ...(deco.statusText ? { statusText: deco.statusText } : {}),
     ...(deco.bannerId ? { bannerId: deco.bannerId } : {}),
+    ...(deco.border ? { border: deco.border } : {}),
+    ...(deco.charm ? { charm: deco.charm } : {}),
     sh: row["sh"],
   };
   return { ...base, kind: "published", card };
@@ -727,18 +773,19 @@ export function friendCardAge(timestamp: number | null, now = Date.now()): strin
 }
 
 export type CardScene = { name: string; url: string };
-export const FRAME_BADGES: Readonly<Record<string, string>> = {
-  gold: "first-answer",
-  stitch: "streak-3",
-  moss: "streak-7",
-  double: "lessons-10",
-  seal: "first-carve",
-};
-export const EFFECT_BADGES: Readonly<Record<string, string>> = {
-  vines: "streak-30",
-  petals: "carved-10",
-  fireflies: "mastered-20",
-};
+// Compatibility exports are derived from the catalogue, never independent unlock maps.
+export const FRAME_BADGES: Readonly<Record<string, string>> = Object.fromEntries(
+  FRIEND_FRAMES.flatMap((id) => {
+    const badge = decorationDefinition("frame", id)?.requiredBadge;
+    return badge ? [[id, badge]] : [];
+  }),
+);
+export const EFFECT_BADGES: Readonly<Record<string, string>> = Object.fromEntries(
+  FRIEND_EFFECTS.flatMap((id) => {
+    const badge = decorationDefinition("effect", id)?.requiredBadge;
+    return badge ? [[id, badge]] : [];
+  }),
+);
 export const FRIEND_STATUS_LABELS: Readonly<Record<NonNullable<FriendDecoration["sb"]>, string>> = {
   adding: "Adding to my notebook",
   reviewing: "Reviewing a few words",
@@ -759,25 +806,44 @@ export const FRIEND_TAG_LABELS: Readonly<Record<NonNullable<FriendDecoration["tg
 
 /** Unlocks affect rendering/selection only. Never rewrite a saved locked choice. */
 export function decorationUnlocked(
-  slot: "frame" | "effect",
+  slot: DecorationSlot,
   id: string,
   badges: Readonly<Record<string, string>>,
 ): boolean {
-  if (slot === "effect") return id === "none"; // Animated effects are implemented in F6.
-  if (id === "plain") return true;
-  const required = FRAME_BADGES[id];
-  return required !== undefined && dayValid(badges[required]);
+  const definition = decorationDefinition(slot, id);
+  return Boolean(
+    definition &&
+    definition.implemented !== false &&
+    (!definition.requiredBadge || dayValid(badges[definition.requiredBadge])),
+  );
 }
 
 export function resolveDeco(
   value: unknown,
   badges: Readonly<Record<string, string>>,
 ): FriendDecoration {
-  const stored = decodeDecoration(value, true) ?? { fr: "plain", fx: "none" };
+  const raw = record(value) ?? {};
+  // Unknown choices fall back per slot, leaving the saved input and other slots intact.
+  const stored = decodeDecoration(
+    {
+      ...raw,
+      fr: isDecorationId("frame", raw["fr"]) ? raw["fr"] : "plain",
+      fx: isDecorationId("effect", raw["fx"]) ? raw["fx"] : "none",
+      border: isDecorationId("border", raw["border"]) ? raw["border"] : undefined,
+      charm: isDecorationId("charm", raw["charm"]) ? raw["charm"] : undefined,
+    },
+    true,
+  ) ?? { fr: "plain", fx: "none" };
   const pin = pins(stored.pin, badges);
   return {
     fr: decorationUnlocked("frame", stored.fr, badges) ? stored.fr : "plain",
-    fx: "none",
+    fx: decorationUnlocked("effect", stored.fx, badges) ? stored.fx : "none",
+    ...(stored.border && decorationUnlocked("border", stored.border, badges)
+      ? { border: stored.border }
+      : {}),
+    ...(stored.charm && decorationUnlocked("charm", stored.charm, badges)
+      ? { charm: stored.charm }
+      : {}),
     ...(stored.bk !== undefined ? { bk: stored.bk } : {}),
     ...(stored.tg !== undefined ? { tg: stored.tg } : {}),
     ...(stored.sb !== undefined ? { sb: stored.sb } : {}),

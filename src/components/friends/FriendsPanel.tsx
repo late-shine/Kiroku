@@ -7,12 +7,15 @@ import {
   INBOX_BATCH,
   publicName,
   friendCardAge,
+  resolveDeco,
   type FriendPeer,
   type FriendCard,
   type FriendSettings,
 } from "@/lib/friends";
 import { PROFILE_GLYPHS, initialOf } from "@/lib/profile";
 import { BADGES, RANKS } from "@/lib/rewards";
+import { decorationDefinition } from "@/lib/friend-decorations";
+import { Frame } from "@/components/profile/Frame";
 import { useFriends } from "./useFriends";
 
 const buttonClass =
@@ -216,9 +219,19 @@ export function FriendsPanel() {
         className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-border/60 py-3 last:border-0"
       >
         <div className="min-w-0">
-          <p className="break-words text-sm">
-            {symbolLabel(card?.g ?? peer.glyph, card?.n ?? peer.name)} · {card?.n ?? peer.name}
-          </p>
+          <div className="flex items-center gap-3 break-words text-sm">
+            <Frame frame={card ? resolveDeco(card, card.bd ?? {}).fr : "plain"}>
+              <span
+                role="img"
+                aria-label={symbolLabel(card?.g ?? peer.glyph, card?.n ?? peer.name)}
+                className="profile-avatar grid size-8 place-items-center rounded-full bg-secondary text-sm text-primary"
+              >
+                {PROFILE_GLYPHS.find((symbol) => symbol.id === (card?.g ?? peer.glyph))?.char ??
+                  initialOf(card?.n ?? peer.name)}
+              </span>
+            </Frame>
+            <span>{card?.n ?? peer.name}</span>
+          </div>
           {peer.state === "crossing" && (
             <p className="text-xs text-muted-foreground">You both sent a request.</p>
           )}
@@ -588,6 +601,7 @@ function PublicSummary({ card }: { card: Omit<FriendCard, "t"> }) {
     ["Taught kanji", card.k],
     ["Vocabulary", card.vc],
   ];
+  const deco = resolveDeco(card, card.bd ?? {});
   return (
     <div className="mt-3 space-y-3 break-words text-xs text-muted-foreground">
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -606,7 +620,10 @@ function PublicSummary({ card }: { card: Omit<FriendCard, "t"> }) {
       </p>
       {pinned.length > 0 && <p>Pinned badges: {pinned.map((badge) => badge.name).join(", ")}.</p>}
       <p>
-        Accent: {card.acc}. Stamp: {card.st}. Frame: {card.fr}. Effect: {card.fx}.
+        Accent: {card.acc}. Stamp: {card.st}. Frame: {decorationDefinition("frame", deco.fr)?.name}.
+        Border: {decorationDefinition("border", deco.border ?? "none")?.name}. Detail:{" "}
+        {decorationDefinition("charm", deco.charm ?? "none")?.name}. Effect:{" "}
+        {decorationDefinition("effect", deco.fx)?.name}.
       </p>
       <p>
         Banner:{" "}
@@ -736,7 +753,7 @@ const SHARING_FIELDS = [
   "Rank, study streak, kanji carved, words mastered, and lesson, taught-kanji and vocabulary counts.",
   "Your last 7 days of quiz answers and writing marks.",
   "Earned badges and up to three pinned badges.",
-  "Your card look: accent, stamp, frame, effect, banner scene or cropped uploaded banner, study tag, and status preset or personal status text (up to 60 characters).",
+  "Your card look: accent, stamp, avatar frame, card border, little detail, effect, banner scene or cropped uploaded banner, study tag, and status preset or personal status text (up to 60 characters).",
 ];
 const SHARING_PICTURE =
   "Your uploaded picture is shown only if you turn on the separate picture choice. Your Google picture is never shared.";

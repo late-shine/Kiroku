@@ -1190,3 +1190,277 @@ rt {
 .profile-card-banner[data-uploaded="true"] .profile-card-upload {
   object-fit: contain;
 }
+
+/* F3g: static catalogue artwork. F3h owns motion; these shapes never animate. */
+.profile-frame-orbit,
+.profile-frame-woven,
+.profile-frame-archive {
+  color: var(--primary);
+}
+.profile-frame-petals {
+  color: var(--accent-sakura);
+}
+.profile-frame[data-frame="petal"] {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent-sakura) 45%, transparent);
+}
+.profile-frame[data-frame="woven"],
+.profile-frame[data-frame="archive"] {
+  border-radius: 24%;
+}
+.profile-frame[data-frame="woven"] .profile-avatar,
+.profile-frame[data-frame="archive"] .profile-avatar {
+  border-radius: 22%;
+}
+.profile-frame-archive-stamp {
+  position: absolute;
+  right: -0.2em;
+  bottom: -0.2em;
+  display: grid;
+  place-items: center;
+  width: 1.35em;
+  height: 1.35em;
+  border: 1px solid var(--primary);
+  border-radius: 0.2em;
+  background: var(--background);
+  color: var(--primary);
+  font-family: var(--font-display);
+  font-size: 0.7em;
+  pointer-events: none;
+}
+.profile-card-banner-shell {
+  position: relative;
+}
+.profile-card-border {
+  --ornament-size: 1.55rem;
+  position: absolute;
+  z-index: 2;
+  inset: 6px;
+  border-radius: inherit;
+  color: var(--primary);
+  pointer-events: none;
+}
+.profile-border-corner {
+  position: absolute;
+  width: var(--ornament-size);
+  height: var(--ornament-size);
+  border-color: currentColor;
+  border-style: solid;
+  border-width: 0;
+  opacity: 0.8;
+}
+.profile-border-tl {
+  top: 0;
+  left: 0;
+  border-top-width: 1px;
+  border-left-width: 1px;
+  border-top-left-radius: 8px;
+}
+.profile-border-tr {
+  top: 0;
+  right: 0;
+  border-top-width: 1px;
+  border-right-width: 1px;
+  border-top-right-radius: 8px;
+}
+.profile-border-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+  border-bottom-left-radius: 8px;
+}
+.profile-border-br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+  border-bottom-right-radius: 8px;
+}
+.profile-card-border[data-card-border="stitched"] {
+  border: 1px dashed color-mix(in oklab, var(--primary) 55%, transparent);
+}
+.profile-card-border[data-card-border="stitched"]::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 42%;
+  height: 10%;
+  border-left: 2px solid var(--glass-strong);
+}
+.profile-card-border[data-card-border="garden"] {
+  color: var(--accent-moss);
+}
+.profile-border-leaf {
+  position: absolute;
+  width: var(--ornament-size);
+  height: var(--ornament-size);
+  opacity: 0.75;
+}
+.profile-border-leaf-top {
+  top: 1px;
+  right: 1px;
+}
+.profile-border-leaf-bottom {
+  bottom: 1px;
+  left: 1px;
+  transform: rotate(180deg);
+}
+.profile-card-border[data-card-border="archival"] {
+  border: 3px double color-mix(in oklab, var(--primary) 55%, transparent);
+}
+.profile-card-border[data-card-border="archival"]::after {
+  content: "";
+  position: absolute;
+  width: 1.5rem;
+  height: 5px;
+  left: calc(50% - 0.75rem);
+  bottom: -3px;
+  border: 1px solid var(--primary);
+  border-radius: 2px 2px 0 0;
+  background: var(--glass-strong);
+}
+.profile-card-charm {
+  position: absolute;
+  z-index: 3;
+  right: 1.2rem;
+  bottom: 0.7rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: var(--primary);
+  pointer-events: none;
+}
+.profile-card-charm[data-card-charm="moon"] {
+  top: 3.5rem;
+  left: 1.5rem;
+  right: auto;
+  bottom: auto;
+}
+.profile-card-charm[data-card-charm="blossom"] {
+  bottom: -0.65rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--accent-sakura);
+  filter: drop-shadow(0 1px 2px var(--scrim));
+}
+.profile-charm-ribbon {
+  display: block;
+  width: 0.9rem;
+  height: 1.8rem;
+  background: var(--primary);
+  clip-path: polygon(0 0, 80% 0, 100% 14%, 100% 100%, 50% 78%, 0 100%);
+}
+.profile-charm-ribbon::before {
+  content: "";
+  display: block;
+  width: 80%;
+  height: 3px;
+  background: var(--highlight-strong);
+}
+.profile-card-charm[data-card-charm="bookmark"] {
+  height: 1.8rem;
+}
+.profile-charm-seal {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: var(--glass-strong);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  transform: rotate(-7deg);
+}
+.studio-decoration-discover {
+  margin-top: 0.75rem;
+}
+.studio-decoration-discover > summary {
+  min-height: 44px;
+}
+.studio-decoration-choice {
+  padding-top: 1.1rem;
+}
+.studio-choice-task {
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+.decoration-mini-card {
+  position: relative;
+  display: block;
+  width: 4.25rem;
+  height: 3.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--glass-strong);
+}
+.decoration-mini-banner {
+  position: relative;
+  display: block;
+  height: 55%;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: var(--secondary);
+}
+.decoration-mini-lines {
+  display: grid;
+  gap: 3px;
+  padding: 8px 12px;
+}
+.decoration-mini-lines i {
+  height: 1px;
+  background: var(--muted-foreground);
+}
+.decoration-mini-lines i:last-child {
+  width: 65%;
+}
+.decoration-mini-card .profile-card-border {
+  --ornament-size: 0.65rem;
+  inset: 3px;
+  border-radius: 0.3rem;
+}
+.decoration-mini-card .profile-card-charm {
+  right: 7px;
+  bottom: 4px;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+.decoration-mini-card .profile-card-charm[data-card-charm="moon"] {
+  left: 10px;
+  top: 6px;
+}
+.decoration-mini-card .profile-card-charm[data-card-charm="blossom"] {
+  bottom: -0.35rem;
+}
+.decoration-mini-card .profile-charm-seal {
+  font-size: 0.6rem;
+}
+.decoration-mini-card .profile-charm-ribbon {
+  width: 0.55rem;
+  height: 1rem;
+}
+@media (max-width: 899px) {
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-border {
+    --ornament-size: 0.9rem;
+    inset: 4px;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-charm {
+    width: 0.9rem;
+    height: 0.9rem;
+    right: 0.7rem;
+    bottom: 0.45rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-charm[data-card-charm="moon"] {
+    top: 0.4rem;
+    left: 9rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-charm[data-card-charm="blossom"] {
+    bottom: -0.4rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-charm-ribbon {
+    width: 0.6rem;
+    height: 1.2rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-charm-seal {
+    font-size: 0.6rem;
+  }
+}

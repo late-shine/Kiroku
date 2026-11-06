@@ -21,6 +21,7 @@ import { BadgeArtDefs } from "./BadgeArt";
 import {
   buildFriendPublication,
   friendCardSource,
+  FRIEND_SCHEMA_VERSION,
   publicName,
   publicGlyph,
   type CardScene,
@@ -225,7 +226,7 @@ export function ProfilePage({
   );
   const savedDeco = accountLook ? (friends.sharing.settings?.deco ?? DEFAULT_DECO) : DEFAULT_DECO;
   const cardSettings = (deco: FriendDecoration): FriendSettings => ({
-    v: 1,
+    v: FRIEND_SCHEMA_VERSION,
     rev: friends.sharing.settings?.rev ?? "0".repeat(32),
     prev: "",
     on: friends.sharing.settings?.on ?? false,
@@ -337,7 +338,9 @@ export function ProfilePage({
           revision={friends.sharing.settings?.rev ?? null}
           loaded={!accountLook || friends.sharing.loaded}
           accountMode={accountLook}
-          disabled={friends.activity.busy || friends.activity.deleting}
+          disabled={
+            friends.activity.busy || friends.activity.deleting || friends.sharing.unsupported
+          }
           scenes={scenes}
           badges={source.badges}
           today={today}
@@ -350,6 +353,10 @@ export function ProfilePage({
           saveError={friends.sharing.error ?? friends.error}
           onManageSharing={openSharing}
           cropActive={cropSource !== null}
+          bannerDraft={friends.bannerDraft}
+          bannerScope={friends.bannerScope}
+          bannerError={friends.bannerError}
+          onBannerChange={friends.setBannerDraft}
           rankLine={
             questsOn ? <StampedRankLine carved={carved} saved={quests.prefs.stamp} /> : null
           }
@@ -365,12 +372,13 @@ export function ProfilePage({
               </button>
             </>
           }
-          renderPreview={(deco, dirty) => {
+          renderPreview={(deco, dirty, banner) => {
             const publication = buildFriendPublication(cardSettings(deco), source);
             const liveName = publication.card.n;
             return (
               <ProfileCard
                 mode="self"
+                localBanner={banner?.selected ? banner.data : null}
                 data={{ ...publication.card, t: null }}
                 cover={cover}
                 scenes={scenes}
@@ -381,7 +389,7 @@ export function ProfilePage({
                 }
                 onStat={() => onOpenProgress()}
                 sharing={Boolean(friends.sharing.settings?.on && friends.sharing.loaded)}
-                draft={accountLook && dirty}
+                draft={Boolean((accountLook && dirty) || banner?.selected)}
                 renderDefs={false}
               />
             );
@@ -560,7 +568,6 @@ export function ProfilePage({
             <FriendsPanel />
           </details>
         )}
-
       </div>
 
       {profileTab === "desk" && (
@@ -644,9 +651,7 @@ export function ProfilePage({
                 <div>
                   <p className="text-sm">Tips</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {tipsReset
-                      ? "The tips will show again."
-                      : "Bring back the tips you dismissed."}
+                    {tipsReset ? "The tips will show again." : "Bring back the tips you dismissed."}
                   </p>
                 </div>
                 <button
@@ -720,12 +725,7 @@ export function ProfilePage({
               )}
             </Section>
           </div>
-          <Section
-            label="危険 · DANGER ZONE"
-            delay="240ms"
-            danger
-            className="profile-desk-danger"
-          >
+          <Section label="危険 · DANGER ZONE" delay="240ms" danger className="profile-desk-danger">
             <p className="mt-3 text-xs text-muted-foreground">
               Erases every lesson and all progress on this device. Export first if you might want
               them back.

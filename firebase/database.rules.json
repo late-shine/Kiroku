@@ -264,9 +264,9 @@
       },
       "settings": {
         "$uid": {
-          ".validate": "newData.hasChildren([\"v\", \"rev\", \"prev\", \"on\", \"photo\", \"n\", \"deco\"]) && (newData.child('on').val() === true || (!newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists())) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.child('rev').val()) && (!newData.parent().parent().child('photos/' + $uid).exists() || (newData.child('on').val() === true && newData.child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val())) && (newData.child('on').val() !== true || newData.child('since').exists())",
+          ".validate": "newData.hasChildren([\"v\", \"rev\", \"prev\", \"on\", \"photo\", \"n\", \"deco\"]) && (newData.child('on').val() === true || (!newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists())) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.child('rev').val()) && (!newData.parent().parent().child('photos/' + $uid).exists() || (newData.child('on').val() === true && newData.child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val())) && (newData.child('on').val() !== true || newData.child('since').exists()) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('v').val() === newData.child('v').val())",
           "v": {
-            ".validate": "newData.val() === 1"
+            ".validate": "(newData.val() === 1 || newData.val() === 2) && (!data.exists() || newData.val() >= data.val())"
           },
           "rev": {
             ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
@@ -287,7 +287,7 @@
             ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
           },
           "deco": {
-            ".validate": "newData.hasChildren([\"fr\", \"fx\"])",
+            ".validate": "newData.hasChildren([\"fr\", \"fx\"]) && !(newData.child('statusText').exists() && newData.child('sb').exists())",
             "fr": {
               ".validate": "newData.isString() && newData.val().matches(/^(plain|gold|stitch|moss|double|seal)$/)"
             },
@@ -301,27 +301,30 @@
               ".validate": "newData.isString() && newData.val().matches(/^(n5|n4|n3|n2|n1|kanji|self|reading)$/)"
             },
             "sb": {
-              ".validate": "newData.isString() && newData.val().matches(/^(adding|reviewing|writing|carving|quiet)$/)"
+              ".validate": "newData.isString() && newData.val().matches(/^(adding|reviewing|writing|carving|quiet)$/) && !newData.parent().child('statusText').exists()"
             },
             "pin": {
               ".validate": "newData.isString() && newData.val().matches(/^(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)(,(first-answer|streak-3|streak-7|streak-30|first-mastered|mastered-20|lessons-10|first-carve|carved-10|hard-one|checked-page)){0,2}$/)"
             },
             "$other": {
               ".validate": false
+            },
+            "statusText": {
+              ".validate": "newData.parent().parent().child('v').val() >= 2 && !newData.parent().child('sb').exists() && newData.isString() && newData.val().length >= 1 && newData.val().length <= 60 && newData.val().matches(/^[^\\x00-\\x20\\x7f-\\x9f]+( [^\\x00-\\x20\\x7f-\\x9f]+)*$/)"
             }
           },
           "$other": {
             ".validate": false
           },
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists()) || (newData.exists() && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.child('rev').val() !== data.child('rev').val() && ((!data.exists() && newData.child('prev').val() === '') || (data.exists() && newData.child('prev').val() === data.child('rev').val()))))"
+          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists()) || (newData.exists() && (!data.exists() || newData.child('v').val() >= data.child('v').val()) && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.child('rev').val() !== data.child('rev').val() && ((!data.exists() && newData.child('prev').val() === '') || (data.exists() && newData.child('prev').val() === data.child('rev').val()))))"
         }
       },
       "cards": {
         "$uid": {
-          ".validate": "newData.hasChildren([\"v\", \"rev\", \"ph\", \"t\", \"d\", \"n\", \"g\", \"r\", \"c\", \"s\", \"m\", \"l\", \"k\", \"vc\", \"a\", \"w\", \"acc\", \"st\", \"fr\", \"fx\", \"sh\"]) && newData.child('n').val() === newData.parent().parent().child('settings/' + $uid).child('n').val() && ((newData.child('ph').val() === true && newData.parent().parent().child('settings/' + $uid).child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val()) || (newData.child('ph').val() === false && !newData.parent().parent().child('photos/' + $uid).exists()))",
+          ".validate": "newData.hasChildren([\"v\", \"rev\", \"ph\", \"t\", \"d\", \"n\", \"g\", \"r\", \"c\", \"s\", \"m\", \"l\", \"k\", \"vc\", \"a\", \"w\", \"acc\", \"st\", \"fr\", \"fx\", \"sh\"]) && newData.child('n').val() === newData.parent().parent().child('settings/' + $uid).child('n').val() && ((newData.child('ph').val() === true && newData.parent().parent().child('settings/' + $uid).child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val()) || (newData.child('ph').val() === false && !newData.parent().parent().child('photos/' + $uid).exists())) && newData.child('v').val() === newData.parent().parent().child('settings/' + $uid).child('v').val() && newData.child('statusText').val() === newData.parent().parent().child('settings/' + $uid).child('deco/statusText').val() && newData.child('sb').val() === newData.parent().parent().child('settings/' + $uid).child('deco/sb').val() && !(newData.child('statusText').exists() && newData.child('sb').exists())",
           "v": {
-            ".validate": "newData.val() === 1"
+            ".validate": "(newData.val() === 1 || newData.val() === 2) && newData.val() === newData.parent().parent().parent().child('settings/' + $uid).child('v').val()"
           },
           "rev": {
             ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
@@ -395,7 +398,7 @@
             ".validate": "newData.isString() && newData.val().matches(/^(n5|n4|n3|n2|n1|kanji|self|reading)$/)"
           },
           "sb": {
-            ".validate": "newData.isString() && newData.val().matches(/^(adding|reviewing|writing|carving|quiet)$/)"
+            ".validate": "newData.isString() && newData.val().matches(/^(adding|reviewing|writing|carving|quiet)$/) && !newData.parent().child('statusText').exists()"
           },
           "sh": {
             ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
@@ -404,7 +407,10 @@
             ".validate": false
           },
           ".read": "auth != null && (auth.uid === $uid || (root.child('friends').child('links/' + $uid + '/' + auth.uid).child('t').exists() && !root.child('friends').child('links/' + $uid + '/' + auth.uid).child('p').exists() && root.child('friends').child('links/' + auth.uid + '/' + $uid).child('t').exists() && !root.child('friends').child('links/' + auth.uid + '/' + $uid).child('p').exists() && !root.child('friends').child('blocks/' + $uid + '/' + auth.uid).exists() && !root.child('friends').child('blocks/' + auth.uid + '/' + $uid).exists() && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && root.child('friends').child('own/' + auth.uid).child('code').exists() && !root.child('friends').child('own/' + auth.uid).child('deleting').exists()))",
-          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('on').val() === true && newData.parent().parent().child('settings/' + $uid).child('rev').val() === newData.child('rev').val()))"
+          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('on').val() === true && newData.parent().parent().child('settings/' + $uid).child('rev').val() === newData.child('rev').val()))",
+          "statusText": {
+            ".validate": "newData.parent().child('v').val() >= 2 && !newData.parent().child('sb').exists() && newData.isString() && newData.val().length >= 1 && newData.val().length <= 60 && newData.val().matches(/^[^\\x00-\\x20\\x7f-\\x9f]+( [^\\x00-\\x20\\x7f-\\x9f]+)*$/)"
+          }
         }
       },
       "photos": {

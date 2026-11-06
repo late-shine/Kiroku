@@ -10,12 +10,17 @@ import {
   FRAME_BADGES,
   decorationUnlocked,
   resolveDeco,
+  MAX_STATUS_LENGTH,
+  normalizeStatusInput,
+  validStatusInput,
   type CardScene,
   type FriendDecoration,
 } from "@/lib/friends";
 import { Frame } from "./Frame";
 import { BadgeArt } from "./BadgeArt";
 import { formatDay } from "./BadgeShelf";
+import { BannerEditor } from "./BannerEditor";
+import type { BannerDraft, BannerScope } from "@/lib/friend-banner";
 
 const DEFAULT: FriendDecoration = { fr: "plain", fx: "none" };
 const FRAME_NAMES: Record<FriendDecoration["fr"], string> = {
@@ -55,6 +60,10 @@ export function DecorChooser({
   rankLine,
   cardLinks,
   cropActive,
+  bannerDraft,
+  bannerScope,
+  bannerError,
+  onBannerChange,
   previewAsFriend,
   onPreviewChange,
   friendPreview,
@@ -74,7 +83,7 @@ export function DecorChooser({
   today: string;
   onDraft: (value: FriendDecoration | null) => unknown;
   onSave: (value: FriendDecoration, revision: string | null) => Promise<boolean>;
-  renderPreview: (value: FriendDecoration, dirty: boolean) => ReactNode;
+  renderPreview: (value: FriendDecoration, dirty: boolean, banner: BannerDraft | null) => ReactNode;
   identityEditor: ReactNode;
   /** The writing rank line (null while Writing practice is off); shown at the top of Badges. */
   rankLine: ReactNode;
@@ -82,6 +91,10 @@ export function DecorChooser({
   cardLinks: ReactNode;
   /** True while the avatar crop editor is open: the preview then stops being sticky. */
   cropActive: boolean;
+  bannerDraft: BannerDraft | null;
+  bannerScope: BannerScope | null;
+  bannerError: string | null;
+  onBannerChange: (value: BannerDraft, scope: BannerScope) => boolean;
   previewAsFriend: boolean;
   onPreviewChange: (value: boolean) => void;
   friendPreview: ReactNode;
@@ -99,6 +112,8 @@ export function DecorChooser({
   const [baseRevision, setBaseRevision] = useState(revision);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [bannerCropActive, setBannerCropActive] = useState(false);
   const hasBase = useRef(loaded);
   const onDraftRef = useRef(onDraft);
   onDraftRef.current = onDraft;
@@ -123,13 +138,15 @@ export function DecorChooser({
   const sectionClass = sectionsAnimate ? "pane-in" : undefined;
   const stateText = previewAsFriend
     ? "As your friends see it"
-    : !accountMode
-      ? "Kept on this device"
-      : saving
-        ? "Saving…"
-        : dirty
-          ? "Unsaved changes"
-          : "Saved";
+    : bannerDraft?.selected
+      ? "On this device"
+      : !accountMode
+        ? "Kept on this device"
+        : saving
+          ? "Saving…"
+          : dirty
+            ? "Unsaved changes"
+            : "Saved";
   const earned = BADGES.filter((badge) => Boolean(badges[badge.id]));
   const lockedBadges = BADGES.filter((badge) => !badges[badge.id]);
   const change = (next: FriendDecoration) => {
@@ -141,6 +158,7 @@ export function DecorChooser({
     onDraft(next);
   };
   const discard = () => {
+    setStatusError(null);
     setDraft(saved);
     setDirty(false);
     setBaseRevision(revision);
@@ -155,7 +173,7 @@ export function DecorChooser({
           className="card-studio-preview glass-panel pane-in rounded-2xl"
           aria-label="Card preview"
           data-expanded={expanded}
-          data-crop={cropActive}
+          data-crop={cropActive || bannerCropActive}
         >
           <div className="studio-preview-bar">
             <div className="studio-preview-heading">
@@ -197,8 +215,13 @@ export function DecorChooser({
             </div>
           </div>
           <div id="studio-card-preview">
-            {previewAsFriend ? friendPreview : renderPreview(draft, dirty)}
+            {previewAsFriend ? friendPreview : renderPreview(draft, dirty, bannerDraft)}
           </div>
+          {!previewAsFriend && bannerDraft?.selected && (
+            <p className="px-4 pb-3 text-xs text-muted-foreground">
+              On this device · friends still see your saved banner
+            </p>
+          )}
         </aside>
         {cardLinks && (
           <nav
@@ -274,17 +297,65 @@ export function DecorChooser({
             <fieldset disabled={disabled || saving} className="studio-fieldset">
               <legend className="studio-field-label">Status</legend>
               <p className="studio-field-hint">A quiet note on your card.</p>
+              <label className="mt-3 block text-sm" htmlFor="card-status-text">
+                Status
+              </label>
+              <input
+                id="card-status-text"
+                type="text"
+                value={draft.statusText ?? ""}
+                aria-describedby="card-status-count card-status-error"
+                aria-invalid={Boolean(statusError)}
+                className="mt-2 min-h-11 w-full min-w-0 rounded-lg border border-border bg-glass/60 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  if (
+                    [...raw].some((char) => {
+                      const n = char.charCodeAt(0);
+                      return (n < 32 && n !== 9 && n !== 10 && n !== 13) || (n >= 127 && n <= 159);
+                    })
+                  ) {
+                    setStatusError("Use plain text without control characters.");
+                    return;
+                  }
+                  const text = normalizeStatusInput(raw);
+                  if (!validStatusInput(text)) {
+                    setStatusError(
+                      `Use at most ${MAX_STATUS_LENGTH} characters. Some emoji count as more than one.`,
+                    );
+                    return;
+                  }
+                  setStatusError(null);
+                  const { sb: _preset, statusText: _text, ...rest } = draft;
+                  change(text ? { ...rest, statusText: text } : rest);
+                }}
+              />
+              <p
+                id="card-status-count"
+                className="mt-1 text-right text-xs text-muted-foreground"
+                aria-live="polite"
+              >
+                {(draft.statusText ?? "").length}/{MAX_STATUS_LENGTH}
+              </p>
+              <p
+                id="card-status-error"
+                role={statusError ? "alert" : undefined}
+                className="mt-1 text-xs text-destructive"
+              >
+                {statusError}
+              </p>
               <div className="studio-status-options" role="group" aria-label="Card status">
                 <button
                   type="button"
                   className="studio-status"
-                  aria-pressed={!draft.sb}
+                  aria-pressed={!draft.sb && !draft.statusText}
                   onClick={() => {
-                    const { sb: _old, ...rest } = draft;
+                    const { sb: _old, statusText: _text, ...rest } = draft;
+                    setStatusError(null);
                     change(rest);
                   }}
                 >
-                  No status<span aria-hidden="true">—</span>
+                  Clear<span aria-hidden="true">—</span>
                 </button>
                 {FRIEND_STATUSES.map((id) => (
                   <button
@@ -292,7 +363,11 @@ export function DecorChooser({
                     type="button"
                     className="studio-status"
                     aria-pressed={draft.sb === id}
-                    onClick={() => change({ ...draft, sb: id })}
+                    onClick={() => {
+                      const { statusText: _text, ...rest } = draft;
+                      setStatusError(null);
+                      change({ ...rest, sb: id });
+                    }}
                   >
                     {FRIEND_STATUS_LABELS[id]}
                     {draft.sb === id && <Check aria-hidden="true" className="size-4 shrink-0" />}
@@ -310,9 +385,11 @@ export function DecorChooser({
                 <button
                   type="button"
                   className="studio-scene studio-scene-ink"
-                  aria-pressed={draft.bk === undefined}
+                  aria-pressed={!bannerDraft?.selected && draft.bk === undefined}
                   onClick={() => {
                     const { bk: _old, ...rest } = draft;
+                    if (bannerScope && bannerDraft)
+                      onBannerChange({ ...bannerDraft, selected: false }, bannerScope);
                     change(rest);
                   }}
                 >
@@ -320,7 +397,7 @@ export function DecorChooser({
                     記
                   </span>
                   <span className="studio-scene-name">Quiet ink</span>
-                  {draft.bk === undefined && (
+                  {!bannerDraft?.selected && draft.bk === undefined && (
                     <span className="studio-choice-check">
                       <Check aria-hidden="true" className="size-3" />
                     </span>
@@ -331,12 +408,16 @@ export function DecorChooser({
                     key={scene.name}
                     type="button"
                     className="studio-scene"
-                    aria-pressed={draft.bk === index}
-                    onClick={() => change({ ...draft, bk: index })}
+                    aria-pressed={!bannerDraft?.selected && draft.bk === index}
+                    onClick={() => {
+                      if (bannerScope && bannerDraft)
+                        onBannerChange({ ...bannerDraft, selected: false }, bannerScope);
+                      change({ ...draft, bk: index });
+                    }}
                   >
                     <img src={scene.url} alt="" loading="lazy" />
                     <span className="studio-scene-name">{scene.name}</span>
-                    {draft.bk === index && (
+                    {!bannerDraft?.selected && draft.bk === index && (
                       <span className="studio-choice-check">
                         <Check aria-hidden="true" className="size-3" />
                       </span>
@@ -345,6 +426,20 @@ export function DecorChooser({
                 ))}
               </div>
             </fieldset>
+            <BannerEditor
+              key={
+                bannerScope ? `${bannerScope.uid ?? "local"}:${bannerScope.generation}` : "waiting"
+              }
+              draft={bannerDraft}
+              scope={bannerScope}
+              disabled={disabled || saving}
+              storageError={bannerError}
+              onChange={(value, scope) => {
+                onPreviewChange(false);
+                return onBannerChange(value, scope);
+              }}
+              onCropActive={setBannerCropActive}
+            />
             <fieldset disabled={disabled || saving} className="studio-fieldset">
               <legend className="studio-field-label">Frame</legend>
               <p className="studio-field-hint">Frames are earned along the way.</p>
@@ -429,7 +524,9 @@ export function DecorChooser({
                       className="studio-badge-choice"
                       aria-pressed={selected}
                       aria-disabled={full}
-                      title={full ? "Unpin another badge to make room." : `${badge.how} Select to pin.`}
+                      title={
+                        full ? "Unpin another badge to make room." : `${badge.how} Select to pin.`
+                      }
                       onClick={() => {
                         if (full) return;
                         const next = selected
@@ -485,7 +582,11 @@ export function DecorChooser({
                 {FRAME_NAMES[saved.fr]} ·{" "}
                 {saved.bk === undefined ? "Quiet ink" : (scenes[saved.bk]?.name ?? "Quiet ink")}
                 {saved.tg ? ` · ${FRIEND_TAG_LABELS[saved.tg]}` : ""}
-                {saved.sb ? ` · ${FRIEND_STATUS_LABELS[saved.sb]}` : ""}
+                {saved.statusText
+                  ? ` · ${saved.statusText}`
+                  : saved.sb
+                    ? ` · ${FRIEND_STATUS_LABELS[saved.sb]}`
+                    : ""}
               </p>
               <button
                 type="button"
@@ -525,11 +626,25 @@ export function DecorChooser({
               <button
                 type="button"
                 className="studio-button studio-button-primary"
-                disabled={disabled || saving || !loaded || !dirty || changedElsewhere}
+                disabled={
+                  disabled ||
+                  saving ||
+                  !loaded ||
+                  !dirty ||
+                  changedElsewhere ||
+                  Boolean(statusError)
+                }
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    const ok = await onSave(draft, baseRevision);
+                    // F3e uploads are local-only; keep the actual cloud built-in selection on other look saves.
+                    const { bk: _draftBanner, ...withoutBanner } = draft;
+                    const toSave = bannerDraft?.selected
+                      ? saved.bk === undefined
+                        ? withoutBanner
+                        : { ...withoutBanner, bk: saved.bk }
+                      : draft;
+                    const ok = await onSave(toSave, baseRevision);
                     if (ok) {
                       setDirty(false);
                       onDraft(null);

@@ -10,6 +10,8 @@ import {
   buildFriendPublication,
   friendCardSource,
   decodeDecoration,
+  FRIEND_SCHEMA_VERSION,
+  UnsupportedFriendSettingsError,
   type FriendDecoration,
   type FriendSettings,
   type FriendPublication,
@@ -46,6 +48,13 @@ import { STORAGE_KEYS } from "@/lib/storage";
 import { PREFS_CHANGED_EVENT, readProfile } from "@/lib/prefs-storage";
 import { localDay } from "@/lib/word-memory";
 import type { QuestPrefs } from "@/lib/quest-prefs";
+import {
+  decodeBannerDraft,
+  readBannerDraft,
+  writeBannerDraft,
+  type BannerDraft,
+  type BannerScope,
+} from "@/lib/friend-banner";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 export type FriendsStudyInput = {
@@ -57,13 +66,19 @@ export type FriendsStudyInput = {
   syncLinked: boolean;
   syncStamp: string | null;
 };
-type SharingView = SharingRead & { uid: string | null; loaded: boolean; error: string | null };
+type SharingView = SharingRead & {
+  uid: string | null;
+  loaded: boolean;
+  error: string | null;
+  unsupported: boolean;
+};
 const emptySharing = (uid: string | null): SharingView => ({
   uid,
   loaded: false,
   settings: null,
   card: { kind: "closed", cached: false, fetchedAt: 0 },
   error: null,
+  unsupported: false,
 });
 
 function readLocal(uid: string) {
@@ -175,6 +190,15 @@ export function useFriendsController({
     value: FriendDecoration | null;
   }>({ uid: null, value: null });
   const [previewPhoto, setPreviewPhoto] = useState<FriendPhoto | null>(null);
+  const [localBanner, setLocalBanner] = useState<{
+    scope: BannerScope;
+    draft: BannerDraft | null;
+    error: string | null;
+  }>({ scope: { uid: null, generation: 0 }, draft: null, error: null });
+  const bannerScopeRef = useRef<BannerScope | null>(null);
+  const bannerGeneration = useRef(0);
+  const bannerOwner = useRef(uid);
+  bannerOwner.current = uid;
   const previewPhotoSequence = useRef(0);
   const previewMismatch = useRef<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
@@ -255,7 +279,7 @@ export function useFriendsController({
         sharingRef.current = emptySharing(uid);
         setSharing(sharingRef.current);
         ++sharingSequence.current;
-        clearFriendsStorage(uid);
+        clearFriendsStorage(uid, true);
       }
       setView((value) => ({ ...value, uid, snapshot, loading: false, error: null }));
       if (snapshot.own && !snapshot.own.deleting) {
@@ -302,6 +326,9 @@ export function useFriendsController({
   useEffect(() => {
     if (!resolved) return;
     setFriendsAccount(uid);
+    const bannerScope = { uid, generation: ++bannerGeneration.current };
+    bannerScopeRef.current = bannerScope;
+    setLocalBanner({ scope: bannerScope, draft: readBannerDraft(uid), error: null });
     let draftDeco: FriendDecoration | null = null;
     try {
       draftDeco =
@@ -349,6 +376,9 @@ export function useFriendsController({
       setActivity(next);
       if (next.busy) lastOutcome = null;
       if (next.deleting) {
+        const clearedBannerScope = { uid, generation: ++bannerGeneration.current };
+        bannerScopeRef.current = clearedBannerScope;
+        setLocalBanner({ scope: clearedBannerScope, draft: null, error: null });
         setDecoration({ uid, value: null });
         setPreviewPhoto(null);
         ++previewPhotoSequence.current;
@@ -387,6 +417,7 @@ export function useFriendsController({
     return () => {
       stop();
       current.current = null;
+      bannerScopeRef.current = null;
       cancelPublish();
       ++sharingSequence.current;
       ++readSequence.current;
@@ -505,7 +536,7 @@ export function useFriendsController({
     ++sharingSequence.current;
     ++previewPhotoSequence.current;
     setPreviewPhoto(null);
-    sharingRef.current = { ...value, uid, loaded: true, error: null };
+    sharingRef.current = { ...value, uid, loaded: true, error: null, unsupported: false };
     setSharing(sharingRef.current);
   };
 
@@ -523,6 +554,7 @@ export function useFriendsController({
       sharingRef.current = {
         ...sharingRef.current,
         loaded: false,
+        unsupported: error instanceof UnsupportedFriendSettingsError,
         error: describeFriendsError(error),
       };
       setSharing(sharingRef.current);
@@ -537,7 +569,7 @@ export function useFriendsController({
     )
       return false;
     if (uid && friendsActivity(uid).deleting) return false;
-    const parsed = value === null ? null : decodeDecoration(value);
+    const parsed = value === null ? null : decodeDecoration(value, true);
     if (value !== null && !parsed) return false;
     try {
       const saved = decodeFriendsLocal(localStorage.getItem(STORAGE_KEYS.friends), uid) ?? {
@@ -554,6 +586,26 @@ export function useFriendsController({
     }
     setDecoration({ uid, value: parsed });
     return true;
+  };
+
+  const setBannerDraft = (value: BannerDraft, scope: BannerScope): boolean => {
+    if (
+      bannerScopeRef.current !== scope ||
+      bannerOwner.current !== scope.uid ||
+      (scope.uid && friendsActivity(scope.uid).deleting)
+    )
+      return false;
+    const parsed = decodeBannerDraft(value, scope.uid);
+    if (!parsed) return false;
+    let error: string | null = null;
+    try {
+      writeBannerDraft(parsed);
+    } catch {
+      error =
+        "This banner is applied for this session but could not be kept on this device. The previous saved banner is unchanged.";
+    }
+    setLocalBanner({ scope, draft: parsed, error });
+    return error === null;
   };
 
   const loadPreviewPhoto = useCallback(async () => {
@@ -837,7 +889,7 @@ export function useFriendsController({
     if (!source || !n || !sharingRef.current.loaded || revision !== (settings?.rev ?? null))
       return null;
     const proposed: FriendSettings = {
-      v: 1,
+      v: settings?.v ?? FRIEND_SCHEMA_VERSION,
       rev: settings?.rev ?? "0".repeat(32),
       prev: settings?.prev ?? "",
       on: true,
@@ -963,6 +1015,13 @@ export function useFriendsController({
     setDecoDraft,
     previewPhoto: sharing.uid === uid ? previewPhoto : null,
     loadPreviewPhoto,
+    bannerDraft: localBanner.scope.uid === uid ? localBanner.draft : null,
+    bannerScope:
+      localBanner.scope.uid === uid && bannerScopeRef.current === localBanner.scope
+        ? localBanner.scope
+        : null,
+    bannerError: localBanner.scope.uid === uid ? localBanner.error : null,
+    setBannerDraft,
     // Why a card may be missing while sharing is On: still loading/syncing, or this device is not yet associated.
     deviceProgress: (!study.hydrated || study.syncBusy
       ? "loading"

@@ -1163,3 +1163,30 @@ rt {
     scroll-padding-top: 0;
   }
 }
+
+/* F3d: plain status text wraps without changing the card width; full text remains accessible. */
+.profile-card-status {
+  overflow-wrap: anywhere;
+}
+.profile-card-status-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 899px) {
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-status-text {
+    -webkit-line-clamp: 1;
+  }
+}
+
+/* F3e: full uploads keep their saved 8:3 composition. The existing compact height uses contain. */
+.profile-card-banner[data-uploaded="true"] {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 8 / 3;
+}
+.profile-card-banner[data-uploaded="true"] .profile-card-upload {
+  object-fit: contain;
+}

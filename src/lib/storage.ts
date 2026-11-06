@@ -29,6 +29,7 @@ export const STORAGE_KEYS = {
   friends: "kiroku_friends_v1", // Account-scoped public-name draft; never sharing consent or lesson sync.
   friendsCache: "kiroku_friends_cache_v1", // Account-scoped private Friends snapshot, never a backup.
   friendInvite: "kiroku_friend_invite_v1", // sessionStorage only; prefill survives sign-in redirect.
+  friendBannerDraft: "kiroku_friend_banner_draft_v1", // UID-scoped local banner source/crop only; never lesson sync or backups.
 } as const;
 
 /** The pre-rebrand keys, paired with what replaced them. Never write to these. */

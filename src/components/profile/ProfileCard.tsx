@@ -6,6 +6,7 @@ import { Frame } from "./Frame";
 import { RankStamp } from "@/components/write/RankStamp";
 import { BADGES, RANKS } from "@/lib/rewards";
 import { resolveAccent, resolveStamp } from "@/lib/quest-prefs";
+import { isBannerData } from "@/lib/friend-banner";
 import {
   PROFILE_GLYPHS,
   initialOf,
@@ -36,6 +37,7 @@ type Props = SharedProps &
     | {
         mode: "self";
         privateAvatar: AvatarData;
+        localBanner?: string | null;
         onEdit?: () => void;
         onStat?: (metric: "streak" | "carved" | "mastered") => void;
       }
@@ -77,6 +79,9 @@ export function ProfileCard(props: Props) {
       ? props.privateAvatar
       : publicAvatar(name, data?.g ?? props.cover.g, props.photo ?? null, data);
   const scene = deco.bk === undefined ? undefined : props.scenes[deco.bk];
+  const upload =
+    props.mode === "self" && isBannerData(props.localBanner) ? props.localBanner : null;
+  const status = deco.statusText?.trim() || (deco.sb ? FRIEND_STATUS_LABELS[deco.sb] : "");
   const pins = (deco.pin?.split(",") ?? []).filter((id) => badges[id]);
   const earned = BADGES.filter((badge) => badges[badge.id]);
   const extra = earned.length - pins.length;
@@ -125,9 +130,14 @@ export function ProfileCard(props: Props) {
       {props.renderDefs !== false && <BadgeArtDefs />}
       <div
         aria-hidden="true"
-        className={`profile-card-banner relative overflow-hidden bg-secondary ${scene ? "" : "profile-card-banner-ink"}`}
+        data-uploaded={Boolean(upload)}
+        className={`profile-card-banner relative overflow-hidden bg-secondary ${scene || upload ? "" : "profile-card-banner-ink"}`}
       >
-        {scene && <img src={scene.url} alt="" className="size-full object-cover" />}
+        {upload ? (
+          <img src={upload} alt="" className="profile-card-upload size-full object-contain" />
+        ) : (
+          scene && <img src={scene.url} alt="" className="size-full object-cover" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-scrim/70 to-transparent" />
         <span className="profile-card-wordmark">
           記録 <span>CALLING CARD</span>
@@ -152,7 +162,7 @@ export function ProfileCard(props: Props) {
               className="profile-avatar size-[72px] bg-secondary text-3xl text-primary"
             />
           </Frame>
-          {data && deco.sb && (
+          {data && status && (
             <div className="profile-card-status relative mt-3 min-w-0 rounded-2xl border border-border bg-glass-strong px-3 py-2 text-xs text-foreground">
               <span
                 aria-hidden="true"
@@ -162,7 +172,9 @@ export function ProfileCard(props: Props) {
                 aria-hidden="true"
                 className="absolute -left-[18px] top-1 size-1 rounded-full border border-border bg-glass-strong"
               />
-              {FRIEND_STATUS_LABELS[deco.sb]}
+              <span className="profile-card-status-text" title={status}>
+                {status}
+              </span>
             </div>
           )}
         </div>

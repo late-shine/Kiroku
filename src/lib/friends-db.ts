@@ -22,6 +22,8 @@ import {
   decodeFriendPhoto,
   decodeFriendSettings,
   newFriendRevision,
+  FRIEND_SCHEMA_VERSION,
+  UnsupportedFriendSettingsError,
   type FriendCardSource,
   type FriendCardState,
   type FriendDecoration,
@@ -74,6 +76,7 @@ export function isFriendsDenied(error: unknown): boolean {
 }
 
 export function describeFriendsError(error: unknown): string {
+  if (error instanceof UnsupportedFriendSettingsError) return error.message;
   if (error instanceof FriendsError) return error.message;
   return "Couldn't access Friends. Try again or check the setup.";
 }
@@ -89,9 +92,14 @@ export function subscribeFriends(subscriber: () => void): () => void {
   };
 }
 
-export function clearFriendsStorage(uid?: string): void {
+export function clearFriendsStorage(uid?: string, preserveBanner = false): void {
   if (typeof window === "undefined") return;
-  for (const key of [STORAGE_KEYS.friends, STORAGE_KEYS.friendsCache]) {
+  for (const key of [
+    STORAGE_KEYS.friends,
+    STORAGE_KEYS.friendsCache,
+    STORAGE_KEYS.friendBannerDraft,
+  ]) {
+    if (preserveBanner && key === STORAGE_KEYS.friendBannerDraft) continue;
     try {
       const raw = localStorage.getItem(key);
       const row = record(JSON.parse(raw ?? "null") as unknown);
@@ -113,7 +121,11 @@ export function setFriendsAccount(uid: string | null): void {
     clearFriendsStorage();
   } else {
     // Reload may reuse this account's own draft/cache, never another account's bucket.
-    for (const key of [STORAGE_KEYS.friends, STORAGE_KEYS.friendsCache]) {
+    for (const key of [
+      STORAGE_KEYS.friends,
+      STORAGE_KEYS.friendsCache,
+      STORAGE_KEYS.friendBannerDraft,
+    ]) {
       try {
         const row = record(JSON.parse(localStorage.getItem(key) ?? "null") as unknown);
         if (row?.["uid"] !== uid || (uid === null && key === STORAGE_KEYS.friendsCache))
@@ -656,11 +668,9 @@ export function saveFriendSharing(
     const on = edit.on ?? current?.on ?? false;
     const snapshot = on ? source() : null;
     if (on && requireReady && !snapshot)
-      throw new FriendsError(
-        "Wait for progress to finish loading or syncing, then try again.",
-      );
+      throw new FriendsError("Wait for progress to finish loading or syncing, then try again.");
     const settings: FriendSettings = {
-      v: 1,
+      v: FRIEND_SCHEMA_VERSION,
       rev: newFriendRevision(),
       prev: current?.rev ?? "",
       on,
@@ -709,8 +719,7 @@ export function publishFriendCard(
     const settings = decodeFriendSettings(await read(token, `settings/${uid}`));
     if (!settings || settings.rev !== expectedRevision)
       throw new FriendsError(SETTINGS_CONFLICT, "conflict");
-    if (!settings.on)
-      throw new FriendsError("Sharing is off. Turn it on to share your card.");
+    if (!settings.on) throw new FriendsError("Sharing is off. Turn it on to share your card.");
     const snapshot = source();
     if (!snapshot)
       throw new FriendsError(

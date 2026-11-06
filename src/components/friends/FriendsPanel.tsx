@@ -610,7 +610,7 @@ function PublicSummary({ card }: { card: Omit<FriendCard, "t"> }) {
       </p>
       <p>
         Banner: {card.bk === undefined ? "Flat" : `Scene ${card.bk + 1}`}. Study tag:{" "}
-        {card.tg ?? "None"}. Status: {card.sb ?? "None"}.
+        {card.tg ?? "None"}. Status: {card.statusText ?? card.sb ?? "None"}.
       </p>
       <p>Sharing since {card.sh}.</p>
     </div>
@@ -691,7 +691,7 @@ const SHARING_FIELDS = [
   "Rank, study streak, kanji carved, words mastered, and lesson, taught-kanji and vocabulary counts.",
   "Your last 7 days of quiz answers and writing marks.",
   "Earned badges and up to three pinned badges.",
-  "Your card look: accent, stamp, frame, effect, banner scene, study tag and status preset.",
+  "Your card look: accent, stamp, frame, effect, banner scene, study tag, and status preset or personal status text (up to 60 characters).",
 ];
 const SHARING_PICTURE =
   "Your uploaded picture is shown only if you turn on the separate picture choice. Your Google picture is never shared.";
@@ -817,9 +817,7 @@ function DeviceProgress({
           </p>
           <p className="break-words text-xs text-muted-foreground">{summary}</p>
           {preview.publication.photo && (
-            <p className="text-xs text-muted-foreground">
-              Your uploaded picture will be included.
-            </p>
+            <p className="text-xs text-muted-foreground">Your uploaded picture will be included.</p>
           )}
           <button
             type="button"

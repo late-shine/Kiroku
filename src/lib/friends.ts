@@ -233,7 +233,7 @@ export function decodeFriendsLocal(raw: string | null, uid: string | null): Frie
     const row = record(JSON.parse(raw ?? "null") as unknown);
     if (row?.["v"] !== 1 || row["uid"] !== uid) return null;
     const name = row["publicName"];
-    const decoDraft = decodeDecoration(row["decoDraft"]);
+    const decoDraft = decodeDecoration(row["decoDraft"], true);
     return {
       v: 1,
       uid,
@@ -317,16 +317,55 @@ export const FRIEND_FRAMES = ["plain", "gold", "stitch", "moss", "double", "seal
 export const FRIEND_EFFECTS = ["none", "vines", "petals", "fireflies"] as const;
 export const FRIEND_TAGS = ["n5", "n4", "n3", "n2", "n1", "kanji", "self", "reading"] as const;
 export const FRIEND_STATUSES = ["adding", "reviewing", "writing", "carving", "quiet"] as const;
+export const FRIEND_SCHEMA_VERSION = 2;
+export const MAX_STATUS_LENGTH = 60;
+export class UnsupportedFriendSettingsError extends Error {
+  constructor() {
+    super("Update Kiroku to edit this card");
+    this.name = "UnsupportedFriendSettingsError";
+  }
+}
+export function normalizeStatusInput(value: string): string {
+  return value.replace(/[\r\n\t\u2028\u2029]/g, " ").replace(/\s+/g, " ");
+}
+export function validStatusInput(value: string): boolean {
+  if (value.length > MAX_STATUS_LENGTH) return false;
+  for (let i = 0; i < value.length; i++) {
+    const unit = value.charCodeAt(i);
+    if (unit < 32 || (unit >= 127 && unit <= 159)) return false;
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = value.charCodeAt(++i);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+  }
+  return true;
+}
+export function canonicalStatus(value: unknown): string | null {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    validStatusInput(value) &&
+    normalizeStatusInput(value).trim() === value
+    ? value
+    : null;
+}
+const decoKeys = ["fr", "fx", "bk", "tg", "sb", "pin", "statusText"];
+function validSavedStatus(row: Record<string, unknown>, version: number): boolean {
+  return (
+    row["statusText"] === undefined ||
+    (version >= 2 && canonicalStatus(row["statusText"]) !== null && row["sb"] === undefined)
+  );
+}
 export type FriendDecoration = {
   fr: (typeof FRIEND_FRAMES)[number];
   fx: (typeof FRIEND_EFFECTS)[number];
   bk?: number;
   tg?: (typeof FRIEND_TAGS)[number];
   sb?: (typeof FRIEND_STATUSES)[number];
+  statusText?: string;
   pin?: string;
 };
 export type FriendSettings = {
-  v: 1;
+  v: 1 | 2;
   rev: string;
   prev: string;
   on: boolean;
@@ -336,7 +375,7 @@ export type FriendSettings = {
   deco: FriendDecoration;
 };
 export type FriendCard = {
-  v: 1;
+  v: 1 | 2;
   rev: string;
   ph: boolean;
   t: number | null;
@@ -361,6 +400,7 @@ export type FriendCard = {
   bk?: number;
   tg?: FriendDecoration["tg"];
   sb?: FriendDecoration["sb"];
+  statusText?: string;
   sh: string;
 };
 export type FriendPhoto = { rev: string; data: string };
@@ -401,10 +441,20 @@ function pins(value: unknown, earned?: Readonly<Record<string, string>>): string
   );
   return ids.length ? ids.slice(0, 3).join(",") : undefined;
 }
-export function decodeDecoration(value: unknown): FriendDecoration | null {
+export function decodeDecoration(value: unknown, draft = false): FriendDecoration | null {
   const row = record(value);
   if (!row || !member(row["fr"], FRIEND_FRAMES) || !member(row["fx"], FRIEND_EFFECTS)) return null;
   const pin = pins(row["pin"]);
+  const rawStatus = row["statusText"];
+  if (
+    rawStatus !== undefined &&
+    (typeof rawStatus !== "string" ||
+      !validStatusInput(rawStatus) ||
+      normalizeStatusInput(rawStatus) !== rawStatus ||
+      row["sb"] !== undefined)
+  )
+    return null;
+  const statusText = typeof rawStatus === "string" ? (draft ? rawStatus : rawStatus.trim()) : "";
   return {
     fr: row["fr"],
     fx: row["fx"],
@@ -413,16 +463,23 @@ export function decodeDecoration(value: unknown): FriendDecoration | null {
       : {}),
     ...(member(row["tg"], FRIEND_TAGS) ? { tg: row["tg"] } : {}),
     ...(member(row["sb"], FRIEND_STATUSES) ? { sb: row["sb"] } : {}),
+    ...(statusText ? { statusText } : {}),
     ...(pin ? { pin } : {}),
   };
 }
 export function decodeFriendSettings(value: unknown): FriendSettings | null {
   if (value === null) return null;
   const row = record(value);
+  if (row && row["v"] !== 1 && row["v"] !== 2) throw new UnsupportedFriendSettingsError();
   const deco = decodeDecoration(row?.["deco"]);
   if (
     !row ||
-    row["v"] !== 1 ||
+    (row["v"] !== 1 && row["v"] !== 2) ||
+    Object.keys(row).some(
+      (key) => !["v", "rev", "prev", "on", "photo", "n", "since", "deco"].includes(key),
+    ) ||
+    Object.keys(record(row["deco"]) ?? {}).some((key) => !decoKeys.includes(key)) ||
+    !validSavedStatus(record(row["deco"]) ?? {}, row["v"]) ||
     !revisionValid(row["rev"]) ||
     (row["prev"] !== "" && !revisionValid(row["prev"])) ||
     typeof row["on"] !== "boolean" ||
@@ -437,7 +494,7 @@ export function decodeFriendSettings(value: unknown): FriendSettings | null {
     throw new Error("Unsupported sharing settings. Update the app before changing sharing.");
   }
   return {
-    v: 1,
+    v: row["v"],
     rev: row["rev"],
     prev: row["prev"],
     on: row["on"],
@@ -492,9 +549,10 @@ export function buildFriendPublication(
   const deco = resolveDeco(settings.deco, source.badges);
   const photo = settings.photo && source.photo ? { rev: settings.rev, data: source.photo } : null;
   const pin = pins(deco.pin, source.badges);
+  const statusText = settings.v >= 2 ? canonicalStatus(deco.statusText?.trim()) : null;
   // Explicit public allowlist: never spread profile, account, lessons or progress here.
   const card: Omit<FriendCard, "t"> = {
-    v: 1,
+    v: settings.v,
     rev: settings.rev,
     ph: photo !== null,
     d: source.day,
@@ -518,6 +576,7 @@ export function buildFriendPublication(
     ...(deco.bk !== undefined ? { bk: deco.bk } : {}),
     ...(deco.tg !== undefined ? { tg: deco.tg } : {}),
     ...(deco.sb !== undefined ? { sb: deco.sb } : {}),
+    ...(statusText ? { statusText } : {}),
     sh: settings.since ?? source.day,
   };
   const serialized = JSON.stringify([card, photo]);
@@ -531,10 +590,44 @@ export function decodeFriendCard(value: unknown): FriendCardState {
   const base = { cached: false, fetchedAt: Date.now() };
   if (value === null) return { ...base, kind: "closed" };
   const row = record(value);
-  if (row && row["v"] !== 1) return { ...base, kind: "unsupported" };
+  if (row && row["v"] !== 1 && row["v"] !== 2) return { ...base, kind: "unsupported" };
   const who = row ? identity(row) : null;
   if (
     !row ||
+    (row["v"] !== 1 && row["v"] !== 2) ||
+    !validSavedStatus(row, row["v"]) ||
+    Object.keys(row).some(
+      (key) =>
+        ![
+          "v",
+          "rev",
+          "ph",
+          "t",
+          "d",
+          "n",
+          "g",
+          "r",
+          "c",
+          "s",
+          "m",
+          "l",
+          "k",
+          "vc",
+          "a",
+          "w",
+          "bd",
+          "pin",
+          "acc",
+          "st",
+          "fr",
+          "fx",
+          "bk",
+          "tg",
+          "sb",
+          "statusText",
+          "sh",
+        ].includes(key),
+    ) ||
     !who ||
     !revisionValid(row["rev"]) ||
     typeof row["ph"] !== "boolean" ||
@@ -563,7 +656,7 @@ export function decodeFriendCard(value: unknown): FriendCardState {
   })!;
   const pin = pins(row["pin"], bd);
   const card: FriendCard = {
-    v: 1,
+    v: row["v"],
     rev: row["rev"],
     ph: row["ph"],
     t: typeof row["t"] === "number" && Number.isFinite(row["t"]) && row["t"] >= 0 ? row["t"] : null,
@@ -588,6 +681,7 @@ export function decodeFriendCard(value: unknown): FriendCardState {
     ...(deco.bk !== undefined ? { bk: deco.bk } : {}),
     ...(deco.tg ? { tg: deco.tg } : {}),
     ...(deco.sb ? { sb: deco.sb } : {}),
+    ...(deco.statusText ? { statusText: deco.statusText } : {}),
     sh: row["sh"],
   };
   return { ...base, kind: "published", card };
@@ -659,7 +753,7 @@ export function resolveDeco(
   value: unknown,
   badges: Readonly<Record<string, string>>,
 ): FriendDecoration {
-  const stored = decodeDecoration(value) ?? { fr: "plain", fx: "none" };
+  const stored = decodeDecoration(value, true) ?? { fr: "plain", fx: "none" };
   const pin = pins(stored.pin, badges);
   return {
     fr: decorationUnlocked("frame", stored.fr, badges) ? stored.fr : "plain",
@@ -667,6 +761,7 @@ export function resolveDeco(
     ...(stored.bk !== undefined ? { bk: stored.bk } : {}),
     ...(stored.tg !== undefined ? { tg: stored.tg } : {}),
     ...(stored.sb !== undefined ? { sb: stored.sb } : {}),
+    ...(stored.statusText !== undefined ? { statusText: stored.statusText } : {}),
     ...(pin ? { pin } : {}),
   };
 }

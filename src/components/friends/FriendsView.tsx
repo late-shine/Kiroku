@@ -19,6 +19,7 @@ import { AddFriendDrawer } from "./AddFriendDrawer";
 import { FriendTabs } from "./FriendTabs";
 import { FriendAvatar } from "./FriendAvatar";
 import { SideBySide } from "./SideBySide";
+import { CheerRow } from "./CheerRow";
 import { friendButton } from "./friends-ui";
 
 export function FriendsView({
@@ -260,6 +261,8 @@ export function FriendsView({
                 today={today}
                 now={clock}
                 activityKnown={online && !snapshot?.cached}
+                unread={friends.unreadCheers}
+                cheersStale={friends.cheersStale}
               />
             )}
           </div>
@@ -270,6 +273,7 @@ export function FriendsView({
           >
             {!online && <p>You're offline. Try requests again when you're back.</p>}
             {friends.error && <p>{friends.error}</p>}
+            {friends.cheersError && <p>{friends.cheersError}</p>}
             {friends.error && !snapshot && (
               <p>Couldn’t refresh this desk. Nothing here is filled in.</p>
             )}
@@ -413,7 +417,7 @@ function SelectedDesk({
               <span aria-hidden="true" className="friends-cover-strap" />
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              {peer.name} isn’t sharing right now.
+              {peer.name} isn’t sharing right now. You can still send a cheer.
             </p>
           </>
         ) : (
@@ -443,6 +447,9 @@ function SelectedDesk({
             Block
           </button>
         </div>
+        {peer.state === "final" && (
+          <CheerRow peer={peer.uid} name={peer.name} today={today} offline={offline} />
+        )}
       </div>
     );
   return (
@@ -485,6 +492,7 @@ function SelectedDesk({
             Reload shared images
           </button>
         )}
+        <CheerRow peer={peer.uid} name={card.n} today={today} offline={offline} />
       </aside>
       {local ? (
         <SideBySide

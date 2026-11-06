@@ -48,6 +48,7 @@ export type FriendsSnapshot = {
   fetchedAt: number;
   cached: boolean;
   cards?: Record<string, FriendCardState>;
+  cheers?: CheerInboxRead;
 };
 export type FriendsLocal = {
   v: 1;
@@ -57,6 +58,9 @@ export type FriendsLocal = {
   publishSourceUid?: string;
   publishedAt?: number;
   fp?: string;
+  seen?: { cheers?: Record<string, number> };
+  sentDay?: Record<string, string>;
+  sentCheer?: Record<string, CheerId>;
 };
 export type FriendsCache = {
   v: 1;
@@ -247,6 +251,22 @@ export function decodeFriendsLocal(raw: string | null, uid: string | null): Frie
     if (row?.["v"] !== 1 || row["uid"] !== uid) return null;
     const name = row["publicName"];
     const decoDraft = decodeDecoration(row["decoDraft"], true);
+    const seen = Object.fromEntries(
+      Object.entries(record(record(row["seen"])?.["cheers"]) ?? {}).filter(
+        ([peer, time]) =>
+          isUid(peer) && typeof time === "number" && Number.isSafeInteger(time) && time >= 0,
+      ),
+    ) as Record<string, number>;
+    const sentDay = Object.fromEntries(
+      Object.entries(record(row["sentDay"]) ?? {}).filter(
+        ([peer, day]) => isUid(peer) && dayValid(day),
+      ),
+    ) as Record<string, string>;
+    const sentCheer = Object.fromEntries(
+      Object.entries(record(row["sentCheer"]) ?? {}).filter(
+        ([peer, kind]) => isUid(peer) && isCheerId(kind),
+      ),
+    ) as Record<string, CheerId>;
     return {
       v: 1,
       uid,
@@ -257,6 +277,9 @@ export function decodeFriendsLocal(raw: string | null, uid: string | null): Frie
         ? { publishedAt: row["publishedAt"] }
         : {}),
       ...(typeof row["fp"] === "string" ? { fp: row["fp"] } : {}),
+      ...(Object.keys(seen).length ? { seen: { cheers: seen } } : {}),
+      ...(Object.keys(sentDay).length ? { sentDay } : {}),
+      ...(Object.keys(sentCheer).length ? { sentCheer } : {}),
     };
   } catch {
     return null;
@@ -958,4 +981,47 @@ export function friendsDoorVisible(snapshot: FriendsSnapshot | null, available: 
       ["final", "incoming-pending", "outgoing-pending", "crossing"].includes(peer.state),
     ),
   );
+}
+
+// F5: one preset slot in each direction, with a device-only daily convention.
+export const CHEERS = [
+  { id: "ganbatte", japanese: "がんばって", gloss: "You can do it." },
+  { id: "otsukare", japanese: "おつかれさま", gloss: "Nice work today." },
+  { id: "sugoi", japanese: "すごい", gloss: "Wow." },
+  { id: "issho", japanese: "一緒に", gloss: "Let's study together." },
+  { id: "mataashita", japanese: "また明日", gloss: "See you tomorrow." },
+] as const;
+export type CheerId = (typeof CHEERS)[number]["id"];
+export type Cheer = { k: CheerId; d: string; t: number };
+export type CheerInboxRead = {
+  loaded: boolean;
+  records: Record<string, Cheer>;
+  invalid: string[];
+  fetchedAt: number;
+  error: string | null;
+};
+export function isCheerId(value: unknown): value is CheerId {
+  return CHEERS.some((cheer) => cheer.id === value);
+}
+export function decodeCheer(value: unknown): Cheer | null {
+  const row = record(value);
+  return row &&
+    Object.keys(row).every((key) => ["k", "d", "t"].includes(key)) &&
+    isCheerId(row["k"]) &&
+    dayValid(row["d"]) &&
+    typeof row["t"] === "number" &&
+    Number.isSafeInteger(row["t"]) &&
+    row["t"] >= 0
+    ? { k: row["k"], d: row["d"], t: row["t"] }
+    : null;
+}
+export function canCheerToday(
+  today: string,
+  stamp: string | undefined,
+  outgoing: Cheer | null,
+): boolean {
+  return dayValid(today) && (!stamp || stamp < today) && (!outgoing || outgoing.d < today);
+}
+export function cheerUnread(cheer: Cheer | null | undefined, seen: number | undefined): boolean {
+  return Boolean(cheer && cheer.t > (seen ?? -1));
 }

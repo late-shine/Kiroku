@@ -2,6 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { Account } from "@/lib/firebase";
 import {
   FRIENDS_REFRESH_MS,
+  canCheerToday,
+  cheerUnread,
+  type Cheer,
+  type CheerId,
   friendsDoorVisible,
   decodeFriendsCache,
   decodeFriendsLocal,
@@ -41,6 +45,9 @@ import {
   saveFriendSharing,
   publishFriendCard,
   readFriendPhoto,
+  readCheerPair,
+  sendFriendCheer,
+  clearFriendCheer,
   readOwnerBannerAsset,
   readFriendBanner,
   type SharingRead,
@@ -105,6 +112,32 @@ function patchLocal(uid: string, patch: Partial<NonNullable<ReturnType<typeof re
     /* Optional device metadata. */
   }
 }
+
+type CheerLocal = {
+  uid: string | null;
+  seen: Record<string, number>;
+  sentDay: Record<string, string>;
+  sentCheer: Record<string, CheerId>;
+};
+type CheerInbox = {
+  uid: string | null;
+  records: Record<string, Cheer>;
+  stale: boolean;
+  fetchedAt: number;
+  error: string | null;
+};
+type CheerPane = {
+  outgoing: Cheer | null;
+  loaded: boolean;
+  loading: boolean;
+  error: string | null;
+};
+const emptyCheerPane = (): CheerPane => ({
+  outgoing: null,
+  loaded: false,
+  loading: false,
+  error: null,
+});
 
 type View = {
   uid: string | null;
@@ -185,6 +218,29 @@ export function useFriendsController({
   const { profile } = useProfile();
   const [view, setView] = useState<View>(() => emptyView(null));
   const [activity, setActivity] = useState(() => friendsActivity(null));
+  const [cheerLocal, setCheerLocal] = useState<CheerLocal>({
+    uid: null,
+    seen: {},
+    sentDay: {},
+    sentCheer: {},
+  });
+  const cheerLocalRef = useRef(cheerLocal);
+  const [cheerInbox, setCheerInbox] = useState<CheerInbox>({
+    uid: null,
+    records: {},
+    stale: true,
+    fetchedAt: 0,
+    error: null,
+  });
+  const cheerInboxRef = useRef(cheerInbox);
+  const [cheerPanes, setCheerPanes] = useState<Record<string, CheerPane>>({});
+  const cheerPanesRef = useRef(cheerPanes);
+  const cheerPeers = useRef(new Set<string>());
+  const cheerRelationsFresh = useRef(false);
+  const activeCheerPeer = useRef<string | null>(null);
+  const cheerPaneSequence = useRef(0);
+  const cheerReading = useRef<string | null>(null);
+  const loadCheerPaneRef = useRef<(peer: string) => Promise<void>>(async () => {});
   const [invite, setInvite] = useState<string | null>(null);
   const [sharing, setSharing] = useState<SharingView>(() => emptySharing(null));
   const sharingRef = useRef(sharing);
@@ -274,6 +330,182 @@ export function useFriendsController({
   const openProfileRef = useRef(onOpenProfile);
   openProfileRef.current = onOpenProfile;
 
+  const saveCheerLocal = useCallback(
+    (next: CheerLocal) => {
+      if (
+        next.uid !== uid ||
+        current.current?.uid !== uid ||
+        (uid && friendsActivity(uid).deleting)
+      )
+        return;
+      cheerLocalRef.current = next;
+      setCheerLocal(next);
+      if (uid)
+        patchLocal(uid, {
+          seen: { cheers: next.seen },
+          sentDay: next.sentDay,
+          sentCheer: next.sentCheer,
+        });
+    },
+    [uid],
+  );
+  const resetCheerData = useCallback(
+    (restore = true) => {
+      ++cheerPaneSequence.current;
+      cheerReading.current = null;
+      activeCheerPeer.current = null;
+      cheerPeers.current = new Set();
+      cheerRelationsFresh.current = false;
+      const local = restore && uid ? readLocal(uid) : null;
+      const next: CheerLocal = {
+        uid,
+        seen: local?.seen?.cheers ?? {},
+        sentDay: local?.sentDay ?? {},
+        sentCheer: local?.sentCheer ?? {},
+      };
+      cheerLocalRef.current = next;
+      setCheerLocal(next);
+      const inbox: CheerInbox = { uid, records: {}, stale: true, fetchedAt: 0, error: null };
+      cheerInboxRef.current = inbox;
+      setCheerInbox(inbox);
+      cheerPanesRef.current = {};
+      setCheerPanes({});
+    },
+    [uid],
+  );
+  const reconcileCheers = useCallback(
+    (snapshot: FriendsSnapshot) => {
+      const allowed = new Set(
+        snapshot.peers.filter((peer) => peer.state === "final").map((peer) => peer.uid),
+      );
+      cheerPeers.current = allowed;
+      cheerRelationsFresh.current = Boolean(
+        snapshot.own && !snapshot.own.deleting && !snapshot.cached,
+      );
+      const keep = <T>(map: Record<string, T>) =>
+        Object.fromEntries(Object.entries(map).filter(([peer]) => allowed.has(peer)));
+      const local = cheerLocalRef.current;
+      saveCheerLocal({
+        uid,
+        seen: keep(local.seen),
+        sentDay: keep(local.sentDay),
+        sentCheer: keep(local.sentCheer),
+      });
+      const read = snapshot.cheers;
+      const records = read?.loaded ? { ...read.records } : keep(cheerInboxRef.current.records);
+      for (const peer of read?.invalid ?? [])
+        if (cheerInboxRef.current.records[peer])
+          records[peer] = cheerInboxRef.current.records[peer]!;
+      const inbox: CheerInbox = {
+        uid,
+        records: keep(records),
+        stale: !read?.loaded || Boolean(read.invalid.length),
+        fetchedAt: read?.loaded ? read.fetchedAt : cheerInboxRef.current.fetchedAt,
+        error: read?.error ?? null,
+      };
+      cheerInboxRef.current = inbox;
+      setCheerInbox(inbox);
+      cheerPanesRef.current = keep(cheerPanesRef.current);
+      setCheerPanes(cheerPanesRef.current);
+      if (activeCheerPeer.current && !allowed.has(activeCheerPeer.current)) {
+        activeCheerPeer.current = null;
+        ++cheerPaneSequence.current;
+        cheerReading.current = null;
+      }
+    },
+    [uid, saveCheerLocal],
+  );
+  const evictCheerPeer = useCallback(
+    (peer: string) => {
+      if (current.current?.uid !== uid) return;
+      cheerPeers.current.delete(peer);
+      if (activeCheerPeer.current === peer) {
+        activeCheerPeer.current = null;
+        ++cheerPaneSequence.current;
+        cheerReading.current = null;
+      }
+      const local = cheerLocalRef.current;
+      const { [peer]: _seen, ...seen } = local.seen;
+      const { [peer]: _day, ...sentDay } = local.sentDay;
+      const { [peer]: _kind, ...sentCheer } = local.sentCheer;
+      saveCheerLocal({ uid, seen, sentDay, sentCheer });
+      const { [peer]: _record, ...records } = cheerInboxRef.current.records;
+      const inbox = { ...cheerInboxRef.current, records };
+      cheerInboxRef.current = inbox;
+      setCheerInbox(inbox);
+      const { [peer]: _pane, ...panes } = cheerPanesRef.current;
+      cheerPanesRef.current = panes;
+      setCheerPanes(panes);
+    },
+    [uid, saveCheerLocal],
+  );
+  const loadCheerPane = useCallback(
+    async (peer: string) => {
+      const captured = current.current;
+      if (
+        !uid ||
+        captured?.uid !== uid ||
+        !cheerRelationsFresh.current ||
+        !cheerPeers.current.has(peer) ||
+        refreshing.current ||
+        friendsActivity(uid).deleting ||
+        friendsActivity(uid).busy ||
+        document.visibilityState === "hidden" ||
+        !navigator.onLine ||
+        cheerReading.current === peer
+      )
+        return;
+      const sequence = ++cheerPaneSequence.current;
+      cheerReading.current = peer;
+      const pending = {
+        ...(cheerPanesRef.current[peer] ?? emptyCheerPane()),
+        loading: true,
+        error: null,
+      };
+      cheerPanesRef.current = { ...cheerPanesRef.current, [peer]: pending };
+      setCheerPanes(cheerPanesRef.current);
+      try {
+        const value = await readCheerPair(uid, peer);
+        if (
+          current.current !== captured ||
+          sequence !== cheerPaneSequence.current ||
+          !cheerPeers.current.has(peer)
+        )
+          return;
+        const records = { ...cheerInboxRef.current.records };
+        if (value.incoming) records[peer] = value.incoming;
+        else delete records[peer];
+        const inbox = { ...cheerInboxRef.current, records };
+        cheerInboxRef.current = inbox;
+        setCheerInbox(inbox);
+        cheerPanesRef.current = {
+          ...cheerPanesRef.current,
+          [peer]: { outgoing: value.outgoing, loaded: true, loading: false, error: null },
+        };
+        setCheerPanes(cheerPanesRef.current);
+      } catch (error) {
+        if (current.current !== captured || sequence !== cheerPaneSequence.current) return;
+        if (isFriendsDenied(error)) evictCheerPeer(peer);
+        cheerPanesRef.current = {
+          ...cheerPanesRef.current,
+          [peer]: {
+            ...(cheerPanesRef.current[peer] ?? emptyCheerPane()),
+            loaded: false,
+            loading: false,
+            error: describeFriendsError(error),
+          },
+        };
+        setCheerPanes(cheerPanesRef.current);
+        if (isFriendsDenied(error)) await refreshRef.current();
+      } finally {
+        if (current.current === captured && sequence === cheerPaneSequence.current)
+          cheerReading.current = null;
+      }
+    },
+    [uid, evictCheerPeer],
+  );
+  loadCheerPaneRef.current = loadCheerPane;
+
   const refresh = useCallback(async () => {
     const captured = current.current;
     if (
@@ -286,6 +518,16 @@ export function useFriendsController({
       return;
     }
     const sequence = ++readSequence.current;
+    ++cheerPaneSequence.current;
+    cheerReading.current = null;
+    cheerPanesRef.current = Object.fromEntries(
+      Object.entries(cheerPanesRef.current).map(([peer, pane]) => [
+        peer,
+        { ...pane, loading: false },
+      ]),
+    );
+    setCheerPanes(cheerPanesRef.current);
+    lastRefresh.current = Date.now();
     refreshing.current = true;
     setView((value) => ({ ...value, loading: true }));
     try {
@@ -293,6 +535,7 @@ export function useFriendsController({
       if (current.current !== captured || sequence !== readSequence.current) return;
       lastRefresh.current = Date.now();
       isSetUp.current = Boolean(snapshot.own && !snapshot.own.deleting);
+      reconcileCheers(snapshot);
       cardCache.current = snapshot.cards ?? {};
       ++selectedBannerSequence.current;
       setBannerRead((old) => (old ? { ...old, loading: false } : null));
@@ -348,7 +591,16 @@ export function useFriendsController({
       }
     } catch (error) {
       if (current.current !== captured || sequence !== readSequence.current) return;
+      cheerRelationsFresh.current = false;
+      const failedInbox = {
+        ...cheerInboxRef.current,
+        stale: true,
+        error: "Couldn't refresh cheers. Last-known indicators are kept.",
+      };
+      cheerInboxRef.current = failedInbox;
+      setCheerInbox(failedInbox);
       if (isFriendsDenied(error)) {
+        reconcileCheers({ own: null, peers: [], blocks: [], fetchedAt: Date.now(), cached: false });
         setSelectedBanner(null);
         setPreviewBanner(null);
         ++selectedBannerSequence.current;
@@ -381,15 +633,18 @@ export function useFriendsController({
         };
       });
     } finally {
-      if (current.current === captured && sequence === readSequence.current)
+      if (current.current === captured && sequence === readSequence.current) {
         refreshing.current = false;
+        if (activeCheerPeer.current) void loadCheerPaneRef.current(activeCheerPeer.current);
+      }
     }
-  }, [uid, cancelPublish]);
+  }, [uid, cancelPublish, reconcileCheers]);
   refreshRef.current = refresh;
 
   useEffect(() => {
     if (!resolved) return;
     setFriendsAccount(uid);
+    resetCheerData();
     ownerBannerRef.current = { uid, loaded: false, loading: false, asset: null, error: null };
     setOwnerBanner(ownerBannerRef.current);
     ++ownerBannerSequence.current;
@@ -457,6 +712,7 @@ export function useFriendsController({
       setActivity(next);
       if (next.busy) lastOutcome = null;
       if (next.deleting) {
+        resetCheerData(false);
         ownerBannerRef.current = { uid, loaded: false, loading: false, asset: null, error: null };
         setOwnerBanner(ownerBannerRef.current);
         ++ownerBannerSequence.current;
@@ -512,6 +768,9 @@ export function useFriendsController({
     return () => {
       stop();
       current.current = null;
+      ++cheerPaneSequence.current;
+      cheerReading.current = null;
+      activeCheerPeer.current = null;
       ++ownerBannerSequence.current;
       ++selectedBannerSequence.current;
       ++previewBannerSequence.current;
@@ -521,41 +780,59 @@ export function useFriendsController({
       ++readSequence.current;
       setFriendsAccount(null);
     };
-  }, [uid, resolved, cancelPublish]);
+  }, [uid, resolved, cancelPublish, resetCheerData]);
 
+  const backgroundReady =
+    view.uid === uid && Boolean(view.snapshot?.own && !view.snapshot.own.deleting);
   useEffect(() => {
     if (!uid) return;
-    const onFocus = () => {
-      if (
-        document.visibilityState !== "hidden" &&
-        isSetUp.current &&
-        !friendsActivity(uid).deleting &&
-        !friendsActivity(uid).busy
-      ) {
-        setDay(localDay());
-        void refreshSharingRef.current().then(() => schedulePublishRef.current(true));
-      }
-      if (
-        document.visibilityState === "hidden" ||
-        refreshing.current ||
-        !isSetUp.current ||
-        friendsActivity(uid).busy ||
-        friendsActivity(uid).deleting ||
-        Date.now() - lastRefresh.current < FRIENDS_REFRESH_MS
-      ) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    const allowed = () =>
+      !stopped &&
+      document.visibilityState !== "hidden" &&
+      navigator.onLine &&
+      isSetUp.current &&
+      !friendsActivity(uid).busy &&
+      !friendsActivity(uid).deleting;
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+      if (!allowed()) return;
+      timer = setTimeout(
+        onFocus,
+        Math.max(250, FRIENDS_REFRESH_MS - (Date.now() - lastRefresh.current)),
+      );
+    };
+    function onFocus(event?: Event) {
+      if (!allowed()) {
+        arm();
         return;
       }
-      void refreshRef.current();
-    };
+      setDay(localDay());
+      void refreshSharingRef.current().then(() => schedulePublishRef.current(true));
+      if (refreshing.current || Date.now() - lastRefresh.current < FRIENDS_REFRESH_MS) {
+        if (event?.type === "online" && !refreshing.current && activeCheerPeer.current)
+          void loadCheerPaneRef.current(activeCheerPeer.current);
+        arm();
+        return;
+      }
+      void refreshRef.current().finally(arm);
+    }
     window.addEventListener("focus", onFocus);
     window.addEventListener("online", onFocus);
+    window.addEventListener("offline", onFocus);
     document.addEventListener("visibilitychange", onFocus);
+    arm();
     return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onFocus);
+      window.removeEventListener("offline", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [uid]);
+  }, [uid, backgroundReady, activity.busy, activity.deleting]);
 
   // Capture before redirect, consume once signed in and the add UI can receive it.
   useEffect(() => {
@@ -1398,15 +1675,156 @@ export function useFriendsController({
     }
   };
 
+  const sendCheer = (peer: string, kind: CheerId) =>
+    perform(async () => {
+      const captured = current.current!;
+      const pane = cheerPanesRef.current[peer];
+      const today = localDay();
+      if (
+        !cheerRelationsFresh.current ||
+        !cheerPeers.current.has(peer) ||
+        !pane?.loaded ||
+        pane.loading ||
+        pane.error
+      )
+        throw new FriendsError("Refresh this friend's cheer before sending.");
+      if (!canCheerToday(today, cheerLocalRef.current.sentDay[peer], pane.outgoing))
+        throw new FriendsError("A cheer is already recorded for this local day or a later day.");
+      await sendFriendCheer(uid!, peer, kind, today, () => {
+        if (
+          current.current !== captured ||
+          friendsActivity(captured.uid).deleting ||
+          !cheerPeers.current.has(peer)
+        )
+          return;
+        const local = cheerLocalRef.current;
+        saveCheerLocal({
+          ...local,
+          sentDay: { ...local.sentDay, [peer]: today },
+          sentCheer: { ...local.sentCheer, [peer]: kind },
+        });
+      });
+      return "Cheer sent. This device will keep your choice for the rest of this local day.";
+    });
+  const clearCheer = (peer: string) =>
+    perform(async () => {
+      const captured = current.current!;
+      if (!cheerRelationsFresh.current || !cheerPeers.current.has(peer))
+        throw new FriendsError("Refresh this friendship before clearing its cheer.");
+      await clearFriendCheer(uid!, peer, () => {
+        if (current.current !== captured || friendsActivity(captured.uid).deleting) return;
+        const { [peer]: _old, ...records } = cheerInboxRef.current.records;
+        const next = { ...cheerInboxRef.current, records };
+        cheerInboxRef.current = next;
+        setCheerInbox(next);
+      });
+      return "Received cheer cleared.";
+    });
+
   const ownView = view.uid === uid ? view : emptyView(uid);
   const suggestedName =
     (sharing.uid === uid ? sharing.settings?.n : null) ??
     ownView.publicName ??
     publicName(profile.name, account?.displayName ?? null) ??
     "";
+  const ownInbox: CheerInbox =
+    cheerInbox.uid === uid
+      ? cheerInbox
+      : { uid, records: {}, stale: true, fetchedAt: 0, error: null };
+  const ownCheerLocal: CheerLocal =
+    cheerLocal.uid === uid ? cheerLocal : { uid, seen: {}, sentDay: {}, sentCheer: {} };
+  const unreadPeers: Record<string, boolean> = Object.fromEntries(
+    (ownView.snapshot?.peers ?? [])
+      .filter((peer) => peer.state === "final")
+      .map((peer) => [
+        peer.uid,
+        cheerUnread(ownInbox.records[peer.uid], ownCheerLocal.seen[peer.uid]),
+      ]),
+  );
+  const cheersStale =
+    ownInbox.stale ||
+    !cheerRelationsFresh.current ||
+    ownView.loading ||
+    Boolean(ownView.snapshot?.cached);
   return {
     ...ownView,
     uid,
+    unreadCheers: unreadPeers,
+    unreadCheerCount: Object.values(unreadPeers).filter(Boolean).length,
+    cheersStale,
+    cheersError: ownInbox.error,
+    openCheerPane: (peer: string) => {
+      activeCheerPeer.current = peer;
+      void loadCheerPaneRef.current(peer);
+    },
+    closeCheerPane: (peer: string) => {
+      if (activeCheerPeer.current !== peer) return;
+      activeCheerPeer.current = null;
+      ++cheerPaneSequence.current;
+      cheerReading.current = null;
+      if (cheerPanesRef.current[peer]) {
+        cheerPanesRef.current = {
+          ...cheerPanesRef.current,
+          [peer]: { ...cheerPanesRef.current[peer]!, loaded: false, loading: false },
+        };
+        setCheerPanes(cheerPanesRef.current);
+      }
+    },
+    refreshCheerPane: async (peer: string) => {
+      if (!cheerRelationsFresh.current) await refreshRef.current();
+      await loadCheerPaneRef.current(peer);
+    },
+    cheerFor: (peer: string) => {
+      const pane =
+        cheerLocal.uid === uid ? (cheerPanes[peer] ?? emptyCheerPane()) : emptyCheerPane();
+      const incoming = unreadPeers[peer] !== undefined ? (ownInbox.records[peer] ?? null) : null;
+      const fresh =
+        cheerRelationsFresh.current &&
+        cheerPeers.current.has(peer) &&
+        !ownView.loading &&
+        !ownView.snapshot?.cached;
+      const cached =
+        !fresh || (ownInbox.stale && (!pane.loaded || pane.loading || pane.error !== null));
+      const stamp = ownCheerLocal.sentDay[peer];
+      const outgoing = pane.outgoing;
+      const chosen =
+        outgoing && outgoing.d >= day && (!stamp || outgoing.d >= stamp)
+          ? outgoing.k
+          : stamp && stamp >= day
+            ? (ownCheerLocal.sentCheer[peer] ?? null)
+            : null;
+      return {
+        incoming,
+        outgoing,
+        loading: pane.loading || ownView.loading,
+        loaded: pane.loaded,
+        cached,
+        error: pane.error ?? (!pane.loaded ? ownInbox.error : null),
+        canSend:
+          fresh &&
+          pane.loaded &&
+          !pane.loading &&
+          !pane.error &&
+          canCheerToday(day, stamp, outgoing),
+        sentKind: chosen,
+        sentDay: stamp && stamp >= day ? stamp : outgoing && outgoing.d >= day ? outgoing.d : null,
+      };
+    },
+    markCheerSeen: (peer: string, time: number) => {
+      if (
+        !uid ||
+        current.current?.uid !== uid ||
+        !cheerRelationsFresh.current ||
+        !cheerPeers.current.has(peer) ||
+        cheerInboxRef.current.records[peer]?.t !== time ||
+        (cheerLocalRef.current.seen[peer] ?? -1) >= time
+      )
+        return;
+      const local = cheerLocalRef.current;
+      saveCheerLocal({ ...local, seen: { ...local.seen, [peer]: time } });
+    },
+    sendCheer,
+    clearCheer,
     available: Boolean(uid && configured),
     showFriends: friendsDoorVisible(
       ownView.snapshot,
@@ -1611,6 +2029,7 @@ export function useFriendsController({
     remove: (peer: string, block = false) =>
       perform(async () => {
         await removeFriend(uid!, peer, block);
+        evictCheerPeer(peer);
         return block
           ? "Person blocked and connection removed."
           : "Connection and requests removed.";

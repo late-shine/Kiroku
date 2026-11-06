@@ -19,6 +19,8 @@ export function FriendTabs({
   today,
   now,
   activityKnown,
+  unread,
+  cheersStale,
 }: {
   peers: readonly FriendPeer[];
   cards: Readonly<Record<string, FriendCardState>>;
@@ -28,6 +30,8 @@ export function FriendTabs({
   today: string;
   now: number;
   activityKnown: boolean;
+  unread: Readonly<Record<string, boolean>>;
+  cheersStale: boolean;
 }) {
   const select = (index: number) => {
     const peer = peers[(index + peers.length) % peers.length];
@@ -97,11 +101,16 @@ export function FriendTabs({
                   {RANKS.find((rank) => rank.level === card.r)?.glyph}
                 </span>
               )}
+              {(studied || unread[peer.uid]) && (
+                <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-primary" />
+              )}
               {studied && (
-                <>
-                  <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-primary" />
-                  <span className="sr-only">Studied today, as of the last shared update</span>
-                </>
+                <span className="sr-only">Studied today, as of the last shared update</span>
+              )}
+              {unread[peer.uid] && (
+                <span className="sr-only">
+                  {cheersStale ? "Last-known new cheer; status not refreshed" : "1 new cheer"}
+                </span>
               )}
             </button>
           );

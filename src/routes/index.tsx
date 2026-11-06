@@ -692,7 +692,9 @@ function Header({
                 ? `Quiz, ${quizDue} words due today`
                 : id === "write" && writeReady && tab !== "write"
                   ? "Write, a writing page is ready"
-                  : label
+                  : id === "friends"
+                    ? `${label}${friends.unreadCheerCount > 0 ? `, ${friends.cheersStale ? "last known: " : ""}${friends.unreadCheerCount} new cheer${friends.unreadCheerCount === 1 ? "" : "s"}` : friends.cheersStale ? ", cheer status not confirmed" : ""}`
+                    : label
             }
             aria-current={tab === id ? "page" : undefined}
             className={`relative flex min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 motion-reduce:transition-none ${
@@ -713,6 +715,18 @@ function Header({
                   className="absolute right-1.5 top-1 size-1.5 rounded-full bg-primary"
                 />
                 <span className="sr-only">A writing page is ready</span>
+              </>
+            )}
+            {id === "friends" && friends.unreadCheerCount > 0 && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1.5 top-1 size-1.5 rounded-full bg-primary"
+                />
+                <span className="sr-only">
+                  {friends.cheersStale ? "Last known: " : ""}
+                  {friends.unreadCheerCount} new cheer{friends.unreadCheerCount === 1 ? "" : "s"}
+                </span>
               </>
             )}
             {id === "quiz" && quizDue > 0 && (

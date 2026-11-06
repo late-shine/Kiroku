@@ -1,6 +1,12 @@
 import { getDb } from "./firebase";
 import {
   BLOCK_LIMIT,
+  decodeCheer,
+  isCheerId,
+  canCheerToday,
+  type Cheer,
+  type CheerId,
+  type CheerInboxRead,
   FRIEND_LIMIT,
   REQUEST_COOLDOWN_MS,
   collection,
@@ -354,10 +360,14 @@ export async function fetchFriends(
     return { own, peers: [], blocks: [], fetchedAt: Date.now(), cached: false };
   }
   if (!own) return { own: null, peers: [], blocks: [], fetchedAt: Date.now(), cached: false };
-  const [linksValue, inboxValue, blocksValue] = await Promise.all([
+  const [linksValue, inboxValue, blocksValue, cheerResult] = await Promise.all([
     read(token, `links/${uid}`),
     read(token, `inbox/${uid}`),
     read(token, `blocks/${uid}`),
+    read(token, `cheers/${uid}`).then(
+      (value) => ({ value, error: null as string | null }),
+      (error: unknown) => ({ value: null, error: describeFriendsError(error) }),
+    ),
   ]);
   const links = collection(linksValue);
   const inbox = collection(inboxValue);
@@ -412,7 +422,40 @@ export async function fetchFriends(
     }),
   );
   assertCurrent(token);
-  return { own, peers, blocks: Object.keys(blocks), fetchedAt: Date.now(), cached: false, cards };
+  const cheers: CheerInboxRead = {
+    loaded: cheerResult.error === null,
+    records: {},
+    invalid: [],
+    fetchedAt: Date.now(),
+    error: cheerResult.error,
+  };
+  if (cheers.loaded) {
+    const values = record(cheerResult.value);
+    if (cheerResult.value !== null && !values) {
+      cheers.loaded = false;
+      cheers.error = "Couldn't read cheers. Last-known indicators are kept.";
+    }
+    for (const peer of peers) {
+      if (peer.state !== "final") continue;
+      const raw = values?.[peer.uid];
+      if (raw === undefined) continue;
+      const cheer = decodeCheer(raw);
+      if (cheer) cheers.records[peer.uid] = cheer;
+      else {
+        cheers.invalid.push(peer.uid);
+        cheers.error = "Some cheers couldn't be read. Their last-known indicators are kept.";
+      }
+    }
+  }
+  return {
+    own,
+    peers,
+    blocks: Object.keys(blocks),
+    fetchedAt: Date.now(),
+    cached: false,
+    cards,
+    cheers,
+  };
 }
 
 /** A denied read is never a collision. Only an occupied candidate permits another candidate. */
@@ -844,4 +887,67 @@ export async function readFriendBanner(uid: string, peer: string, id: string) {
   return banner && banner.id === id
     ? { kind: "banner" as const, banner }
     : { kind: raw === null ? ("missing" as const) : ("mismatch" as const) };
+}
+
+/** Authoritative selected-pair read; sharing On is deliberately not required. */
+export async function readCheerPair(
+  uid: string,
+  peer: string,
+): Promise<{ incoming: Cheer | null; outgoing: Cheer | null }> {
+  const token = tokenFor(uid);
+  await requireSetup(token);
+  if ((await pair(token, peer)).state !== "final")
+    throw new FriendsError("Not connected.", "denied");
+  const [incoming, outgoing] = await Promise.all([
+    read(token, `cheers/${uid}/${peer}`),
+    read(token, `cheers/${peer}/${uid}`),
+  ]);
+  const received = decodeCheer(incoming),
+    sent = decodeCheer(outgoing);
+  if ((incoming !== null && !received) || (outgoing !== null && !sent))
+    throw new FriendsError("Couldn't read this cheer. Refresh before sending.");
+  return { incoming: received, outgoing: sent };
+}
+export function sendFriendCheer(
+  uid: string,
+  peer: string,
+  kind: CheerId,
+  day: string,
+  onAcknowledged: () => void,
+): Promise<void> {
+  return mutate(uid, async (token) => {
+    if (!isCheerId(kind) || day !== localDay())
+      throw new FriendsError("The local day changed. Reopen this friend's pane.");
+    await requireSetup(token);
+    if ((await pair(token, peer)).state !== "final")
+      throw new FriendsError("Not connected.", "denied");
+    const raw = await read(token, `cheers/${peer}/${uid}`);
+    const outgoing = decodeCheer(raw);
+    if (raw !== null && !outgoing)
+      throw new FriendsError("Couldn't read the outgoing cheer. Refresh before sending.");
+    if (!canCheerToday(day, undefined, outgoing))
+      throw new FriendsError("A cheer is already recorded for this local day or a later day.");
+    const { mod } = await getDb(uid);
+    await update(
+      token,
+      { [`cheers/${peer}/${uid}`]: { k: kind, d: day, t: mod.serverTimestamp() } },
+      () => {
+        if (day !== localDay())
+          throw new FriendsError("The local day changed. Reopen this friend’s pane.");
+        return true;
+      },
+    );
+    if (!session(uid).deleting) onAcknowledged();
+  });
+}
+export function clearFriendCheer(
+  uid: string,
+  peer: string,
+  onAcknowledged: () => void,
+): Promise<void> {
+  return mutate(uid, async (token) => {
+    if (!isUid(peer) || peer === uid) throw new FriendsError("Invalid friend.");
+    await update(token, { [`cheers/${uid}/${peer}`]: null });
+    if (!session(uid).deleting) onAcknowledged();
+  });
 }

@@ -451,8 +451,21 @@
         "$to": {
           ".read": "auth != null && auth.uid === $to",
           "$from": {
+            ".validate": "newData.hasChildren([\"k\", \"d\", \"t\"])",
+            "k": {
+              ".validate": "newData.isString() && newData.val().matches(/^(ganbatte|otsukare|sugoi|issho|mataashita)$/)"
+            },
+            "d": {
+              ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+            },
+            "t": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= now"
+            },
+            "$other": {
+              ".validate": false
+            },
             ".read": "auth != null && auth.uid === $from",
-            ".write": "auth != null && (auth.uid === $to || auth.uid === $from) && !newData.exists()"
+            ".write": "auth != null && $to !== $from && ((!newData.exists() && (auth.uid === $to || auth.uid === $from)) || (newData.exists() && auth.uid === $from && root.child('friends').child('links/' + $to + '/' + $from).child('t').exists() && !root.child('friends').child('links/' + $to + '/' + $from).child('p').exists() && root.child('friends').child('links/' + $from + '/' + $to).child('t').exists() && !root.child('friends').child('links/' + $from + '/' + $to).child('p').exists() && !root.child('friends').child('blocks/' + $to + '/' + $from).exists() && !root.child('friends').child('blocks/' + $from + '/' + $to).exists() && root.child('friends').child('own/' + $to).child('code').exists() && !root.child('friends').child('own/' + $to).child('deleting').exists() && root.child('friends').child('own/' + $from).child('code').exists() && !root.child('friends').child('own/' + $from).child('deleting').exists() && newData.parent().parent().parent().child('links/' + $to + '/' + $from).child('t').exists() && !newData.parent().parent().parent().child('links/' + $to + '/' + $from).child('p').exists() && newData.parent().parent().parent().child('links/' + $from + '/' + $to).child('t').exists() && !newData.parent().parent().parent().child('links/' + $from + '/' + $to).child('p').exists() && !newData.parent().parent().parent().child('blocks/' + $to + '/' + $from).exists() && !newData.parent().parent().parent().child('blocks/' + $from + '/' + $to).exists() && newData.parent().parent().parent().child('own/' + $to).child('code').exists() && !newData.parent().parent().parent().child('own/' + $to).child('deleting').exists() && newData.parent().parent().parent().child('own/' + $from).child('code').exists() && !newData.parent().parent().parent().child('own/' + $from).child('deleting').exists()))"
           }
         }
       },

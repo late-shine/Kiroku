@@ -105,6 +105,7 @@ export function ProfilePage({
   onResetAll,
   due,
   onOpenProgress,
+  onOpenFriends,
   onOpenQuiz,
   onOpenAtmosphere,
   onShowTipsAgain,
@@ -125,6 +126,7 @@ export function ProfilePage({
   due: number;
   mastered: number;
   onOpenProgress: () => void;
+  onOpenFriends: () => void;
   onOpenQuiz: () => void;
   onOpenAtmosphere: () => void;
   /** The shell's `useTips().showAgain`: the shell owns the tip state (a second copy here would not refresh its tip cards). */
@@ -615,6 +617,17 @@ export function ProfilePage({
                 className="size-4 shrink-0 text-muted-foreground group-open:rotate-180"
               />
             </summary>
+            {friends.snapshot?.own && !friends.activity.deleting && (
+              <div className="px-5 pt-3">
+                <button
+                  type="button"
+                  onClick={onOpenFriends}
+                  className="min-h-11 rounded-lg border border-border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  Open Friends
+                </button>
+              </div>
+            )}
             <FriendsPanel />
           </details>
         )}

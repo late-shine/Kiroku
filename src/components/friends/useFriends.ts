@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { Account } from "@/lib/firebase";
 import {
   FRIENDS_REFRESH_MS,
+  friendsDoorVisible,
   decodeFriendsCache,
   decodeFriendsLocal,
   normalizeFriendCode,
@@ -45,10 +46,11 @@ import {
   type SharingRead,
   type SharingEdit,
 } from "@/lib/friends-db";
+import { avatarFor } from "@/lib/profile";
 import { useProfile } from "@/components/profile/useProfile";
 import { STORAGE_KEYS } from "@/lib/storage";
 import { PREFS_CHANGED_EVENT, readProfile } from "@/lib/prefs-storage";
-import { localDay } from "@/lib/word-memory";
+import { addDays, localDay } from "@/lib/word-memory";
 import type { QuestPrefs } from "@/lib/quest-prefs";
 import {
   decodeBannerDraft,
@@ -304,7 +306,17 @@ export function useFriendsController({
           : null;
       });
       ++photoSequence.current;
-      setSelectedPhoto(null);
+      setSelectedPhoto((old) => {
+        const entry = old ? snapshot.cards?.[old.peer] : null;
+        return old &&
+          entry?.kind === "published" &&
+          !entry.cached &&
+          entry.card.ph &&
+          entry.card.rev === old.photo.rev &&
+          snapshot.peers.some((peer) => peer.uid === old.peer && peer.state === "final")
+          ? old
+          : null;
+      });
       if (snapshot.own?.deleting) {
         clearFriendsStorage(uid);
       } else if (snapshot.own) {
@@ -1361,6 +1373,10 @@ export function useFriendsController({
     const captured = current.current;
     if (!uid || captured?.uid !== uid) return false;
     if (friendsActivity(uid).busy || friendsActivity(uid).deleting) return false;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setView((value) => ({ ...value, error: "You're offline. Try again when you're back." }));
+      return false;
+    }
     cancelPublish();
     ++readSequence.current;
     refreshing.current = false;
@@ -1392,6 +1408,33 @@ export function useFriendsController({
     ...ownView,
     uid,
     available: Boolean(uid && configured),
+    showFriends: friendsDoorVisible(
+      ownView.snapshot,
+      Boolean(uid && configured && !activity.deleting),
+    ),
+    comparisonData: (day: string) => {
+      if (!uid || current.current?.uid !== uid || friendsActivity(uid).deleting) return null;
+      const input = latestStudy.current;
+      if (!input.hydrated || input.syncBusy) return null;
+      const ownProfile = readProfile();
+      const previousAnswers = Array.from(
+        { length: 7 },
+        (_, i) => input.progress.studyLog[addDays(day, i - 13)]?.answered ?? 0,
+      ).reduce((sum, n) => sum + n, 0);
+      return {
+        source: friendCardSource(input.lessons, input.progress, ownProfile, input.prefs, day),
+        previousAnswers,
+        avatar: avatarFor(ownProfile, account),
+      };
+    },
+    clearSelectedImages: () => {
+      ++photoSequence.current;
+      ++selectedBannerSequence.current;
+      setSelectedPhoto(null);
+      setSelectedPeer(null);
+      setSelectedBanner(null);
+      setBannerRead(null);
+    },
     activity: view.uid === uid ? activity : friendsActivity(uid),
     invite: uid ? invite : null,
     suggestedName,

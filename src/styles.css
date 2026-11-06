@@ -1676,3 +1676,223 @@ rt {
     height: 7px;
   }
 }
+
+/* F4: contained Friends navigation and a read-only two-notebook ledger. */
+.friends-view {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.friends-comparison-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+.friends-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(100%, 34rem);
+  max-width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0;
+}
+.friends-drawer::backdrop {
+  background: var(--scrim);
+  opacity: 0.7;
+}
+.friends-closed-card {
+  position: relative;
+  max-width: 440px;
+}
+.friends-cover-strap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40%;
+  height: 1px;
+  background: color-mix(in oklab, var(--primary) 30%, transparent);
+  pointer-events: none;
+}
+.friends-mirror {
+  --mirror-half: 40px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+}
+.friends-mirror-column {
+  min-width: 0;
+}
+.friends-mirror-half {
+  height: var(--mirror-half);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+.friends-mirror-upper {
+  justify-content: end;
+}
+.friends-mirror-lower {
+  justify-content: start;
+}
+.friends-mirror-axis {
+  display: block;
+  height: 1px;
+  background: var(--border);
+}
+.friends-bar {
+  display: block;
+  width: 60%;
+  max-width: 1.5rem;
+  min-height: 2px;
+  border-radius: 2px;
+}
+.friends-bar-zero {
+  background: color-mix(in oklab, var(--foreground) 15%, transparent);
+  height: 2px;
+}
+.friends-same-accent {
+  background: color-mix(in oklab, var(--foreground) 55%, transparent);
+  border: 1px dashed var(--foreground);
+}
+.friends-no-data {
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--border) 3px 5px);
+  border: 1px solid var(--border);
+}
+.friends-bar-unknown {
+  display: block;
+  height: 100%;
+  width: 60%;
+  max-width: 1.5rem;
+}
+.friends-thread-shared {
+  box-shadow: 0 0 7px var(--glow);
+}
+.friends-ladder {
+  padding: 0 14px;
+  height: 7.5rem;
+  margin-top: 0.5rem;
+}
+.friends-ladder-track {
+  position: relative;
+  top: 50%;
+  border-top: 1px solid var(--border);
+}
+.friends-ladder-rung {
+  position: absolute;
+  top: -0.55rem;
+  transform: translateX(-50%);
+  background: var(--glass-strong);
+  padding: 0 0.2rem;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.friends-ladder-marker {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.friends-ladder-yours {
+  top: -2.8rem;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.friends-ladder-theirs {
+  top: 1.2rem;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 55%, transparent);
+}
+@keyframes thread-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes friends-ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-length);
+  }
+  to {
+    stroke-dashoffset: var(--ring-end);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .friends-view[data-motion-allowed="true"] .friends-bar-up {
+    animation: bar-grow 700ms ease-out 1 both;
+    transform-origin: bottom;
+  }
+  .friends-view[data-motion-allowed="true"] .bar-grow-down {
+    animation: bar-grow 700ms ease-out 1 both;
+    transform-origin: top;
+  }
+  .friends-view[data-motion-allowed="true"] .friends-thread-shared {
+    animation: thread-draw 600ms ease-out 1 both;
+    transform-origin: left;
+  }
+  .friends-view[data-motion-allowed="true"] .friends-mastery-circle {
+    animation: friends-ring-draw 700ms ease-out 1 both;
+  }
+  .friends-view[data-motion-allowed="true"] .friends-ladder-marker {
+    transition: transform 400ms ease-out;
+  }
+  .friends-view[data-motion-allowed="true"]
+    .friends-ladder[data-entered="false"]
+    .friends-ladder-marker {
+    transform: translateX(-50%) scale(0.9);
+  }
+}
+@media (min-width: 1280px) {
+  .friends-comparison-grid {
+    grid-template-columns: 380px minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+  .friends-mirror {
+    --mirror-half: 56px;
+  }
+}
+@media (max-width: 1279px) {
+  .friends-selected-card .profile-card {
+    max-width: none;
+  }
+  .friends-selected-card .profile-card-banner {
+    height: 72px;
+  }
+  .friends-selected-card .profile-card-banner[data-uploaded="true"] {
+    height: 72px;
+    aspect-ratio: auto;
+  }
+  .friends-selected-card .profile-card-avatar-frame {
+    margin-top: -24px;
+  }
+  .friends-selected-card .profile-card-avatar-frame .profile-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 1.4rem;
+  }
+  .friends-selected-card .profile-card-body {
+    padding: 0 1.1rem 1rem;
+  }
+  .friends-selected-card .profile-card-name-row {
+    margin-top: 0.65rem;
+  }
+  .friends-selected-card .profile-card-name-row h2 {
+    font-size: 1.25rem;
+  }
+  .friends-selected-card :is(.profile-card-rank, .profile-card-stats, .profile-card-footer) {
+    display: none;
+  }
+  .friends-selected-card .profile-card-border {
+    --ornament-size: 1rem;
+  }
+  .friends-selected-card .profile-card-charm[data-card-charm="moon"] {
+    top: 0.6rem;
+    left: 11rem;
+    width: 1rem;
+    height: 1rem;
+  }
+}

@@ -23,10 +23,10 @@ const buttonClass =
 const primaryClass = `${buttonClass} bg-primary text-primary-foreground`;
 const inputClass =
   "min-h-11 w-full min-w-0 rounded-md border border-border bg-background/70 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
-type Confirmation = { title: string; body: string; label: string; run: () => void };
+export type Confirmation = { title: string; body: string; label: string; run: () => void };
 type RowKind = "incoming" | "outgoing" | "final" | "unavailable";
 
-function FriendsConfirmation({
+export function FriendsConfirmation({
   confirmation,
   onClose,
 }: {
@@ -86,7 +86,13 @@ function symbolLabel(glyph: string, name: string): string {
   return symbol ? `${symbol.char} (${symbol.label})` : `${initialOf(name) || "—"} (initial)`;
 }
 
-export function FriendsPanel() {
+export function FriendsPanel({
+  managementOnly = false,
+  refreshOnOpen = true,
+}: {
+  managementOnly?: boolean;
+  refreshOnOpen?: boolean;
+}) {
   const friends = useFriends();
   const { sync } = useAccountSync();
   const [settingUp, setSettingUp] = useState(false);
@@ -123,8 +129,8 @@ export function FriendsPanel() {
   }, [friends.activity.deleting]);
 
   useEffect(() => {
-    void friends.refresh(); // Opening Profile refreshes; background focus reads are throttled.
-  }, [friends.refresh]);
+    if (refreshOnOpen) void friends.refresh(); // The single provider owns background/focus refresh.
+  }, [friends.refresh, refreshOnOpen]);
 
   useEffect(() => {
     if (!friends.invite) return;
@@ -236,7 +242,7 @@ export function FriendsPanel() {
             <p className="text-xs text-muted-foreground">You both sent a request.</p>
           )}
           {kind === "unavailable" && <p className="text-xs text-muted-foreground">Not connected</p>}
-          {kind === "final" && <PlainFriendCard peer={peer} />}
+          {kind === "final" && !managementOnly && <PlainFriendCard peer={peer} />}
         </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label={`Actions for ${peer.name}`}>
           {kind === "incoming" && (
@@ -352,7 +358,7 @@ export function FriendsPanel() {
           {snapshot && !snapshot.own && !snapshot.cached && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-muted-foreground">
-                Friends · Not set up yet. Study alongside someone you know.
+                Friends · Off. Study alongside someone you know.
               </p>
               {!settingUp && (
                 <button
@@ -423,15 +429,17 @@ export function FriendsPanel() {
           )}
           {snapshot?.own && !snapshot.cached && (
             <div className="mt-5 space-y-4 border-t border-border pt-4">
-              <FriendsSharing
-                name={chosenName}
-                disabled={disabled}
-                friendCount={connected.length}
-              />
+              {!managementOnly && (
+                <FriendsSharing
+                  name={chosenName}
+                  disabled={disabled}
+                  friendCount={connected.length}
+                />
+              )}
               <div>
                 <p className="text-sm text-muted-foreground">Your friend code</p>
                 <p
-                  className="mt-2 select-all break-all font-mono text-xl tracking-wider"
+                  className={`mt-2 select-all break-all ${managementOnly ? "font-display" : "font-mono"} text-xl tracking-wider`}
                   aria-label={`Friend code: ${snapshot.own.code.slice(0, 5)}, ${snapshot.own.code.slice(5)}`}
                 >
                   {groupedFriendCode(snapshot.own.code)}
@@ -511,7 +519,7 @@ export function FriendsPanel() {
           {snapshot && (snapshot.own || snapshot.cached) && (
             <div className="mt-5 grid min-w-0 gap-5 border-t border-border pt-4 xl:grid-cols-2">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold">Incoming requests</h3>
+                <h3 className="text-sm font-semibold">Requests ({incoming.length})</h3>
                 {incoming.length ? (
                   <ul>{incoming.slice(0, batch).map((peer) => peerRow(peer, "incoming"))}</ul>
                 ) : (

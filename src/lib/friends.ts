@@ -1,9 +1,10 @@
 import { cleanName, isAvatarDataUrl, PROFILE_GLYPHS } from "./profile";
 import { resolveAccent, resolveStamp, type QuestPrefs } from "./quest-prefs";
-import { BADGES } from "./rewards";
+import { BADGES, RANKS } from "./rewards";
 import { profileStats } from "./writing-stats";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 import { isBannerId } from "./friend-banner";
+import { addDays } from "./word-memory";
 import {
   decorationDefinition,
   decorationIds,
@@ -858,4 +859,103 @@ export function maskEmail(email: string | null): string {
   const at = email.lastIndexOf("@");
   if (at <= 0 || at === email.length - 1) return "Email unavailable";
   return `${[...email.slice(0, at)][0] ?? ""}•••@${email.slice(at + 1)}`;
+}
+
+// F4 comparisons are read-only projections, never publication or learning records.
+export type AlignedFriendDay = { day: string; answers: number | null; writing: number | null };
+export type NotebookSummary = Pick<
+  FriendCard,
+  "r" | "c" | "s" | "m" | "l" | "k" | "vc" | "acc" | "st" | "fr" | "g" | "n"
+> & { bd: Readonly<Record<string, string>> };
+export function comparisonWeek(
+  day: string,
+  answers: readonly number[],
+  writing: readonly number[],
+  today: string,
+): AlignedFriendDay[] | null {
+  if (
+    !dayValid(day) ||
+    !dayValid(today) ||
+    day > addDays(today, 1) ||
+    answers.length !== 7 ||
+    writing.length !== 7 ||
+    [...answers, ...writing].some((n) => !Number.isFinite(n) || !Number.isInteger(n) || n < 0)
+  )
+    return null;
+  const source = new Map(
+    Array.from({ length: 7 }, (_, i) => [
+      addDays(day, i - 6),
+      { answers: answers[i]!, writing: writing[i]! },
+    ]),
+  );
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(today, i - 6);
+    const known = source.get(date);
+    return { day: date, answers: known?.answers ?? null, writing: known?.writing ?? null };
+  });
+}
+export function alignFriendWeek(card: FriendCard, today: string): AlignedFriendDay[] | null {
+  return weekValid(card.a) && weekValid(card.w)
+    ? comparisonWeek(card.d, card.a.split(",").map(Number), card.w.split(",").map(Number), today)
+    : null;
+}
+export function friendSnapshotFresh(card: FriendCard, now: number): boolean {
+  return card.t !== null && card.t <= now && now - card.t <= 36 * 60 * 60_000;
+}
+export function studiedOnDay(week: readonly AlignedFriendDay[] | null, day: string): boolean {
+  const row = week?.find((entry) => entry.day === day);
+  return Boolean(
+    row && row.answers !== null && row.writing !== null && row.answers + row.writing > 0,
+  );
+}
+export function sharedStudyDays(
+  own: readonly AlignedFriendDay[],
+  other: readonly AlignedFriendDay[],
+  fresh: boolean,
+) {
+  if (!fresh) return null;
+  const days = own.map((day) => {
+    const peer = other.find((row) => row.day === day.day);
+    const known =
+      peer !== undefined &&
+      day.answers !== null &&
+      day.writing !== null &&
+      peer.answers !== null &&
+      peer.writing !== null;
+    return {
+      day: day.day,
+      shared: known ? studiedOnDay(own, day.day) && studiedOnDay(other, day.day) : null,
+    };
+  });
+  const covered = days.filter((day) => day.shared !== null).length;
+  return covered
+    ? { days, covered, count: days.filter((day) => day.shared === true).length }
+    : null;
+}
+export function comparisonScale(values: readonly (number | null)[]): number {
+  return Math.max(3, ...values.filter((value): value is number => value !== null));
+}
+export function masteryFraction(mastered: number, vocabulary: number): number | null {
+  return Number.isFinite(mastered) && Number.isFinite(vocabulary) && vocabulary > 0
+    ? Math.min(1, Math.max(0, mastered / vocabulary))
+    : null;
+}
+export function rankLadderPosition(carved: number): number {
+  if (!Number.isFinite(carved) || carved < RANKS[0]!.carved) return 0;
+  for (let i = 0; i < RANKS.length - 1; i++) {
+    const here = RANKS[i]!.carved,
+      next = RANKS[i + 1]!.carved;
+    if (carved < next) return i + (carved - here) / (next - here);
+  }
+  return RANKS.length - 1;
+}
+export function friendsDoorVisible(snapshot: FriendsSnapshot | null, available: boolean): boolean {
+  return Boolean(
+    available &&
+    snapshot?.own &&
+    !snapshot.own.deleting &&
+    snapshot.peers.some((peer) =>
+      ["final", "incoming-pending", "outgoing-pending", "crossing"].includes(peer.state),
+    ),
+  );
 }

@@ -15,6 +15,7 @@ import {
   Trophy,
   Upload,
   Volume2,
+  Users,
 } from "lucide-react";
 // Phase 11a: the 13 sample days are no longer loaded. The old sample course is kept as an archive in
 // `handoffs/fixtures/initialLessons.legacy.ts` (moved out of `src/` in Phase 17) and is imported nowhere in the app.
@@ -87,6 +88,8 @@ import { ProfilePage } from "@/components/profile/ProfilePage";
 import { HeaderAccount } from "@/components/account/HeaderAccount";
 import { AccountSyncProvider } from "@/components/account/AccountSyncProvider";
 import { FriendsProvider } from "@/components/friends/FriendsProvider";
+import { FriendsView } from "@/components/friends/FriendsView";
+import { useFriends } from "@/components/friends/useFriends";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 
 export const Route = createFileRoute("/")({
@@ -111,7 +114,8 @@ export const Route = createFileRoute("/")({
 
 // Phase 20: "studio" is a shell mode like the others — the AI Lesson Studio is a page, not an overlay.
 // Writing quests Q2: "write" is one too (its pill shows only while Writing practice is on).
-type MainTab = "lesson" | "quiz" | "progress" | "atmosphere" | "profile" | "studio" | "write";
+type MainTab =
+  "lesson" | "quiz" | "progress" | "atmosphere" | "profile" | "studio" | "write" | "friends";
 type LessonTab = "overview" | "grammar" | "kanji" | "vocab";
 const backgrounds = [
   { name: "Misty companions", url: cats },
@@ -530,6 +534,7 @@ function JapaneseDesk() {
                       progress.masteredVocabIds,
                       progress.vocabMemory,
                     )}
+                    onOpenFriends={() => setTab("friends")}
                     onOpenProgress={() => setTab("progress")}
                     onOpenQuiz={() => setTab("quiz")}
                     onOpenAtmosphere={() => setTab("atmosphere")}
@@ -539,6 +544,13 @@ function JapaneseDesk() {
                     quests={quests}
                   />
                 </>
+              )}
+              {mounted && tab === "friends" && (
+                <FriendsView
+                  scenes={backgrounds}
+                  onProfile={() => setTab("profile")}
+                  onBack={() => setTab("lesson")}
+                />
               )}
               {mounted && tab === "write" && (
                 <WritePage
@@ -647,15 +659,17 @@ function Header({
   onHelp: () => void;
   onProfile: () => void;
 }) {
+  const friends = useFriends();
   const nav: { id: MainTab; label: string; icon: typeof BookOpen }[] = [
     { id: "lesson", label: "Lessons", icon: BookOpen },
     { id: "quiz", label: "Quiz", icon: Sparkles },
     { id: "progress", label: "Progress", icon: Trophy },
     { id: "atmosphere", label: "Atmosphere", icon: Image },
     ...(showWrite ? [{ id: "write" as const, label: "Write", icon: PenLine }] : []),
+    ...(friends.showFriends ? [{ id: "friends" as const, label: "Friends", icon: Users }] : []),
   ];
   return (
-    <header className="glass-panel grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl px-3.5 py-2.5 lg:grid-cols-[1fr_auto_1fr]">
+    <header className="glass-panel grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl px-3.5 py-2.5 xl:grid-cols-[1fr_auto_1fr]">
       <div className="flex items-center gap-2.5">
         <span className="font-display text-base font-semibold tracking-wider text-foreground">
           記録
@@ -665,12 +679,23 @@ function Header({
           kiroku study desk
         </span>
       </div>
-      <nav className="order-3 col-span-2 flex items-center justify-center gap-1 rounded-full border border-border/60 bg-glass/60 p-1 backdrop-blur-md lg:order-none lg:col-span-1">
+      <nav
+        aria-label="Study modes"
+        className="order-3 col-span-2 flex min-w-0 max-w-full items-center justify-start gap-1 overflow-x-auto rounded-full border border-border/60 bg-glass/60 p-1 backdrop-blur-md sm:justify-center xl:order-none xl:col-span-1"
+      >
         {nav.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`hit-area flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 motion-reduce:transition-none ${
+            aria-label={
+              id === "quiz" && quizDue > 0
+                ? `Quiz, ${quizDue} words due today`
+                : id === "write" && writeReady && tab !== "write"
+                  ? "Write, a writing page is ready"
+                  : label
+            }
+            aria-current={tab === id ? "page" : undefined}
+            className={`relative flex min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 motion-reduce:transition-none ${
               tab === id
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"

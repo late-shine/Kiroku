@@ -164,6 +164,7 @@ export function FriendsPanel({
   const disabled =
     friends.activity.busy || friends.loading || Boolean(snapshot?.cached) || Boolean(deleting);
   const hasAddForm = Boolean(snapshot?.own && !snapshot.cached && !deleting);
+  const showActionFeedback = !hasAddForm || managementOnly || friends.feedbackTarget !== "sharing";
   const validCode = normalizeFriendCode(code);
   const feedback = (
     <div className="space-y-2 text-sm" aria-live="polite" aria-atomic="true">
@@ -176,8 +177,10 @@ export function FriendsPanel({
         </p>
       )}
       {friends.activity.outcome && <p>{friends.activity.outcome}</p>}
-      {friends.notice && <p>{friends.notice}</p>}
-      {friends.error && <p className="break-words text-destructive">{friends.error}</p>}
+      {showActionFeedback && friends.notice && <p>{friends.notice}</p>}
+      {showActionFeedback && friends.error && (
+        <p className="break-words text-destructive">{friends.error}</p>
+      )}
     </div>
   );
   const chosenName = nameDraft ?? friends.suggestedName;
@@ -992,22 +995,34 @@ function FriendsSharing({
   const { loaded, settings, card, error } = friends.sharing;
   const [photo, setPhoto] = useState(false);
   const [choice, setChoice] = useState(true); // Draft for confirmed-missing settings only.
+  const [savingChoice, setSavingChoice] = useState<boolean | null>(null);
+  const choiceSequence = useRef(0);
   useEffect(() => {
     setPhoto(settings?.photo ?? false);
   }, [settings?.rev, settings?.photo]);
   useEffect(() => {
     setChoice(true);
+    setSavingChoice(null);
+    ++choiceSequence.current;
+    return () => {
+      ++choiceSequence.current;
+    };
   }, [friends.uid, friends.activity.deleting]);
   const clean = publicName(name, null);
   const missing = loaded && settings === null;
   const on = settings?.on === true;
-  const pending = friends.activity.busy
-    ? friends.activity.uncertain
-      ? "The last change may still be processing. Reconnect to check its status."
-      : "Saving…"
-    : friends.loading
-      ? "Refreshing Friends…"
-      : null;
+  const pending =
+    savingChoice !== null && !friends.activity.uncertain
+      ? savingChoice
+        ? "Turning sharing on…"
+        : "Turning sharing off…"
+      : friends.activity.busy
+        ? friends.activity.uncertain
+          ? "The last change may still be processing. Reconnect to check its status."
+          : "Saving…"
+        : friends.loading
+          ? "Refreshing Friends…"
+          : null;
   const waiting =
     friends.deviceProgress === "needs-device"
       ? "On · waiting for this device's progress. No card is shared yet."
@@ -1027,18 +1042,28 @@ function FriendsSharing({
             : "On · card status unavailable. Refresh to check it.";
   // Zero friends never disables the switch; On only means ready for people you accept.
   const showReady = (missing ? choice : on) && friendCount === 0;
+  const actionError = friends.feedbackTarget === "sharing" ? friends.error : null;
   return (
     <div className="space-y-3 border-b border-border pb-5">
-      <h3 className="text-sm font-semibold">Share with friends</h3>
       <SharingChoice
         id="friends-sharing"
         checked={missing ? choice : on}
-        disabled={disabled || !loaded}
+        disabled={disabled || !loaded || savingChoice !== null}
         describedBy="friends-sharing-status"
         onChange={(next) => {
-          if (missing) setChoice(next);
-          else if (settings && next) void friends.saveSharing({ on: true }, settings.rev);
-          else if (settings) void friends.stopSharing();
+          if (missing) {
+            setChoice(next);
+            return;
+          }
+          if (!settings || savingChoice !== null) return;
+          const sequence = ++choiceSequence.current;
+          setSavingChoice(next);
+          const save = next
+            ? friends.saveSharing({ on: true }, settings.rev)
+            : friends.stopSharing();
+          void save.finally(() => {
+            if (sequence === choiceSequence.current) setSavingChoice(null);
+          });
         }}
       />
       <div
@@ -1054,6 +1079,11 @@ function FriendsSharing({
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
+        </p>
+      )}
+      {actionError && actionError !== error && (
+        <p role="alert" className="break-words text-sm text-destructive">
+          {actionError}
         </p>
       )}
       <WhatFriendsSee />

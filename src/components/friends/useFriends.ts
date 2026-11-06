@@ -146,6 +146,7 @@ type View = {
   notice: string | null;
   loading: boolean;
   publicName: string | null;
+  feedbackTarget: "friends" | "sharing";
 };
 const emptyView = (uid: string | null): View => ({
   uid,
@@ -154,6 +155,7 @@ const emptyView = (uid: string | null): View => ({
   notice: null,
   loading: false,
   publicName: null,
+  feedbackTarget: "friends",
 });
 
 function readLocalName(uid: string): string | null {
@@ -1367,7 +1369,7 @@ export function useFriendsController({
       const old =
         timestamp === null || timestamp > Date.now() || Date.now() - timestamp >= 6 * 60 * 60_000;
       if (unchanged && read.card.kind === "published" && (!ageCheck || !old)) return;
-      if (Date.now() - lastPublished.current < 60_000) {
+      if (read.card.kind === "published" && Date.now() - lastPublished.current < 60_000) {
         schedulePublishRef.current(ageCheck);
         return;
       }
@@ -1409,11 +1411,16 @@ export function useFriendsController({
       return;
     queuedAgeCheck.current ||= ageCheck;
     if (publishTimer.current) clearTimeout(publishTimer.current);
-    const delay = Math.max(
-      ageCheck ? 0 : 30_000,
-      publication.fp !== readLocal(uid)?.fp ? quietUntil.current - Date.now() : 0,
-      60_000 - (Date.now() - lastPublished.current),
-    );
+    // An explicitly re-enabled, closed card has nothing published to throttle.
+    // Existing cards retain the ordinary debounce/rate limit.
+    const delay =
+      card.kind === "closed"
+        ? 0
+        : Math.max(
+            ageCheck ? 0 : 30_000,
+            publication.fp !== readLocal(uid)?.fp ? quietUntil.current - Date.now() : 0,
+            60_000 - (Date.now() - lastPublished.current),
+          );
     const epoch = ++publishGeneration.current;
     publishTimer.current = setTimeout(() => {
       publishTimer.current = null;
@@ -1496,35 +1503,44 @@ export function useFriendsController({
   }, [uid, sharing.loaded, cancelPublish]);
 
   const saveSharingEdit = (edit: SharingEdit, expectedRevision: string | null) =>
-    perform(async () => {
-      const captured = current.current!;
-      const result = await saveFriendSharing(
-        uid!,
-        expectedRevision,
-        edit,
-        () => getSource(false, true),
-        false,
-        (result) => {
-          if (current.current !== captured || friendsActivity(captured.uid).deleting) return;
-          acknowledge(captured, result.settings, result.publication);
-          if ("bannerAsset" in result) {
-            bannerEdited.current = false;
-            installOwnerBanner(result.bannerAsset ?? null, result.settings, true);
-            removingRef.current = false;
-            setBannerRemoving(false);
-          }
-        },
-      );
-      if (!result.settings.on)
-        return "Sharing is off. Your public card, picture and banner have been removed.";
-      if (result.publication)
+    perform(
+      async () => {
+        const captured = current.current!;
+        // Consent must be saveable even if card construction/media publication fails.
+        // The normal publisher runs after acknowledgement, with the same source guard.
+        const enabling = edit.on === true && sharingRef.current.settings?.on === false;
+        const result = await saveFriendSharing(
+          uid!,
+          expectedRevision,
+          edit,
+          () => (enabling ? null : getSource(false, true)),
+          false,
+          (result) => {
+            if (current.current !== captured || friendsActivity(captured.uid).deleting) return;
+            acknowledge(captured, result.settings, result.publication);
+            if ("bannerAsset" in result) {
+              bannerEdited.current = false;
+              installOwnerBanner(result.bannerAsset ?? null, result.settings, true);
+              removingRef.current = false;
+              setBannerRemoving(false);
+            }
+          },
+        );
+        if (!result.settings.on)
+          return "Sharing is off. Your public card, picture and banner have been removed.";
+        if (result.publication)
+          return edit.on
+            ? "Sharing is on. Your card is saved."
+            : "Your sharing choices and card are saved.";
+        if (enabling && getSource(false, true))
+          return "Sharing is on. Your card is being prepared; nothing is shared until it is saved.";
         return edit.on
-          ? "Sharing is on. Your card is saved."
-          : "Your sharing choices and card are saved.";
-      return edit.on
-        ? "Sharing is on. No card is shared until this device's progress is ready."
-        : "Your choices are saved. No card is shared until this device's progress is ready.";
-    });
+          ? "Sharing is on. No card is shared until this device's progress is ready."
+          : "Your choices are saved. No card is shared until this device's progress is ready.";
+      },
+      undefined,
+      "sharing",
+    );
   cosmeticSaveRef.current = () => {
     if (
       !uid ||
@@ -1657,7 +1673,11 @@ export function useFriendsController({
     setView((value) => ({ ...value, publicName: name }));
   };
 
-  const perform = async (job: () => Promise<string>, identity?: PublicIdentity) => {
+  const perform = async (
+    job: () => Promise<string>,
+    identity?: PublicIdentity,
+    feedbackTarget: View["feedbackTarget"] = "friends",
+  ) => {
     const captured = current.current;
     if (!uid || captured?.uid !== uid) return false;
     const activity = friendsActivity(uid);
@@ -1668,17 +1688,22 @@ export function useFriendsController({
         : activity.uncertain
           ? "An earlier change may still be processing. Wait for its status before trying again."
           : "Another Friends change is saving. Wait for it to finish, then try again.";
-      setView((value) => ({ ...value, notice: null, error }));
+      setView((value) => ({ ...value, notice: null, error, feedbackTarget }));
       return false;
     }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setView((value) => ({ ...value, error: "You're offline. Try again when you're back." }));
+      setView((value) => ({
+        ...value,
+        notice: null,
+        error: "You're offline. Try again when you're back.",
+        feedbackTarget,
+      }));
       return false;
     }
     cancelPublish();
     ++readSequence.current;
     refreshing.current = false;
-    setView((value) => ({ ...value, loading: false, error: null, notice: null }));
+    setView((value) => ({ ...value, loading: false, error: null, notice: null, feedbackTarget }));
     try {
       const notice = await job();
       if (current.current !== captured || friendsActivity(uid).deleting) return false;

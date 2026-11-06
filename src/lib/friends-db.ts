@@ -872,11 +872,13 @@ export function saveFriendSharing(
       ...(await publicationPaths(token, publication, assetChange)),
     };
     try {
-      await update(token, paths, () => {
-        if (!publication) return true;
-        const latest = source();
-        return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
-      });
+      await friendStep("sharing-save", "save your sharing choice", () =>
+        update(token, paths, () => {
+          if (!publication) return true;
+          const latest = source();
+          return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
+        }),
+      );
     } catch (error) {
       // A rejected CAS is reconciled, never replayed with a newer consent revision.
       const latest = decodeFriendSettings(await read(token, `settings/${uid}`));
@@ -917,10 +919,13 @@ export function publishFriendCard(
         "Your progress is not ready for this account. Use this device's progress or finish syncing first.",
       );
     const publication = buildFriendPublication(settings, snapshot);
-    await update(token, await publicationPaths(token, publication), () => {
-      const latest = source();
-      return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
-    });
+    const paths = await publicationPaths(token, publication);
+    await friendStep("card-publish", "update your shared card", () =>
+      update(token, paths, () => {
+        const latest = source();
+        return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
+      }),
+    );
     if (!session(uid).deleting) onAcknowledged?.(publication);
     return publication;
   });

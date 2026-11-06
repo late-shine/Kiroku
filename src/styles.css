@@ -1464,3 +1464,215 @@ rt {
     font-size: 0.6rem;
   }
 }
+
+/* F3h: one finite effect per card. The static artwork and readable card do not move. */
+.profile-workspace:not([data-motion-allowed="true"]) .pane-in {
+  animation: none !important;
+}
+.studio-decoration-tile {
+  position: relative;
+  min-width: 0;
+}
+.studio-decoration-tile > .studio-decoration-choice {
+  width: 100%;
+  height: 100%;
+}
+.studio-decoration-tile:has(.studio-effect-replay) > .studio-decoration-choice {
+  padding-bottom: 2.75rem;
+}
+.studio-effect-replay {
+  position: absolute;
+  bottom: 0.15rem;
+  left: 0.25rem;
+  right: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 44px;
+  border-radius: 0.5rem;
+  color: var(--primary);
+  font-size: 0.6875rem;
+}
+.studio-effect-replay:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.effect-sample {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  color: var(--primary);
+  background: var(--secondary);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+}
+.effect-sample[data-effect="glint"] {
+  border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+}
+.effect-sample[data-effect="breath"] {
+  box-shadow: 0 0 8px var(--glow);
+}
+.effect-sample[data-effect="fireflies"] {
+  text-shadow: 0 0 5px var(--primary);
+}
+.card-effects {
+  position: absolute;
+  inset: 5px;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: inherit;
+  color: var(--primary);
+  pointer-events: none;
+  contain: paint;
+}
+.card-effect-edge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+.card-effect-quiet-line {
+  opacity: 0.14;
+}
+.card-effect-trace {
+  opacity: 0;
+  stroke-dasharray: 12 88;
+  stroke-linecap: round;
+}
+.profile-card-motion-ring {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid var(--primary);
+  border-radius: inherit;
+  box-shadow: 0 0 8px 1px var(--glow);
+  opacity: 0.16;
+  pointer-events: none;
+}
+.card-effect-vine {
+  position: absolute;
+  width: 1.75rem;
+  height: 1.75rem;
+  opacity: 0.35;
+}
+.card-effect-vine-top {
+  top: 1px;
+  right: 1px;
+}
+.card-effect-vine-bottom {
+  bottom: 1px;
+  left: 1px;
+  transform: rotate(180deg);
+}
+.card-effect-particle {
+  position: absolute;
+  opacity: 0;
+  background: currentColor;
+  --particle-peak: 0.45;
+}
+.card-effect-petal {
+  width: 5px;
+  height: 9px;
+  border-radius: 70% 0 70% 0;
+}
+.card-effect-firefly {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  box-shadow: 0 0 5px 1px var(--glow);
+}
+@keyframes card-golden-trace {
+  0% {
+    opacity: 0;
+    stroke-dashoffset: 100;
+  }
+  8% {
+    opacity: 0.35;
+  }
+  85% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes card-lantern-glow {
+  0%,
+  100% {
+    opacity: 0.16;
+  }
+  50% {
+    opacity: 0.42;
+  }
+}
+@keyframes card-vine-reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    opacity: 0.35;
+    clip-path: inset(0);
+  }
+}
+/* Scene leaf-fall uses viewport travel. This bounded variant stays in the card's margins. */
+@keyframes card-petal-pass {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(8deg);
+  }
+  12% {
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate3d(var(--wx), 16px, 0) rotate(-24deg);
+  }
+  85% {
+    opacity: 0.25;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, calc(var(--wy) + 36px), 0) rotate(36deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card-effects[data-phase="running"][data-effect="glint"] .card-effect-trace {
+    animation: card-golden-trace 5s linear 1 both;
+  }
+  .profile-card[data-card-effect="breath"][data-effect-phase="running"] .profile-card-motion-ring {
+    animation: card-lantern-glow 8s ease-in-out 2 both;
+  }
+  .card-effects[data-phase="running"][data-effect="vines"] .card-effect-vine {
+    animation: card-vine-reveal 1.4s ease-out 1 both;
+  }
+  .card-effects[data-phase="running"] .card-effect-petal {
+    animation: card-petal-pass 11s ease-in-out var(--card-particle-delay) 1 both;
+  }
+  .card-effects[data-phase="running"] .card-effect-firefly {
+    animation: firefly 9s ease-in-out var(--card-particle-delay) 1 both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-workspace .pane-in {
+    animation: none !important;
+  }
+}
+@media (max-width: 899px) {
+  .card-studio-preview:not([data-expanded="true"]) .card-effect-vine {
+    width: 1rem;
+    height: 1rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-motion-ring {
+    inset: -3px;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .card-effect-petal {
+    width: 4px;
+    height: 7px;
+  }
+}

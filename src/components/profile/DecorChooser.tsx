@@ -16,6 +16,8 @@ import {
 import { Frame } from "./Frame";
 import { DecorationCollection } from "./DecorationCollection";
 import { OrnamentSample } from "./CardOrnaments";
+import { EffectSample } from "./CardEffects";
+import { cardEffectRun, type CardEffectRun } from "@/lib/card-motion";
 import { decorationDefinition } from "@/lib/friend-decorations";
 import { BadgeArt } from "./BadgeArt";
 import { formatDay } from "./BadgeShelf";
@@ -39,6 +41,7 @@ export function DecorChooser({
   localDraft,
   revision,
   loaded,
+  motionReady,
   accountMode,
   disabled,
   scenes,
@@ -74,6 +77,7 @@ export function DecorChooser({
   localDraft: FriendDecoration | null;
   revision: string | null;
   loaded: boolean;
+  motionReady: boolean;
   accountMode: boolean;
   disabled: boolean;
   scenes: readonly CardScene[];
@@ -82,7 +86,12 @@ export function DecorChooser({
   today: string;
   onDraft: (value: FriendDecoration | null) => unknown;
   onSave: (value: FriendDecoration, revision: string | null) => Promise<boolean>;
-  renderPreview: (value: FriendDecoration, dirty: boolean, banner: BannerDraft | null) => ReactNode;
+  renderPreview: (
+    value: FriendDecoration,
+    dirty: boolean,
+    banner: BannerDraft | null,
+    run: CardEffectRun | null,
+  ) => ReactNode;
   identityEditor: ReactNode;
   /** The writing rank line (null while Writing practice is off); shown at the top of Badges. */
   rankLine: ReactNode;
@@ -103,13 +112,16 @@ export function DecorChooser({
   onBannerDeselect: () => void;
   previewAsFriend: boolean;
   onPreviewChange: (value: boolean) => void;
-  friendPreview: ReactNode;
+  friendPreview: (run: CardEffectRun | null) => ReactNode;
   previewAvailable: boolean;
   saveError: string | null;
   publicationPending: boolean;
   onManageSharing: () => void;
 }) {
   const [panel, setPanel] = useState<Panel>("about");
+  const [motionRun, setMotionRun] = useState<CardEffectRun | null>(null);
+  const motionEntry = useRef(false);
+  const motionToken = useRef(0);
   // The entry animation replays on a section only after the learner has switched sections, so the first section does
   // not animate twice (the whole panel already rose in). A choice inside a section never changes its class or display.
   const [sectionsAnimate, setSectionsAnimate] = useState(false);
@@ -145,6 +157,11 @@ export function DecorChooser({
     }
   }, [revision, loaded, savedKey, draftKey, dirty, pending, bannerDirty, accountMode]);
   const resolved = resolveDeco(draft, badges);
+  useEffect(() => {
+    if (!motionReady || motionEntry.current || (!dirty && draftKey !== savedKey)) return;
+    motionEntry.current = true;
+    setMotionRun(cardEffectRun(resolved.fx, ++motionToken.current));
+  }, [motionReady, dirty, draftKey, savedKey, resolved.fx]);
   const changedElsewhere = accountMode && loaded && pending && revision !== baseRevision;
   const selectedPins = resolved.pin?.split(",") ?? [];
   const sectionClass = sectionsAnimate ? "pane-in" : undefined;
@@ -262,8 +279,8 @@ export function DecorChooser({
           </div>
           <div id="studio-card-preview">
             {previewAsFriend
-              ? friendPreview
-              : renderPreview(draft, pending, bannerRemoving ? null : bannerDraft)}
+              ? friendPreview(motionRun)
+              : renderPreview(draft, pending, bannerRemoving ? null : bannerDraft, motionRun)}
           </div>
           {!previewAsFriend && bannerDirty && (
             <p className="px-4 pb-3 text-xs text-muted-foreground">
@@ -284,7 +301,7 @@ export function DecorChooser({
 
       <section
         className="card-studio-editor glass-panel-strong pane-in rounded-2xl"
-        style={{ animationDelay: "90ms" }}
+        style={{ animationDelay: "60ms" }}
         aria-label="Edit your card"
       >
         <div className="studio-section-picker" role="group" aria-label="Card editor section">
@@ -506,6 +523,27 @@ export function DecorChooser({
                 change(charm === "none" ? rest : { ...rest, charm });
               }}
               thumbnail={(id) => <OrnamentSample charm={id} />}
+            />
+            <DecorationCollection
+              slot="effect"
+              label="Motion"
+              hint="One quiet effect, then your card settles."
+              selected={draft.fx}
+              badges={badges}
+              disabled={disabled || saving}
+              onSelect={(fx) => {
+                if (disabled || saving || fx === draft.fx) return;
+                change({ ...draft, fx });
+                motionEntry.current = true;
+                setMotionRun(cardEffectRun(fx, ++motionToken.current));
+              }}
+              onReplay={() => {
+                if (disabled || saving) return;
+                onPreviewChange(false);
+                motionEntry.current = true;
+                setMotionRun(cardEffectRun(resolved.fx, ++motionToken.current));
+              }}
+              thumbnail={(id) => <EffectSample effect={id} />}
             />
           </div>
 

@@ -16,6 +16,8 @@ import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { ArrowUpRight, BookOpen, ChevronDown, Settings2, Users } from "lucide-react";
 import { useFriends } from "@/components/friends/useFriends";
 import { ProfileCard } from "./ProfileCard";
+import type { CardEffectRun } from "@/lib/card-motion";
+import { useMotionPreference } from "@/hooks/use-motion-preference";
 import { DecorChooser } from "./DecorChooser";
 import { BadgeArtDefs } from "./BadgeArt";
 import {
@@ -135,6 +137,7 @@ export function ProfilePage({
 }) {
   const { account, sync } = useAccountSync();
   const friends = useFriends();
+  const motionAllowed = useMotionPreference();
   const { profile, setName, setGlyph, setPhoto, removePhoto, markExported } = useProfile();
   const identity = account.auth.status === "in" ? account.auth.account : null;
   const hasData = !isEmptySnapshot(snapshotOf(lessons, progress));
@@ -269,33 +272,36 @@ export function ProfilePage({
     setProfileTab("card");
     requestAnimationFrame(() => sharingSection.current?.scrollIntoView({ block: "start" }));
   };
-  const friendPreview = previewUnavailable ? (
-    <article aria-label="Friend preview unavailable" className="studio-note-box">
-      {friends.activity.deleting
-        ? "Cloud deletion is in progress."
-        : publicState.kind === "unsupported"
-          ? "Update the app to view this card."
-          : "Your published card isn't confirmed yet."}
-      <button type="button" className="studio-text-button mt-3 block" onClick={openSharing}>
-        Open Friends & sharing
-      </button>
-    </article>
-  ) : (
-    <ProfileCard
-      mode="friend"
-      data={previewCard}
-      cover={cover}
-      scenes={scenes}
-      photo={friends.previewPhoto}
-      banner={friends.previewBanner}
-      bannerError={friends.previewBannerError}
-      onRetryBanner={() => void friends.loadPreviewBanner(true)}
-      renderDefs={false}
-    />
-  );
+  const friendPreview = (motionRun: CardEffectRun | null) =>
+    previewUnavailable ? (
+      <article aria-label="Friend preview unavailable" className="studio-note-box">
+        {friends.activity.deleting
+          ? "Cloud deletion is in progress."
+          : publicState.kind === "unsupported"
+            ? "Update the app to view this card."
+            : "Your published card isn't confirmed yet."}
+        <button type="button" className="studio-text-button mt-3 block" onClick={openSharing}>
+          Open Friends & sharing
+        </button>
+      </article>
+    ) : (
+      <ProfileCard
+        mode="friend"
+        motionRun={motionRun}
+        motionActive={profileTab === "card"}
+        data={previewCard}
+        cover={cover}
+        scenes={scenes}
+        photo={friends.previewPhoto}
+        banner={friends.previewBanner}
+        bannerError={friends.previewBannerError}
+        onRetryBanner={() => void friends.loadPreviewBanner(true)}
+        renderDefs={false}
+      />
+    );
 
   return (
-    <div className="profile-workspace">
+    <div className="profile-workspace" data-motion-allowed={motionAllowed === true}>
       <BadgeArtDefs />
       <header className="profile-workspace-heading glass-panel pane-in rounded-2xl">
         <h1 className="font-display text-xl sm:text-2xl">Your corner of Kiroku</h1>
@@ -349,6 +355,13 @@ export function ProfilePage({
           localDraft={friends.decoDraft}
           revision={friends.sharing.settings?.rev ?? null}
           loaded={!accountLook || friends.sharing.loaded}
+          motionReady={Boolean(
+            friends.bannerScope &&
+            friends.deviceProgress !== "loading" &&
+            (!friends.uid ||
+              friends.sharing.loaded ||
+              (friends.snapshot && !friends.snapshot.cached && !friends.snapshot.own)),
+          )}
           accountMode={accountLook}
           disabled={
             friends.activity.busy || friends.activity.deleting || friends.sharing.unsupported
@@ -394,12 +407,14 @@ export function ProfilePage({
               </button>
             </>
           }
-          renderPreview={(deco, dirty, banner) => {
+          renderPreview={(deco, dirty, banner, motionRun) => {
             const publication = buildFriendPublication(cardSettings(deco), source);
             const liveName = publication.card.n;
             return (
               <ProfileCard
                 mode="self"
+                motionRun={motionRun}
+                motionActive={profileTab === "card"}
                 localBanner={
                   friends.bannerRemoving
                     ? null

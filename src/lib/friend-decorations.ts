@@ -48,29 +48,40 @@ export const DECORATIONS = {
   effect: {
     none: { name: "Still", visual: "none", minVersion: 1 },
     vines: {
-      name: "Vines",
+      name: "Growing garden",
       visual: "vines",
       requiredBadge: "streak-30",
       minVersion: 1,
-      implemented: false,
+      implemented: true,
     },
     petals: {
-      name: "Petals",
+      name: "Passing petals",
       visual: "petals",
       requiredBadge: "carved-10",
       minVersion: 1,
-      implemented: false,
+      implemented: true,
     },
     fireflies: {
-      name: "Fireflies",
+      name: "Evening lights",
       visual: "fireflies",
       requiredBadge: "mastered-20",
       minVersion: 1,
-      implemented: false,
+      implemented: true,
     },
-    // Reserved for F3h; its motion/unlock packet supplies their implementation.
-    glint: { name: "Glint", visual: "glint", minVersion: 4, implemented: false },
-    breath: { name: "Breath", visual: "breath", minVersion: 4, implemented: false },
+    glint: {
+      name: "Golden trace",
+      visual: "glint",
+      requiredBadge: "first-answer",
+      minVersion: 4,
+      implemented: true,
+    },
+    breath: {
+      name: "Lantern glow",
+      visual: "breath",
+      requiredBadge: "streak-3",
+      minVersion: 4,
+      implemented: true,
+    },
   },
 } as const satisfies Record<DecorationSlot, Record<string, DecorationDefinition>>;
 

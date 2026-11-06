@@ -4,6 +4,9 @@ import { BadgeArt, BadgeArtDefs } from "./BadgeArt";
 import { BadgeShelf } from "./BadgeShelf";
 import { Frame } from "./Frame";
 import { CardBorder, LittleDetail } from "./CardOrnaments";
+import { CardEffects } from "./CardEffects";
+import { useCardEffect } from "@/hooks/use-card-effect";
+import type { CardEffectRun } from "@/lib/card-motion";
 import { RankStamp } from "@/components/write/RankStamp";
 import { BADGES, RANKS } from "@/lib/rewards";
 import { resolveAccent, resolveStamp } from "@/lib/quest-prefs";
@@ -34,6 +37,8 @@ type SharedProps = {
   renderDefs?: boolean;
   bannerError?: string | null;
   onRetryBanner?: () => void;
+  motionRun?: CardEffectRun | null;
+  motionActive?: boolean;
 };
 type Props = SharedProps &
   (
@@ -83,6 +88,11 @@ export function ProfileCard(props: Props) {
   const badges = data?.bd ?? {};
   const deco = resolveDeco(data, badges);
   const accent = resolveAccent(data?.acc, badges);
+  const motion = useCardEffect(
+    data ? deco.fx : "none",
+    props.motionRun,
+    (props.motionActive ?? true) && data !== null,
+  );
   const avatar =
     props.mode === "self"
       ? props.privateAvatar
@@ -140,6 +150,9 @@ export function ProfileCard(props: Props) {
     ) : null;
   return (
     <article
+      ref={motion.root}
+      data-card-effect={data ? deco.fx : "none"}
+      data-effect-phase={motion.phase}
       aria-labelledby={heading}
       data-card-accent={accent}
       className="profile-card relative w-full overflow-hidden rounded-2xl"
@@ -169,6 +182,7 @@ export function ProfileCard(props: Props) {
         {data && <LittleDetail charm={deco.charm} />}
       </div>
       {data && <CardBorder border={deco.border} />}
+      {data && <CardEffects effect={deco.fx} phase={motion.phase} token={motion.token} />}
       {(props.bannerError || (upload && failedBanner === upload)) && (
         <div className="px-4 pt-2 text-xs text-muted-foreground" role="status">
           <p>{props.bannerError ?? "Couldn't display this banner."}</p>
@@ -204,6 +218,9 @@ export function ProfileCard(props: Props) {
               fallbackChar={initialOf(name)}
               className="profile-avatar size-[72px] bg-secondary text-3xl text-primary"
             />
+            {data && deco.fx === "breath" && (
+              <span key={motion.token} aria-hidden="true" className="profile-card-motion-ring" />
+            )}
           </Frame>
           {data && status && (
             <div className="profile-card-status relative mt-3 min-w-0 rounded-2xl border border-border bg-glass-strong px-3 py-2 text-xs text-foreground">

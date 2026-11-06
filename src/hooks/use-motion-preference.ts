@@ -12,6 +12,7 @@ export function useMotionPreference(): boolean | null {
       return () => query.removeEventListener("change", update);
     } catch {
       setAllowed(false);
+      return undefined;
     }
   }, []);
   return allowed;

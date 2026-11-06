@@ -179,9 +179,9 @@ export function ProfileCard(props: Props) {
             記録 <span>CALLING CARD</span>
           </span>
         </div>
-        {data && <LittleDetail charm={deco.charm} />}
+        {data && <LittleDetail charm={deco.charm ?? "none"} />}
       </div>
-      {data && <CardBorder border={deco.border} />}
+      {data && <CardBorder border={deco.border ?? "none"} />}
       {data && <CardEffects effect={deco.fx} phase={motion.phase} token={motion.token} />}
       {(props.bannerError || (upload && failedBanner === upload)) && (
         <div className="px-4 pt-2 text-xs text-muted-foreground" role="status">

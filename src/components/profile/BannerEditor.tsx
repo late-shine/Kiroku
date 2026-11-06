@@ -15,6 +15,13 @@ export function BannerEditor({
   scope,
   disabled,
   storageError,
+  active,
+  accountMode,
+  loading,
+  loadError,
+  removing,
+  onLoad,
+  onRemove,
   onChange,
   onCropActive,
 }: {
@@ -22,10 +29,20 @@ export function BannerEditor({
   scope: BannerScope | null;
   disabled: boolean;
   storageError: string | null;
+  active: boolean;
+  accountMode: boolean;
+  loading: boolean;
+  loadError: string | null;
+  removing: boolean;
+  onLoad: (force?: boolean) => Promise<void>;
+  onRemove: () => void;
   onChange: (value: BannerDraft, scope: BannerScope) => boolean;
   onCropActive: (value: boolean) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (active && accountMode) void onLoad(true);
+  }, [active, accountMode, onLoad]);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,16 +121,16 @@ export function BannerEditor({
         <button
           type="button"
           className="studio-button studio-button-quiet"
-          disabled={disabled || !scope || busy}
+          disabled={disabled || !scope || busy || loading}
           onClick={() => input.current?.click()}
         >
           {draft ? "Replace banner" : "Upload banner"}
         </button>
-        {draft && (
+        {draft && !removing && (
           <button
             type="button"
             className="studio-button studio-button-quiet"
-            disabled={disabled || !scope || busy}
+            disabled={disabled || !scope || busy || loading || removing}
             onClick={() => {
               void prepare();
             }}
@@ -121,11 +138,11 @@ export function BannerEditor({
             Adjust crop
           </button>
         )}
-        {draft && !draft.selected && (
+        {draft && !removing && !draft.selected && (
           <button
             type="button"
             className="studio-button studio-button-quiet"
-            disabled={disabled || !scope || busy}
+            disabled={disabled || !scope || busy || loading || removing}
             onClick={() => {
               if (scope) onChange({ ...draft, selected: true }, scope);
             }}
@@ -133,12 +150,45 @@ export function BannerEditor({
             Use uploaded banner
           </button>
         )}
+        {(draft || loadError) && !removing && (
+          <button
+            type="button"
+            className="studio-button studio-button-quiet"
+            disabled={disabled || busy || loading}
+            onClick={() => {
+              cancel();
+              onRemove();
+            }}
+          >
+            Remove upload
+          </button>
+        )}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {draft?.selected
-          ? "On this device · friends still see your saved banner"
-          : "JPEG, PNG or WebP, up to 20 MB. The upload stays on this device until banner sharing is added."}
+        {removing
+          ? "Save look to remove the upload from your account. Discard keeps it."
+          : accountMode
+            ? "JPEG, PNG or WebP, up to 20 MB. Save look keeps the editable banner privately. Friends receive only its selected crop while sharing is on."
+            : "JPEG, PNG or WebP, up to 20 MB. Your banner stays on this device."}
       </p>
+      {loading && (
+        <p role="status" className="mt-2 text-xs text-muted-foreground">
+          Loading your saved banner…
+        </p>
+      )}
+      {loadError && (
+        <div className="mt-2 text-xs text-destructive" role="alert">
+          <p>{loadError}</p>
+          <button
+            type="button"
+            className="studio-text-button"
+            disabled={disabled || loading}
+            onClick={() => void onLoad(true)}
+          >
+            Retry saved banner
+          </button>
+        </div>
+      )}
       {busy && (
         <div
           role="status"

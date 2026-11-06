@@ -218,8 +218,17 @@ export function ProfilePage({
     if (account.error || sync.notice?.kind === "error") setProfileTab("desk");
   }, [account.error, sync.notice]);
   useEffect(() => {
-    if (previewAsFriend) void friends.loadPreviewPhoto();
-  }, [previewAsFriend, friends.sharing.card, friends.loadPreviewPhoto]);
+    if (previewAsFriend && profileTab === "card") {
+      void friends.loadPreviewPhoto();
+      void friends.loadPreviewBanner();
+    }
+  }, [
+    previewAsFriend,
+    profileTab,
+    friends.sharing.card,
+    friends.loadPreviewPhoto,
+    friends.loadPreviewBanner,
+  ]);
 
   const accountLook = Boolean(
     friends.available && friends.snapshot?.own && !friends.activity.deleting,
@@ -278,6 +287,9 @@ export function ProfilePage({
       cover={cover}
       scenes={scenes}
       photo={friends.previewPhoto}
+      banner={friends.previewBanner}
+      bannerError={friends.previewBannerError}
+      onRetryBanner={() => void friends.loadPreviewBanner(true)}
       renderDefs={false}
     />
   );
@@ -345,18 +357,28 @@ export function ProfilePage({
           badges={source.badges}
           today={today}
           onDraft={friends.setDecoDraft}
-          onSave={(deco, revision) => friends.saveSharing({ deco }, revision)}
+          onSave={friends.saveLook}
           previewAsFriend={previewAsFriend}
           onPreviewChange={setPreviewAsFriend}
           previewAvailable={friends.available}
           friendPreview={friendPreview}
           saveError={friends.sharing.error ?? friends.error}
+          publicationPending={Boolean(
+            accountLook && friends.sharing.loaded && friends.sharing.settings?.on && !previewCard,
+          )}
           onManageSharing={openSharing}
           cropActive={cropSource !== null}
           bannerDraft={friends.bannerDraft}
           bannerScope={friends.bannerScope}
           bannerError={friends.bannerError}
           onBannerChange={friends.setBannerDraft}
+          bannerLoading={friends.bannerAssetLoading}
+          bannerLoadError={friends.bannerAssetError}
+          bannerRemoving={friends.bannerRemoving}
+          onBannerLoad={friends.loadBannerAsset}
+          onBannerRemove={friends.removeBanner}
+          onBannerDiscard={friends.discardBanner}
+          onBannerDeselect={friends.deselectBanner}
           rankLine={
             questsOn ? <StampedRankLine carved={carved} saved={quests.prefs.stamp} /> : null
           }
@@ -378,7 +400,20 @@ export function ProfilePage({
             return (
               <ProfileCard
                 mode="self"
-                localBanner={banner?.selected ? banner.data : null}
+                localBanner={
+                  friends.bannerRemoving
+                    ? null
+                    : banner?.selected
+                      ? banner.data
+                      : deco.bannerId && friends.bannerAsset?.id === deco.bannerId
+                        ? friends.bannerAsset.data
+                        : null
+                }
+                bannerError={
+                  deco.bannerId && !banner?.selected && friends.bannerAsset?.id !== deco.bannerId
+                    ? (friends.bannerAssetError ?? "Open Style to load your saved banner.")
+                    : null
+                }
                 data={{ ...publication.card, t: null }}
                 cover={cover}
                 scenes={scenes}
@@ -389,7 +424,7 @@ export function ProfilePage({
                 }
                 onStat={() => onOpenProgress()}
                 sharing={Boolean(friends.sharing.settings?.on && friends.sharing.loaded)}
-                draft={Boolean((accountLook && dirty) || banner?.selected)}
+                draft={Boolean(accountLook && dirty)}
                 renderDefs={false}
               />
             );

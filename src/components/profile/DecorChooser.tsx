@@ -64,11 +64,19 @@ export function DecorChooser({
   bannerScope,
   bannerError,
   onBannerChange,
+  bannerLoading,
+  bannerLoadError,
+  bannerRemoving,
+  onBannerLoad,
+  onBannerRemove,
+  onBannerDiscard,
+  onBannerDeselect,
   previewAsFriend,
   onPreviewChange,
   friendPreview,
   previewAvailable,
   saveError,
+  publicationPending,
   onManageSharing,
 }: {
   saved: FriendDecoration;
@@ -95,11 +103,19 @@ export function DecorChooser({
   bannerScope: BannerScope | null;
   bannerError: string | null;
   onBannerChange: (value: BannerDraft, scope: BannerScope) => boolean;
+  bannerLoading: boolean;
+  bannerLoadError: string | null;
+  bannerRemoving: boolean;
+  onBannerLoad: (force?: boolean) => Promise<void>;
+  onBannerRemove: () => void;
+  onBannerDiscard: () => void;
+  onBannerDeselect: () => void;
   previewAsFriend: boolean;
   onPreviewChange: (value: boolean) => void;
   friendPreview: ReactNode;
   previewAvailable: boolean;
   saveError: string | null;
+  publicationPending: boolean;
   onManageSharing: () => void;
 }) {
   const [panel, setPanel] = useState<Panel>("about");
@@ -117,36 +133,39 @@ export function DecorChooser({
   const hasBase = useRef(loaded);
   const onDraftRef = useRef(onDraft);
   onDraftRef.current = onDraft;
+  const bannerDirty =
+    accountMode &&
+    (bannerRemoving ||
+      Boolean(bannerDraft?.selected && (!bannerDraft.id || bannerDraft.id !== saved.bannerId)));
+  const pending = dirty || bannerDirty;
   const savedKey = JSON.stringify(saved);
   const draftKey = JSON.stringify(draft);
   useEffect(() => {
     if (!loaded) return;
-    if (!hasBase.current || !dirty) {
+    if (!hasBase.current || !pending) {
       hasBase.current = true;
       setBaseRevision(revision);
-      if (!dirty) setDraft(JSON.parse(savedKey) as FriendDecoration);
+      if (!pending) setDraft(JSON.parse(savedKey) as FriendDecoration);
     }
-    if (accountMode && draftKey === savedKey && dirty) {
+    if (accountMode && draftKey === savedKey && dirty && !bannerDirty) {
       setDirty(false);
       setBaseRevision(revision);
       onDraftRef.current(null);
     }
-  }, [revision, loaded, savedKey, draftKey, dirty, accountMode]);
+  }, [revision, loaded, savedKey, draftKey, dirty, pending, bannerDirty, accountMode]);
   const resolved = resolveDeco(draft, badges);
-  const changedElsewhere = accountMode && loaded && dirty && revision !== baseRevision;
+  const changedElsewhere = accountMode && loaded && pending && revision !== baseRevision;
   const selectedPins = resolved.pin?.split(",") ?? [];
   const sectionClass = sectionsAnimate ? "pane-in" : undefined;
   const stateText = previewAsFriend
     ? "As your friends see it"
-    : bannerDraft?.selected
-      ? "On this device"
-      : !accountMode
-        ? "Kept on this device"
-        : saving
-          ? "Saving…"
-          : dirty
-            ? "Unsaved changes"
-            : "Saved";
+    : !accountMode
+      ? "Kept on this device"
+      : saving
+        ? "Saving…"
+        : pending
+          ? "Unsaved changes"
+          : "Saved";
   const earned = BADGES.filter((badge) => Boolean(badges[badge.id]));
   const lockedBadges = BADGES.filter((badge) => !badges[badge.id]);
   const change = (next: FriendDecoration) => {
@@ -159,6 +178,7 @@ export function DecorChooser({
   };
   const discard = () => {
     setStatusError(null);
+    if (accountMode) onBannerDiscard();
     setDraft(saved);
     setDirty(false);
     setBaseRevision(revision);
@@ -215,9 +235,11 @@ export function DecorChooser({
             </div>
           </div>
           <div id="studio-card-preview">
-            {previewAsFriend ? friendPreview : renderPreview(draft, dirty, bannerDraft)}
+            {previewAsFriend
+              ? friendPreview
+              : renderPreview(draft, pending, bannerRemoving ? null : bannerDraft)}
           </div>
-          {!previewAsFriend && bannerDraft?.selected && (
+          {!previewAsFriend && bannerDirty && (
             <p className="px-4 pb-3 text-xs text-muted-foreground">
               On this device · friends still see your saved banner
             </p>
@@ -385,11 +407,14 @@ export function DecorChooser({
                 <button
                   type="button"
                   className="studio-scene studio-scene-ink"
-                  aria-pressed={!bannerDraft?.selected && draft.bk === undefined}
+                  aria-pressed={
+                    (!bannerDraft?.selected || bannerRemoving) &&
+                    !draft.bannerId &&
+                    draft.bk === undefined
+                  }
                   onClick={() => {
-                    const { bk: _old, ...rest } = draft;
-                    if (bannerScope && bannerDraft)
-                      onBannerChange({ ...bannerDraft, selected: false }, bannerScope);
+                    const { bk: _old, bannerId: _upload, ...rest } = draft;
+                    onBannerDeselect();
                     change(rest);
                   }}
                 >
@@ -397,31 +422,39 @@ export function DecorChooser({
                     記
                   </span>
                   <span className="studio-scene-name">Quiet ink</span>
-                  {!bannerDraft?.selected && draft.bk === undefined && (
-                    <span className="studio-choice-check">
-                      <Check aria-hidden="true" className="size-3" />
-                    </span>
-                  )}
+                  {(!bannerDraft?.selected || bannerRemoving) &&
+                    !draft.bannerId &&
+                    draft.bk === undefined && (
+                      <span className="studio-choice-check">
+                        <Check aria-hidden="true" className="size-3" />
+                      </span>
+                    )}
                 </button>
                 {scenes.slice(0, 4).map((scene, index) => (
                   <button
                     key={scene.name}
                     type="button"
                     className="studio-scene"
-                    aria-pressed={!bannerDraft?.selected && draft.bk === index}
+                    aria-pressed={
+                      (!bannerDraft?.selected || bannerRemoving) &&
+                      !draft.bannerId &&
+                      draft.bk === index
+                    }
                     onClick={() => {
-                      if (bannerScope && bannerDraft)
-                        onBannerChange({ ...bannerDraft, selected: false }, bannerScope);
-                      change({ ...draft, bk: index });
+                      onBannerDeselect();
+                      const { bannerId: _upload, ...rest } = draft;
+                      change({ ...rest, bk: index });
                     }}
                   >
                     <img src={scene.url} alt="" loading="lazy" />
                     <span className="studio-scene-name">{scene.name}</span>
-                    {!bannerDraft?.selected && draft.bk === index && (
-                      <span className="studio-choice-check">
-                        <Check aria-hidden="true" className="size-3" />
-                      </span>
-                    )}
+                    {(!bannerDraft?.selected || bannerRemoving) &&
+                      !draft.bannerId &&
+                      draft.bk === index && (
+                        <span className="studio-choice-check">
+                          <Check aria-hidden="true" className="size-3" />
+                        </span>
+                      )}
                   </button>
                 ))}
               </div>
@@ -434,6 +467,17 @@ export function DecorChooser({
               scope={bannerScope}
               disabled={disabled || saving}
               storageError={bannerError}
+              active={panel === "style"}
+              accountMode={accountMode}
+              loading={bannerLoading}
+              loadError={bannerLoadError}
+              removing={bannerRemoving}
+              onLoad={onBannerLoad}
+              onRemove={() => {
+                onBannerRemove();
+                const { bannerId: _upload, ...rest } = draft;
+                change(rest);
+              }}
               onChange={(value, scope) => {
                 onPreviewChange(false);
                 return onBannerChange(value, scope);
@@ -575,12 +619,22 @@ export function DecorChooser({
         </div>
 
         <footer className="studio-savebar">
+          {publicationPending && (
+            <p role="status" className="studio-inline-message text-xs text-muted-foreground">
+              Your saved look is private for now. Sharing is on; your card and banner will appear
+              when this device's progress is ready.
+            </p>
+          )}
           {changedElsewhere && (
             <div className="studio-inline-message">
               <p>Your saved look changed on another device.</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {FRAME_NAMES[saved.fr]} ·{" "}
-                {saved.bk === undefined ? "Quiet ink" : (scenes[saved.bk]?.name ?? "Quiet ink")}
+                {saved.bannerId
+                  ? "Uploaded banner"
+                  : saved.bk === undefined
+                    ? "Quiet ink"
+                    : (scenes[saved.bk]?.name ?? "Quiet ink")}
                 {saved.tg ? ` · ${FRIEND_TAG_LABELS[saved.tg]}` : ""}
                 {saved.statusText
                   ? ` · ${saved.statusText}`
@@ -612,7 +666,7 @@ export function DecorChooser({
                 ? "Saving your look does not turn sharing on."
                 : "Your look stays on this device. Sharing is a separate choice."}
             </p>
-            {dirty && (
+            {pending && (
               <button
                 type="button"
                 className="studio-button studio-button-quiet"
@@ -630,21 +684,14 @@ export function DecorChooser({
                   disabled ||
                   saving ||
                   !loaded ||
-                  !dirty ||
+                  !pending ||
                   changedElsewhere ||
                   Boolean(statusError)
                 }
                 onClick={async () => {
                   setSaving(true);
                   try {
-                    // F3e uploads are local-only; keep the actual cloud built-in selection on other look saves.
-                    const { bk: _draftBanner, ...withoutBanner } = draft;
-                    const toSave = bannerDraft?.selected
-                      ? saved.bk === undefined
-                        ? withoutBanner
-                        : { ...withoutBanner, bk: saved.bk }
-                      : draft;
-                    const ok = await onSave(toSave, baseRevision);
+                    const ok = await onSave(draft, baseRevision);
                     if (ok) {
                       setDirty(false);
                       onDraft(null);

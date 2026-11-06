@@ -5,7 +5,7 @@
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid && (newData.exists() || (!root.child('friends').child('links/' + $uid).exists() && !root.child('friends').child('inbox/' + $uid).exists() && !root.child('friends').child('blocks/' + $uid).exists() && !root.child('friends').child('settings/' + $uid).exists() && !root.child('friends').child('cards/' + $uid).exists() && !root.child('friends').child('photos/' + $uid).exists() && !root.child('friends').child('cheers/' + $uid).exists() && (!root.child('friends/own/' + $uid).exists() || (root.child('friends/own/' + $uid + '/deleting').val() === true && !root.child('friends/codes').child(root.child('friends/own/' + $uid + '/code').val()).exists()))))",
+        ".write": "auth != null && auth.uid === $uid && (newData.exists() || (!root.child('friends').child('links/' + $uid).exists() && !root.child('friends').child('inbox/' + $uid).exists() && !root.child('friends').child('blocks/' + $uid).exists() && !root.child('friends').child('settings/' + $uid).exists() && !root.child('friends').child('cards/' + $uid).exists() && !root.child('friends').child('photos/' + $uid).exists() && !root.child('friends').child('bannerAssets/' + $uid).exists() && !root.child('friends').child('banners/' + $uid).exists() && !root.child('friends').child('cheers/' + $uid).exists() && (!root.child('friends/own/' + $uid).exists() || (root.child('friends/own/' + $uid + '/deleting').val() === true && !root.child('friends/codes').child(root.child('friends/own/' + $uid + '/code').val()).exists()))))",
         "lessons": {
           "$day": {
             ".validate": "$day.matches(/^d[0-9]{1,5}$/) && newData.isString() && newData.val().length <= 500000"
@@ -187,7 +187,7 @@
             ".validate": false
           },
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && ((newData.exists() && ((!data.exists() && !newData.child('deleting').exists()) || (data.exists() && (!data.child('deleting').exists() || (newData.child('deleting').val() === true && newData.child('code').val() === data.child('code').val()))))) || (!newData.exists() && (!data.exists() || (data.child('deleting').val() === true && !newData.parent().parent().child('links/' + $uid).exists() && !newData.parent().parent().child('inbox/' + $uid).exists() && !newData.parent().parent().child('blocks/' + $uid).exists() && !newData.parent().parent().child('settings/' + $uid).exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists() && !newData.parent().parent().child('cheers/' + $uid).exists() && !newData.parent().parent().child('codes').child(data.child('code').val()).exists() && !root.child('users/' + $uid).exists()))))"
+          ".write": "auth != null && auth.uid === $uid && ((newData.exists() && ((!data.exists() && !newData.child('deleting').exists()) || (data.exists() && (!data.child('deleting').exists() || (newData.child('deleting').val() === true && newData.child('code').val() === data.child('code').val()))))) || (!newData.exists() && (!data.exists() || (data.child('deleting').val() === true && !newData.parent().parent().child('links/' + $uid).exists() && !newData.parent().parent().child('inbox/' + $uid).exists() && !newData.parent().parent().child('blocks/' + $uid).exists() && !newData.parent().parent().child('settings/' + $uid).exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists() && !newData.parent().parent().child('bannerAssets/' + $uid).exists() && !newData.parent().parent().child('banners/' + $uid).exists() && !newData.parent().parent().child('cheers/' + $uid).exists() && !newData.parent().parent().child('codes').child(data.child('code').val()).exists() && !root.child('users/' + $uid).exists()))))"
         }
       },
       "codes": {
@@ -264,9 +264,9 @@
       },
       "settings": {
         "$uid": {
-          ".validate": "newData.hasChildren([\"v\", \"rev\", \"prev\", \"on\", \"photo\", \"n\", \"deco\"]) && (newData.child('on').val() === true || (!newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists())) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.child('rev').val()) && (!newData.parent().parent().child('photos/' + $uid).exists() || (newData.child('on').val() === true && newData.child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val())) && (newData.child('on').val() !== true || newData.child('since').exists()) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('v').val() === newData.child('v').val())",
+          ".validate": "newData.hasChildren([\"v\", \"rev\", \"prev\", \"on\", \"photo\", \"n\", \"deco\"]) && (newData.child('on').val() === true || (!newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists())) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.child('rev').val()) && (!newData.parent().parent().child('photos/' + $uid).exists() || (newData.child('on').val() === true && newData.child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val())) && (newData.child('on').val() !== true || newData.child('since').exists()) && (!newData.parent().parent().child('cards/' + $uid).exists() || newData.parent().parent().child('cards/' + $uid).child('v').val() === newData.child('v').val()) && (newData.child('on').val() === true || !newData.parent().parent().child('banners/' + $uid).exists()) && (!newData.parent().parent().child('banners/' + $uid).exists() || (newData.child('on').val() === true && newData.parent().parent().child('cards/' + $uid).child('bannerId').val() === newData.child('deco/bannerId').val() && newData.parent().parent().child('banners/' + $uid).child('id').val() === newData.child('deco/bannerId').val()))",
           "v": {
-            ".validate": "(newData.val() === 1 || newData.val() === 2) && (!data.exists() || newData.val() >= data.val())"
+            ".validate": "(newData.val() === 1 || newData.val() === 2 || newData.val() === 3) && (!data.exists() || newData.val() >= data.val())"
           },
           "rev": {
             ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
@@ -287,7 +287,7 @@
             ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
           },
           "deco": {
-            ".validate": "newData.hasChildren([\"fr\", \"fx\"]) && !(newData.child('statusText').exists() && newData.child('sb').exists())",
+            ".validate": "newData.hasChildren([\"fr\", \"fx\"]) && !(newData.child('statusText').exists() && newData.child('sb').exists()) && !(newData.child('bannerId').exists() && newData.child('bk').exists()) && (!newData.child('bannerId').exists() || (newData.parent().child('v').val() >= 3 && newData.child('bannerId').val() === newData.parent().parent().parent().child('bannerAssets/' + $uid).child('id').val()))",
             "fr": {
               ".validate": "newData.isString() && newData.val().matches(/^(plain|gold|stitch|moss|double|seal)$/)"
             },
@@ -295,7 +295,7 @@
               ".validate": "newData.isString() && newData.val().matches(/^(none|vines|petals|fireflies)$/)"
             },
             "bk": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0"
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0 && !newData.parent().child('bannerId').exists()"
             },
             "tg": {
               ".validate": "newData.isString() && newData.val().matches(/^(n5|n4|n3|n2|n1|kanji|self|reading)$/)"
@@ -311,20 +311,23 @@
             },
             "statusText": {
               ".validate": "newData.parent().parent().child('v').val() >= 2 && !newData.parent().child('sb').exists() && newData.isString() && newData.val().length >= 1 && newData.val().length <= 60 && newData.val().matches(/^[^\\x00-\\x20\\x7f-\\x9f]+( [^\\x00-\\x20\\x7f-\\x9f]+)*$/)"
+            },
+            "bannerId": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/) && newData.parent().parent().child('v').val() >= 3 && !newData.parent().child('bk').exists()"
             }
           },
           "$other": {
             ".validate": false
           },
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists()) || (newData.exists() && (!data.exists() || newData.child('v').val() >= data.child('v').val()) && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.child('rev').val() !== data.child('rev').val() && ((!data.exists() && newData.child('prev').val() === '') || (data.exists() && newData.child('prev').val() === data.child('rev').val()))))"
+          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('cards/' + $uid).exists() && !newData.parent().parent().child('photos/' + $uid).exists() && !newData.parent().parent().child('banners/' + $uid).exists()) || (newData.exists() && (!data.exists() || newData.child('v').val() >= data.child('v').val()) && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.child('rev').val() !== data.child('rev').val() && ((!data.exists() && newData.child('prev').val() === '') || (data.exists() && newData.child('prev').val() === data.child('rev').val()))))"
         }
       },
       "cards": {
         "$uid": {
-          ".validate": "newData.hasChildren([\"v\", \"rev\", \"ph\", \"t\", \"d\", \"n\", \"g\", \"r\", \"c\", \"s\", \"m\", \"l\", \"k\", \"vc\", \"a\", \"w\", \"acc\", \"st\", \"fr\", \"fx\", \"sh\"]) && newData.child('n').val() === newData.parent().parent().child('settings/' + $uid).child('n').val() && ((newData.child('ph').val() === true && newData.parent().parent().child('settings/' + $uid).child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val()) || (newData.child('ph').val() === false && !newData.parent().parent().child('photos/' + $uid).exists())) && newData.child('v').val() === newData.parent().parent().child('settings/' + $uid).child('v').val() && newData.child('statusText').val() === newData.parent().parent().child('settings/' + $uid).child('deco/statusText').val() && newData.child('sb').val() === newData.parent().parent().child('settings/' + $uid).child('deco/sb').val() && !(newData.child('statusText').exists() && newData.child('sb').exists())",
+          ".validate": "newData.hasChildren([\"v\", \"rev\", \"ph\", \"t\", \"d\", \"n\", \"g\", \"r\", \"c\", \"s\", \"m\", \"l\", \"k\", \"vc\", \"a\", \"w\", \"acc\", \"st\", \"fr\", \"fx\", \"sh\"]) && newData.child('n').val() === newData.parent().parent().child('settings/' + $uid).child('n').val() && ((newData.child('ph').val() === true && newData.parent().parent().child('settings/' + $uid).child('photo').val() === true && newData.parent().parent().child('photos/' + $uid).child('rev').val() === newData.child('rev').val()) || (newData.child('ph').val() === false && !newData.parent().parent().child('photos/' + $uid).exists())) && newData.child('v').val() === newData.parent().parent().child('settings/' + $uid).child('v').val() && newData.child('statusText').val() === newData.parent().parent().child('settings/' + $uid).child('deco/statusText').val() && newData.child('sb').val() === newData.parent().parent().child('settings/' + $uid).child('deco/sb').val() && !(newData.child('statusText').exists() && newData.child('sb').exists()) && newData.child('bannerId').val() === newData.parent().parent().child('settings/' + $uid).child('deco/bannerId').val() && ((newData.child('bannerId').exists() && newData.child('v').val() >= 3 && !newData.child('bk').exists() && newData.parent().parent().child('banners/' + $uid).child('id').val() === newData.child('bannerId').val() && newData.parent().parent().child('bannerAssets/' + $uid).child('id').val() === newData.child('bannerId').val() && newData.parent().parent().child('banners/' + $uid).child('data').val() === newData.parent().parent().child('bannerAssets/' + $uid).child('data').val()) || (!newData.child('bannerId').exists() && !newData.parent().parent().child('banners/' + $uid).exists()))",
           "v": {
-            ".validate": "(newData.val() === 1 || newData.val() === 2) && newData.val() === newData.parent().parent().parent().child('settings/' + $uid).child('v').val()"
+            ".validate": "(newData.val() === 1 || newData.val() === 2 || newData.val() === 3) && newData.val() === newData.parent().parent().parent().child('settings/' + $uid).child('v').val()"
           },
           "rev": {
             ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
@@ -392,7 +395,7 @@
             ".validate": "newData.isString() && newData.val().matches(/^(none|vines|petals|fireflies)$/)"
           },
           "bk": {
-            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0"
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3 && newData.val() % 1 === 0 && !newData.parent().child('bannerId').exists()"
           },
           "tg": {
             ".validate": "newData.isString() && newData.val().matches(/^(n5|n4|n3|n2|n1|kanji|self|reading)$/)"
@@ -410,6 +413,9 @@
           ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('on').val() === true && newData.parent().parent().child('settings/' + $uid).child('rev').val() === newData.child('rev').val()))",
           "statusText": {
             ".validate": "newData.parent().child('v').val() >= 2 && !newData.parent().child('sb').exists() && newData.isString() && newData.val().length >= 1 && newData.val().length <= 60 && newData.val().matches(/^[^\\x00-\\x20\\x7f-\\x9f]+( [^\\x00-\\x20\\x7f-\\x9f]+)*$/)"
+          },
+          "bannerId": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/) && newData.parent().child('v').val() >= 3 && !newData.parent().child('bk').exists()"
           }
         }
       },
@@ -440,6 +446,56 @@
       },
       "$other": {
         ".validate": false
+      },
+      "bannerAssets": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('settings/' + $uid).child('deco/bannerId').exists() && !newData.parent().parent().child('banners/' + $uid).exists() && !newData.parent().parent().child('cards/' + $uid).child('bannerId').exists()) || (newData.exists() && root.child('friends/own/' + $uid).child('code').exists() && !root.child('friends/own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('v').val() >= 3 && newData.parent().parent().child('settings/' + $uid).child('rev').val() !== root.child('friends/settings/' + $uid).child('rev').val()))",
+          ".validate": "newData.hasChildren(['id','source','data','crop']) && (!newData.parent().parent().child('settings/' + $uid).child('deco/bannerId').exists() || newData.parent().parent().child('settings/' + $uid).child('deco/bannerId').val() === newData.child('id').val()) && (!newData.parent().parent().child('banners/' + $uid).exists() || (newData.parent().parent().child('banners/' + $uid).child('id').val() === newData.child('id').val() && newData.parent().parent().child('banners/' + $uid).child('data').val() === newData.child('data').val())) && (!newData.parent().parent().child('cards/' + $uid).child('bannerId').exists() || newData.parent().parent().child('cards/' + $uid).child('bannerId').val() === newData.child('id').val()) && (!data.exists() || newData.child('id').val() !== data.child('id').val() || (newData.child('source').val() === data.child('source').val() && newData.child('data').val() === data.child('data').val() && newData.child('crop/cx').val() === data.child('crop/cx').val() && newData.child('crop/cy').val() === data.child('crop/cy').val() && newData.child('crop/zoom').val() === data.child('crop/zoom').val()))",
+          "id": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
+          },
+          "source": {
+            ".validate": "newData.isString() && newData.val().length <= 160000 && newData.val().matches(/^data:image\\/(jpeg|webp);base64,[A-Za-z0-9+\\/]+={0,2}$/)"
+          },
+          "data": {
+            ".validate": "newData.isString() && newData.val().length <= 96000 && newData.val().matches(/^data:image\\/(jpeg|webp);base64,[A-Za-z0-9+\\/]+={0,2}$/)"
+          },
+          "crop": {
+            ".validate": "newData.hasChildren(['cx','cy','zoom'])",
+            "cx": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+            },
+            "cy": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+            },
+            "zoom": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "banners": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || (root.child('friends/settings/' + $uid).child('on').val() === true && data.child('id').exists() && root.child('friends/settings/' + $uid).child('deco/bannerId').val() === data.child('id').val() && root.child('friends/cards/' + $uid).child('bannerId').val() === data.child('id').val() && root.child('friends/cards/' + $uid).child('rev').val() === root.child('friends/settings/' + $uid).child('rev').val() && root.child('friends').child('links/' + $uid + '/' + auth.uid).child('t').exists() && !root.child('friends').child('links/' + $uid + '/' + auth.uid).child('p').exists() && root.child('friends').child('links/' + auth.uid + '/' + $uid).child('t').exists() && !root.child('friends').child('links/' + auth.uid + '/' + $uid).child('p').exists() && !root.child('friends').child('blocks/' + $uid + '/' + auth.uid).exists() && !root.child('friends').child('blocks/' + auth.uid + '/' + $uid).exists() && root.child('friends').child('own/' + $uid).child('code').exists() && !root.child('friends').child('own/' + $uid).child('deleting').exists() && root.child('friends').child('own/' + auth.uid).child('code').exists() && !root.child('friends').child('own/' + auth.uid).child('deleting').exists()))",
+          ".write": "auth != null && auth.uid === $uid && ((!newData.exists() && !newData.parent().parent().child('cards/' + $uid).child('bannerId').exists()) || (newData.exists() && root.child('friends/own/' + $uid).child('code').exists() && !root.child('friends/own/' + $uid).child('deleting').exists() && newData.parent().parent().child('own/' + $uid).child('code').exists() && !newData.parent().parent().child('own/' + $uid).child('deleting').exists() && newData.parent().parent().child('settings/' + $uid).child('v').val() >= 3 && newData.parent().parent().child('settings/' + $uid).child('on').val() === true && newData.parent().parent().child('settings/' + $uid).child('deco/bannerId').val() === newData.child('id').val() && newData.parent().parent().child('cards/' + $uid).child('bannerId').val() === newData.child('id').val() && newData.parent().parent().child('cards/' + $uid).child('rev').val() === newData.parent().parent().child('settings/' + $uid).child('rev').val() && newData.parent().parent().child('cards/' + $uid).child('v').val() === newData.parent().parent().child('settings/' + $uid).child('v').val() && newData.parent().parent().child('bannerAssets/' + $uid).child('id').val() === newData.child('id').val() && newData.parent().parent().child('bannerAssets/' + $uid).child('data').val() === newData.child('data').val()))",
+          ".validate": "newData.hasChildren(['id','data'])",
+          "id": {
+            ".validate": "newData.isString() && newData.val().matches(/^[a-f0-9]{32}$/)"
+          },
+          "data": {
+            ".validate": "newData.isString() && newData.val().length <= 96000 && newData.val().matches(/^data:image\\/(jpeg|webp);base64,[A-Za-z0-9+\\/]+={0,2}$/)"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
       }
     }
   }

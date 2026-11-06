@@ -6,7 +6,7 @@ import { Frame } from "./Frame";
 import { RankStamp } from "@/components/write/RankStamp";
 import { BADGES, RANKS } from "@/lib/rewards";
 import { resolveAccent, resolveStamp } from "@/lib/quest-prefs";
-import { isBannerData } from "@/lib/friend-banner";
+import { isBannerData, type PublicBanner } from "@/lib/friend-banner";
 import {
   PROFILE_GLYPHS,
   initialOf,
@@ -31,6 +31,8 @@ type SharedProps = {
   draft?: boolean;
   sharing?: boolean;
   renderDefs?: boolean;
+  bannerError?: string | null;
+  onRetryBanner?: () => void;
 };
 type Props = SharedProps &
   (
@@ -41,7 +43,13 @@ type Props = SharedProps &
         onEdit?: () => void;
         onStat?: (metric: "streak" | "carved" | "mastered") => void;
       }
-    | { mode: "friend"; photo?: FriendPhoto | null; onRemove?: () => void; onBlock?: () => void }
+    | {
+        mode: "friend";
+        banner?: PublicBanner | null;
+        photo?: FriendPhoto | null;
+        onRemove?: () => void;
+        onBlock?: () => void;
+      }
   );
 const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
@@ -78,9 +86,17 @@ export function ProfileCard(props: Props) {
     props.mode === "self"
       ? props.privateAvatar
       : publicAvatar(name, data?.g ?? props.cover.g, props.photo ?? null, data);
-  const scene = deco.bk === undefined ? undefined : props.scenes[deco.bk];
+  const scene = deco.bannerId || deco.bk === undefined ? undefined : props.scenes[deco.bk];
   const upload =
-    props.mode === "self" && isBannerData(props.localBanner) ? props.localBanner : null;
+    props.mode === "self"
+      ? isBannerData(props.localBanner)
+        ? props.localBanner
+        : null
+      : data?.bannerId && props.banner?.id === data.bannerId && isBannerData(props.banner.data)
+        ? props.banner.data
+        : null;
+  const [failedBanner, setFailedBanner] = useState<string | null>(null);
+  const visibleUpload = upload && failedBanner !== upload ? upload : null;
   const status = deco.statusText?.trim() || (deco.sb ? FRIEND_STATUS_LABELS[deco.sb] : "");
   const pins = (deco.pin?.split(",") ?? []).filter((id) => badges[id]);
   const earned = BADGES.filter((badge) => badges[badge.id]);
@@ -130,11 +146,16 @@ export function ProfileCard(props: Props) {
       {props.renderDefs !== false && <BadgeArtDefs />}
       <div
         aria-hidden="true"
-        data-uploaded={Boolean(upload)}
-        className={`profile-card-banner relative overflow-hidden bg-secondary ${scene || upload ? "" : "profile-card-banner-ink"}`}
+        data-uploaded={Boolean(visibleUpload)}
+        className={`profile-card-banner relative overflow-hidden bg-secondary ${scene || visibleUpload ? "" : "profile-card-banner-ink"}`}
       >
-        {upload ? (
-          <img src={upload} alt="" className="profile-card-upload size-full object-contain" />
+        {visibleUpload ? (
+          <img
+            src={visibleUpload}
+            alt=""
+            className="profile-card-upload size-full object-contain"
+            onError={() => setFailedBanner(visibleUpload)}
+          />
         ) : (
           scene && <img src={scene.url} alt="" className="size-full object-cover" />
         )}
@@ -143,6 +164,23 @@ export function ProfileCard(props: Props) {
           記録 <span>CALLING CARD</span>
         </span>
       </div>
+      {(props.bannerError || (upload && failedBanner === upload)) && (
+        <div className="px-4 pt-2 text-xs text-muted-foreground" role="status">
+          <p>{props.bannerError ?? "Couldn't display this banner."}</p>
+          {props.onRetryBanner && (
+            <button
+              type="button"
+              className="studio-text-button"
+              onClick={() => {
+                setFailedBanner(null);
+                props.onRetryBanner?.();
+              }}
+            >
+              Retry banner
+            </button>
+          )}
+        </div>
+      )}
       {menu}
       {props.mode === "self" && props.onEdit && (
         <button

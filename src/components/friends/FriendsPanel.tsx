@@ -609,8 +609,9 @@ function PublicSummary({ card }: { card: Omit<FriendCard, "t"> }) {
         Accent: {card.acc}. Stamp: {card.st}. Frame: {card.fr}. Effect: {card.fx}.
       </p>
       <p>
-        Banner: {card.bk === undefined ? "Flat" : `Scene ${card.bk + 1}`}. Study tag:{" "}
-        {card.tg ?? "None"}. Status: {card.statusText ?? card.sb ?? "None"}.
+        Banner:{" "}
+        {card.bannerId ? "Uploaded crop" : card.bk === undefined ? "Flat" : `Scene ${card.bk + 1}`}.
+        Study tag: {card.tg ?? "None"}. Status: {card.statusText ?? card.sb ?? "None"}.
       </p>
       <p>Sharing since {card.sh}.</p>
     </div>
@@ -619,6 +620,7 @@ function PublicSummary({ card }: { card: Omit<FriendCard, "t"> }) {
 
 function PlainFriendCard({ peer }: { peer: FriendPeer }) {
   const friends = useFriends();
+  const [failedBanner, setFailedBanner] = useState<string | null>(null);
   const entry = friends.snapshot?.cards?.[peer.uid];
   if (!entry)
     return <p className="mt-2 text-xs text-muted-foreground">Card unavailable. Refresh Friends.</p>;
@@ -642,6 +644,17 @@ function PlainFriendCard({ peer }: { peer: FriendPeer }) {
     friends.selectedPhoto.photo.rev === card.rev &&
     card.ph
       ? friends.selectedPhoto.photo.data
+      : null;
+  const banner =
+    failedBanner !== card.bannerId &&
+    !cached &&
+    friends.selectedBanner?.peer === peer.uid &&
+    friends.selectedBanner.banner.id === card.bannerId
+      ? friends.selectedBanner.banner
+      : null;
+  const bannerRead =
+    friends.bannerRead?.peer === peer.uid && friends.bannerRead.id === card.bannerId
+      ? friends.bannerRead
       : null;
   return (
     <div className="mt-2">
@@ -678,12 +691,44 @@ function PlainFriendCard({ peer }: { peer: FriendPeer }) {
           View picture
         </button>
       )}
+      {banner && (
+        <img
+          className="mt-3 aspect-[8/3] w-full max-w-md rounded-md object-contain"
+          src={banner.data}
+          alt={`${card.n}'s shared banner`}
+          onError={() => setFailedBanner(banner.id)}
+        />
+      )}
+      {card.bannerId && !banner && (
+        <div className="mt-2">
+          {(bannerRead?.error || failedBanner === card.bannerId) && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {bannerRead?.error ?? "Couldn't display this banner. Retry when connected."}
+            </p>
+          )}
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={Boolean(cached) || Boolean(bannerRead?.loading)}
+            onClick={() => {
+              setFailedBanner(null);
+              void friends.selectBanner(peer.uid);
+            }}
+          >
+            {bannerRead?.loading
+              ? "Loading banner…"
+              : bannerRead?.error || failedBanner === card.bannerId
+                ? "Retry banner"
+                : "View banner"}
+          </button>
+        </div>
+      )}
       <PublicSummary card={card} />
     </div>
   );
 }
 
-// F3d/F3f: extend SHARING_FIELDS when typed status and uploaded banners join the card.
+// Audience copy follows the current public-card allowlist.
 const SHARING_SUMMARY =
   "Accepted friends can see your card and study summary. Lessons, email and API keys stay private.";
 const SHARING_FIELDS = [
@@ -691,11 +736,12 @@ const SHARING_FIELDS = [
   "Rank, study streak, kanji carved, words mastered, and lesson, taught-kanji and vocabulary counts.",
   "Your last 7 days of quiz answers and writing marks.",
   "Earned badges and up to three pinned badges.",
-  "Your card look: accent, stamp, frame, effect, banner scene, study tag, and status preset or personal status text (up to 60 characters).",
+  "Your card look: accent, stamp, frame, effect, banner scene or cropped uploaded banner, study tag, and status preset or personal status text (up to 60 characters).",
 ];
 const SHARING_PICTURE =
   "Your uploaded picture is shown only if you turn on the separate picture choice. Your Google picture is never shared.";
-const SHARING_PRIVATE = "Never shared: your email, lesson text, word lists and Gemini key.";
+const SHARING_PRIVATE =
+  "Never shared: your email, lesson text, word lists, Gemini key, or the private banner source and crop controls.";
 const READY_TEXT = "Ready for your first friend. Only people you accept can see your shared card.";
 const MISSING_HELP =
   "Sharing starts On for a new setup. Only people you accept can see your card. Nothing is shared until you save.";
@@ -775,8 +821,9 @@ function WhatFriendsSee() {
         <p>{SHARING_PRIVATE}</p>
         <p>Stats and unlocks are self-reported, not verified achievements.</p>
         <p>
-          Turning sharing off prevents new reads after it is saved. Copies already seen on another
-          device may remain there until refreshed.
+          Turning sharing off removes your shared card, picture and banner after it is saved. Your
+          editable banner stays private in your account. Copies already seen on another device may
+          remain there until refreshed.
         </p>
         <p>Signing out doesn&apos;t hide your card. Turn sharing off first.</p>
       </div>

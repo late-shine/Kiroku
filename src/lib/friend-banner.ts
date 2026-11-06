@@ -13,7 +13,49 @@ export type BannerDraft = {
   data: string;
   crop: BannerCrop;
   selected: boolean;
+  id?: string;
 };
+export type BannerAsset = { id: string; source: string; data: string; crop: BannerCrop };
+export type PublicBanner = { id: string; data: string };
+export type BannerEdit = { kind: "upload"; draft: BannerDraft } | { kind: "remove" };
+export const isBannerId = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-f0-9]{32}$/.test(value);
+export function decodeBannerAsset(value: unknown): BannerAsset | null {
+  if (value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new BannerImageError("Couldn't read the saved banner. Replace or remove it in Style.");
+  const row = value as Record<string, unknown>;
+  const draft = decodeBannerDraft({ ...row, v: 1, uid: null, selected: false }, null);
+  if (
+    !isBannerId(row["id"]) ||
+    !draft ||
+    Object.keys(row).some((key) => !["id", "source", "data", "crop"].includes(key)) ||
+    Object.keys(row["crop"] as object).some((key) => !["cx", "cy", "zoom"].includes(key))
+  )
+    throw new BannerImageError("Couldn't read the saved banner. Replace or remove it in Style.");
+  return { id: row["id"], source: draft.source, data: draft.data, crop: draft.crop };
+}
+export function decodePublicBanner(value: unknown): PublicBanner | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  return isBannerId(row["id"]) &&
+    isBannerData(row["data"]) &&
+    Object.keys(row).every((key) => key === "id" || key === "data")
+    ? { id: row["id"], data: row["data"] }
+    : null;
+}
+export function sameBannerImage(
+  a: Pick<BannerAsset, "source" | "data" | "crop">,
+  b: Pick<BannerAsset, "source" | "data" | "crop">,
+): boolean {
+  return (
+    a.source === b.source &&
+    a.data === b.data &&
+    a.crop.cx === b.crop.cx &&
+    a.crop.cy === b.crop.cy &&
+    a.crop.zoom === b.crop.zoom
+  );
+}
 export type BannerSource = AvatarSource;
 export class BannerImageError extends Error {}
 export function isBannerData(value: unknown, limit = MAX_BANNER_DATA): value is string {
@@ -64,6 +106,7 @@ export function decodeBannerDraft(value: unknown, uid: string | null): BannerDra
     data: row["data"],
     crop: { cx, cy, zoom },
     selected: row["selected"],
+    ...(isBannerId(row["id"]) ? { id: row["id"] } : {}),
   };
 }
 export function readBannerDraft(uid: string | null): BannerDraft | null {

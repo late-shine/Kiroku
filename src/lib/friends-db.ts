@@ -35,6 +35,15 @@ import {
 } from "./friends";
 import { STORAGE_KEYS } from "./storage";
 import { localDay } from "./word-memory";
+import {
+  decodeBannerAsset,
+  decodeBannerDraft,
+  decodePublicBanner,
+  isBannerId,
+  sameBannerImage,
+  type BannerAsset,
+  type BannerEdit,
+} from "./friend-banner";
 
 const TIMEOUT_MS = 20_000;
 const PENDING_COPY = "The request may still be processing. Reconnect to check its status.";
@@ -624,7 +633,18 @@ export async function finishFriendsDeletion(uid: string): Promise<void> {
 const SETTINGS_CONFLICT =
   "Your sharing settings changed on another device. Review them before saving.";
 export type SharingRead = { settings: FriendSettings | null; card: FriendCardState };
-export type SharingEdit = { on?: boolean; photo?: boolean; n?: string; deco?: FriendDecoration };
+export type SharingEdit = {
+  on?: boolean;
+  photo?: boolean;
+  n?: string;
+  deco?: FriendDecoration;
+  banner?: BannerEdit;
+};
+export type SharingSave = {
+  settings: FriendSettings;
+  publication: FriendPublication | null;
+  bannerAsset?: BannerAsset | null;
+};
 
 export async function readFriendSharing(uid: string): Promise<SharingRead> {
   const token = tokenFor(uid);
@@ -636,13 +656,40 @@ export async function readFriendSharing(uid: string): Promise<SharingRead> {
   return { settings: decodeFriendSettings(settings), card: decodeFriendCard(card) };
 }
 
-async function publicationPaths(token: Token, publication: FriendPublication | null) {
+async function publicationPaths(
+  token: Token,
+  publication: FriendPublication | null,
+  assetChange?: BannerAsset | null,
+) {
   const { mod } = await getDb(token.uid);
   assertCurrent(token);
-  return {
+  const paths: Record<string, unknown> = {
     [`cards/${token.uid}`]: publication ? { ...publication.card, t: mod.serverTimestamp() } : null,
     [`photos/${token.uid}`]: publication?.photo ?? null,
   };
+  const id = publication?.card.bannerId;
+  if (!id) paths[`banners/${token.uid}`] = null;
+  else if (assetChange && assetChange.id === id)
+    paths[`banners/${token.uid}`] = { id, data: assetChange.data };
+  else {
+    // Reuse an unchanged published crop. Stats updates never read/upload its large source.
+    const publicId = await read(token, `banners/${token.uid}/id`);
+    if (publicId !== id) {
+      const [privateId, data] = await Promise.all([
+        read(token, `bannerAssets/${token.uid}/id`),
+        read(token, `bannerAssets/${token.uid}/data`),
+      ]);
+      const banner = decodePublicBanner({ id: privateId, data });
+      if (!banner || banner.id !== id)
+        throw new FriendsError(
+          "Your saved banner changed. Refresh Friends and review the look before saving.",
+          "conflict",
+        );
+      paths[`banners/${token.uid}`] = banner;
+    }
+  }
+  if (assetChange !== undefined) paths[`bannerAssets/${token.uid}`] = assetChange;
+  return paths;
 }
 
 export function saveFriendSharing(
@@ -651,11 +698,8 @@ export function saveFriendSharing(
   edit: SharingEdit,
   source: () => FriendCardSource | null,
   requireReady = false,
-  onAcknowledged?: (result: {
-    settings: FriendSettings;
-    publication: FriendPublication | null;
-  }) => void,
-): Promise<{ settings: FriendSettings; publication: FriendPublication | null }> {
+  onAcknowledged?: (result: SharingSave) => void,
+): Promise<SharingSave> {
   return mutate(uid, async (token) => {
     await requireSetup(token);
     const current = decodeFriendSettings(await read(token, `settings/${uid}`));
@@ -663,8 +707,40 @@ export function saveFriendSharing(
       throw new FriendsError(SETTINGS_CONFLICT, "conflict");
     const n = publicName(edit.n ?? current?.n ?? "", null);
     if (!n) throw new FriendsError("Choose a public name first.");
-    const deco = decodeDecoration(edit.deco ?? current?.deco ?? { fr: "plain", fx: "none" });
+    let deco = decodeDecoration(edit.deco ?? current?.deco ?? { fr: "plain", fx: "none" });
     if (!deco) throw new FriendsError("Choose supported decorations before saving.");
+    let assetChange: BannerAsset | null | undefined;
+    let selectedAsset: BannerAsset | null = null;
+    if (edit.banner?.kind === "remove") {
+      const { bannerId: _old, ...rest } = deco;
+      deco = rest;
+      assetChange = null;
+    } else if (edit.banner?.kind === "upload") {
+      const candidate = decodeBannerDraft(edit.banner.draft, uid);
+      if (!candidate || !candidate.selected)
+        throw new FriendsError("Choose this account's banner before saving.");
+      const rawAsset = await read(token, `bannerAssets/${uid}`);
+      let oldAsset: BannerAsset | null = null;
+      try {
+        oldAsset = decodeBannerAsset(rawAsset);
+      } catch {
+        /* An explicit replacement can replace malformed legacy data. The read itself succeeded. */
+      }
+      if (oldAsset && sameBannerImage(oldAsset, candidate)) selectedAsset = oldAsset;
+      else {
+        let id = newFriendRevision();
+        while (id === record(rawAsset)?.["id"]) id = newFriendRevision();
+        selectedAsset = {
+          id,
+          source: candidate.source,
+          data: candidate.data,
+          crop: candidate.crop,
+        };
+        assetChange = selectedAsset;
+      }
+      const { bk: _builtIn, bannerId: _old, ...rest } = deco;
+      deco = { ...rest, bannerId: selectedAsset.id };
+    }
     const on = edit.on ?? current?.on ?? false;
     const snapshot = on ? source() : null;
     if (on && requireReady && !snapshot)
@@ -686,7 +762,7 @@ export function saveFriendSharing(
     const publication = snapshot ? buildFriendPublication(settings, snapshot) : null;
     const paths = {
       [`settings/${uid}`]: settings,
-      ...(await publicationPaths(token, publication)),
+      ...(await publicationPaths(token, publication, assetChange)),
     };
     try {
       await update(token, paths, () => {
@@ -701,7 +777,15 @@ export function saveFriendSharing(
         throw new FriendsError(SETTINGS_CONFLICT, "conflict");
       throw error;
     }
-    const result = { settings, publication };
+    const result: SharingSave = {
+      settings,
+      publication,
+      ...(assetChange !== undefined
+        ? { bannerAsset: assetChange }
+        : selectedAsset
+          ? { bannerAsset: selectedAsset }
+          : {}),
+    };
     if (!session(uid).deleting) onAcknowledged?.(result);
     return result;
   });
@@ -742,4 +826,22 @@ export async function readFriendPhoto(uid: string, peer: string, revision: strin
   const photo = decodeFriendPhoto(await read(token, `photos/${peer}`));
   if (!photo || photo.rev !== revision) return { kind: "refresh" as const };
   return { kind: "photo" as const, photo };
+}
+
+/** Private retained source is fetched only when the owner opens the banner editor. */
+export async function readOwnerBannerAsset(uid: string): Promise<BannerAsset | null> {
+  const token = tokenFor(uid);
+  await requireSetup(token);
+  return decodeBannerAsset(await read(token, `bannerAssets/${uid}`));
+}
+
+/** Selected visible card only; this response never includes source or crop. */
+export async function readFriendBanner(uid: string, peer: string, id: string) {
+  const token = tokenFor(uid);
+  if (!isUid(peer) || !isBannerId(id)) throw new FriendsError("Not connected.");
+  const raw = await read(token, `banners/${peer}`);
+  const banner = decodePublicBanner(raw);
+  return banner && banner.id === id
+    ? { kind: "banner" as const, banner }
+    : { kind: raw === null ? ("missing" as const) : ("mismatch" as const) };
 }

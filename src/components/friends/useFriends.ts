@@ -40,6 +40,8 @@ import {
   saveFriendSharing,
   publishFriendCard,
   readFriendPhoto,
+  readOwnerBannerAsset,
+  readFriendBanner,
   type SharingRead,
   type SharingEdit,
 } from "@/lib/friends-db";
@@ -54,6 +56,9 @@ import {
   writeBannerDraft,
   type BannerDraft,
   type BannerScope,
+  type BannerAsset,
+  type PublicBanner,
+  sameBannerImage,
 } from "@/lib/friend-banner";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
@@ -190,15 +195,44 @@ export function useFriendsController({
     value: FriendDecoration | null;
   }>({ uid: null, value: null });
   const [previewPhoto, setPreviewPhoto] = useState<FriendPhoto | null>(null);
+  const [ownerBanner, setOwnerBanner] = useState<{
+    uid: string | null;
+    loaded: boolean;
+    loading: boolean;
+    asset: BannerAsset | null;
+    error: string | null;
+  }>({ uid: null, loaded: false, loading: false, asset: null, error: null });
+  const ownerBannerRef = useRef(ownerBanner);
+  const ownerBannerSequence = useRef(0);
+  const [bannerRemoving, setBannerRemoving] = useState(false);
+  const removingRef = useRef(false);
+  const [selectedBanner, setSelectedBanner] = useState<{
+    peer: string;
+    banner: PublicBanner;
+  } | null>(null);
+  const [bannerRead, setBannerRead] = useState<{
+    peer: string;
+    id: string;
+    error: string | null;
+    loading: boolean;
+  } | null>(null);
+  const selectedBannerSequence = useRef(0);
+  const [previewBanner, setPreviewBanner] = useState<PublicBanner | null>(null);
+  const [previewBannerError, setPreviewBannerError] = useState<string | null>(null);
+  const previewBannerSequence = useRef(0);
+  const previewBannerMismatch = useRef<string | null>(null);
   const [localBanner, setLocalBanner] = useState<{
     scope: BannerScope;
     draft: BannerDraft | null;
     error: string | null;
   }>({ scope: { uid: null, generation: 0 }, draft: null, error: null });
+  const localBannerRef = useRef(localBanner);
+  const bannerEdited = useRef(false);
   const bannerScopeRef = useRef<BannerScope | null>(null);
   const bannerGeneration = useRef(0);
   const bannerOwner = useRef(uid);
   bannerOwner.current = uid;
+  localBannerRef.current = localBanner;
   const previewPhotoSequence = useRef(0);
   const previewMismatch = useRef<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
@@ -258,6 +292,17 @@ export function useFriendsController({
       lastRefresh.current = Date.now();
       isSetUp.current = Boolean(snapshot.own && !snapshot.own.deleting);
       cardCache.current = snapshot.cards ?? {};
+      ++selectedBannerSequence.current;
+      setBannerRead((old) => (old ? { ...old, loading: false } : null));
+      setSelectedBanner((old) => {
+        const entry = old ? snapshot.cards?.[old.peer] : null;
+        return old &&
+          entry?.kind === "published" &&
+          entry.card.bannerId === old.banner.id &&
+          snapshot.peers.some((peer) => peer.uid === old.peer && peer.state === "final")
+          ? old
+          : null;
+      });
       ++photoSequence.current;
       setSelectedPhoto(null);
       if (snapshot.own?.deleting) {
@@ -277,6 +322,9 @@ export function useFriendsController({
         sourceUid.current = null;
         cosmeticPending.current = false;
         sharingRef.current = emptySharing(uid);
+        setPreviewBanner(null);
+        setPreviewBannerError(null);
+        ++previewBannerSequence.current;
         setSharing(sharingRef.current);
         ++sharingSequence.current;
         clearFriendsStorage(uid, true);
@@ -289,6 +337,10 @@ export function useFriendsController({
     } catch (error) {
       if (current.current !== captured || sequence !== readSequence.current) return;
       if (isFriendsDenied(error)) {
+        setSelectedBanner(null);
+        setPreviewBanner(null);
+        ++selectedBannerSequence.current;
+        ++previewBannerSequence.current;
         cancelPublish();
         isSetUp.current = false;
         sharingRef.current = {
@@ -326,9 +378,25 @@ export function useFriendsController({
   useEffect(() => {
     if (!resolved) return;
     setFriendsAccount(uid);
+    ownerBannerRef.current = { uid, loaded: false, loading: false, asset: null, error: null };
+    setOwnerBanner(ownerBannerRef.current);
+    ++ownerBannerSequence.current;
+    setBannerRemoving(false);
+    removingRef.current = false;
+    setSelectedBanner(null);
+    setBannerRead(null);
+    setPreviewBanner(null);
+    setPreviewBannerError(null);
+    ++selectedBannerSequence.current;
+    ++previewBannerSequence.current;
+    previewBannerMismatch.current = null;
+    const restoredBanner = readBannerDraft(uid);
+    bannerEdited.current = Boolean(restoredBanner && !restoredBanner.id);
     const bannerScope = { uid, generation: ++bannerGeneration.current };
     bannerScopeRef.current = bannerScope;
-    setLocalBanner({ scope: bannerScope, draft: readBannerDraft(uid), error: null });
+    const restoredLocal = { scope: bannerScope, draft: restoredBanner, error: null };
+    localBannerRef.current = restoredLocal;
+    setLocalBanner(restoredLocal);
     let draftDeco: FriendDecoration | null = null;
     try {
       draftDeco =
@@ -336,6 +404,7 @@ export function useFriendsController({
     } catch {
       /* Optional local draft. */
     }
+    if (draftDeco && restoredBanner) bannerEdited.current = true;
     setDecoration({ uid, value: draftDeco });
     setPreviewPhoto(null);
     ++previewPhotoSequence.current;
@@ -376,6 +445,17 @@ export function useFriendsController({
       setActivity(next);
       if (next.busy) lastOutcome = null;
       if (next.deleting) {
+        ownerBannerRef.current = { uid, loaded: false, loading: false, asset: null, error: null };
+        setOwnerBanner(ownerBannerRef.current);
+        ++ownerBannerSequence.current;
+        setBannerRemoving(false);
+        removingRef.current = false;
+        setSelectedBanner(null);
+        setBannerRead(null);
+        setPreviewBanner(null);
+        setPreviewBannerError(null);
+        ++selectedBannerSequence.current;
+        ++previewBannerSequence.current;
         const clearedBannerScope = { uid, generation: ++bannerGeneration.current };
         bannerScopeRef.current = clearedBannerScope;
         setLocalBanner({ scope: clearedBannerScope, draft: null, error: null });
@@ -388,6 +468,9 @@ export function useFriendsController({
         cardCache.current = {};
         ++photoSequence.current;
         sharingRef.current = emptySharing(uid);
+        setPreviewBanner(null);
+        setPreviewBannerError(null);
+        ++previewBannerSequence.current;
         setSharing(sharingRef.current);
         ++sharingSequence.current;
         setSelectedPeer(null);
@@ -417,6 +500,9 @@ export function useFriendsController({
     return () => {
       stop();
       current.current = null;
+      ++ownerBannerSequence.current;
+      ++selectedBannerSequence.current;
+      ++previewBannerSequence.current;
       bannerScopeRef.current = null;
       cancelPublish();
       ++sharingSequence.current;
@@ -536,6 +622,16 @@ export function useFriendsController({
     ++sharingSequence.current;
     ++previewPhotoSequence.current;
     setPreviewPhoto(null);
+    ++previewBannerSequence.current;
+    setPreviewBanner((old) =>
+      value.settings?.on && value.card.kind === "published" && value.card.card.bannerId === old?.id
+        ? old
+        : null,
+    );
+    if (!value.settings?.on || value.card.kind !== "published" || !value.card.card.bannerId) {
+      setPreviewBannerError(null);
+      previewBannerMismatch.current = null;
+    }
     sharingRef.current = { ...value, uid, loaded: true, error: null, unsupported: false };
     setSharing(sharingRef.current);
   };
@@ -557,6 +653,11 @@ export function useFriendsController({
         unsupported: error instanceof UnsupportedFriendSettingsError,
         error: describeFriendsError(error),
       };
+      if (isFriendsDenied(error)) {
+        setPreviewBanner(null);
+        ++previewBannerSequence.current;
+        setPreviewBannerError("Couldn't access the shared banner. Refresh and retry.");
+      }
       setSharing(sharingRef.current);
     }
   };
@@ -604,8 +705,281 @@ export function useFriendsController({
       error =
         "This banner is applied for this session but could not be kept on this device. The previous saved banner is unchanged.";
     }
-    setLocalBanner({ scope, draft: parsed, error });
+    bannerEdited.current = true;
+    removingRef.current = false;
+    setBannerRemoving(false);
+    const next = { scope, draft: parsed, error };
+    localBannerRef.current = next;
+    setLocalBanner(next);
     return error === null;
+  };
+
+  const installOwnerBanner = (
+    asset: BannerAsset | null,
+    settings: FriendSettings | null,
+    replaceLocal = false,
+  ) => {
+    if (!uid || current.current?.uid !== uid || friendsActivity(uid).deleting) return;
+    ++ownerBannerSequence.current;
+    ownerBannerRef.current = { uid, loaded: true, loading: false, asset, error: null };
+    setOwnerBanner(ownerBannerRef.current);
+    const scope = bannerScopeRef.current;
+    const local = localBannerRef.current.draft;
+    if (!scope || scope.uid !== uid) return;
+    if (!asset) {
+      if (replaceLocal || !bannerEdited.current) {
+        try {
+          writeBannerDraft(null);
+        } catch {
+          /* Cleared in memory; preserve storage error feedback below. */
+        }
+        const next = { scope, draft: null, error: null };
+        localBannerRef.current = next;
+        setLocalBanner(next);
+      }
+    } else if (replaceLocal || !bannerEdited.current || !local) {
+      const draft: BannerDraft = {
+        v: 1,
+        uid,
+        ...asset,
+        selected: (replaceLocal || !bannerEdited.current) && settings?.deco.bannerId === asset.id,
+      };
+      let error: string | null = null;
+      try {
+        writeBannerDraft(draft);
+      } catch {
+        error = "The saved banner is loaded, but this device couldn't keep a local copy.";
+      }
+      const next = { scope, draft, error };
+      localBannerRef.current = next;
+      setLocalBanner(next);
+    } else if (sameBannerImage(local, asset)) {
+      const draft = { ...local, id: asset.id };
+      let error: string | null = null;
+      try {
+        writeBannerDraft(draft);
+      } catch {
+        error = "This device couldn't keep the banner draft.";
+      }
+      const next = { scope, draft, error };
+      localBannerRef.current = next;
+      setLocalBanner(next);
+    }
+  };
+
+  const loadBannerAsset = useCallback(
+    async (force = false) => {
+      const captured = current.current;
+      if (
+        !uid ||
+        captured?.uid !== uid ||
+        friendsActivity(uid).deleting ||
+        friendsActivity(uid).busy ||
+        ownerBannerRef.current.loading ||
+        (ownerBannerRef.current.loaded && !force)
+      )
+        return;
+      const sequence = ++ownerBannerSequence.current;
+      ownerBannerRef.current = { ...ownerBannerRef.current, uid, loading: true, error: null };
+      setOwnerBanner(ownerBannerRef.current);
+      try {
+        const asset = await readOwnerBannerAsset(uid);
+        if (
+          current.current !== captured ||
+          sequence !== ownerBannerSequence.current ||
+          friendsActivity(uid).deleting
+        )
+          return;
+        installOwnerBanner(asset, sharingRef.current.settings);
+      } catch (error) {
+        if (current.current !== captured || sequence !== ownerBannerSequence.current) return;
+        ownerBannerRef.current = {
+          uid,
+          asset: null,
+          loaded: false,
+          loading: false,
+          error: error instanceof Error ? error.message : describeFriendsError(error),
+        };
+        setOwnerBanner(ownerBannerRef.current);
+        if (!bannerEdited.current && localBannerRef.current.draft?.id) {
+          const scope = bannerScopeRef.current;
+          if (scope) {
+            try {
+              writeBannerDraft(null);
+            } catch {
+              /* Memory is evicted even if optional storage is unavailable. */
+            }
+            const next = { scope, draft: null, error: null };
+            localBannerRef.current = next;
+            setLocalBanner(next);
+          }
+        }
+      }
+      // installOwnerBanner reads mutable refs; its identity need not restart an editor load.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [uid],
+  );
+
+  const removeBanner = () => {
+    if (
+      uid &&
+      (current.current?.uid !== uid || friendsActivity(uid).busy || friendsActivity(uid).deleting)
+    )
+      return;
+    if (!uid || !view.snapshot?.own) {
+      const scope = bannerScopeRef.current;
+      if (scope) {
+        let error: string | null = null;
+        try {
+          writeBannerDraft(null);
+        } catch {
+          error =
+            "The banner was cleared for this session, but this device could not remove its saved copy.";
+        }
+        const next = { scope, draft: null, error };
+        localBannerRef.current = next;
+        setLocalBanner(next);
+      }
+      return;
+    }
+    bannerEdited.current = true;
+    removingRef.current = true;
+    setBannerRemoving(true);
+  };
+  const discardBanner = () => {
+    bannerEdited.current = false;
+    removingRef.current = false;
+    setBannerRemoving(false);
+    if (!uid || current.current?.uid !== uid || friendsActivity(uid).deleting) return;
+    if (ownerBannerRef.current.loaded)
+      installOwnerBanner(ownerBannerRef.current.asset, sharingRef.current.settings, true);
+    else {
+      const scope = bannerScopeRef.current;
+      if (scope) {
+        try {
+          writeBannerDraft(null);
+        } catch {
+          /* A failed local clear does not change the account. */
+        }
+        const next = { scope, draft: null, error: null };
+        localBannerRef.current = next;
+        setLocalBanner(next);
+      }
+      void loadBannerAsset(true);
+    }
+  };
+
+  const loadPreviewBanner = useCallback(
+    async (force = false) => {
+      const captured = current.current;
+      const entry = sharingRef.current.card;
+      const settings = sharingRef.current.settings;
+      if (
+        !uid ||
+        captured?.uid !== uid ||
+        friendsActivity(uid).deleting ||
+        document.visibilityState === "hidden" ||
+        !settings?.on ||
+        entry.kind !== "published" ||
+        !entry.card.bannerId ||
+        entry.card.rev !== settings.rev
+      )
+        return;
+      const key = `${entry.card.bannerId}:${entry.card.rev}`;
+      if (!force && previewBannerMismatch.current === key) return;
+      const sequence = ++previewBannerSequence.current;
+      setPreviewBannerError(null);
+      try {
+        const result = await readFriendBanner(uid, uid, entry.card.bannerId);
+        if (current.current !== captured || sequence !== previewBannerSequence.current) return;
+        if (result.kind === "banner") setPreviewBanner(result.banner);
+        else {
+          setPreviewBanner(null);
+          previewBannerMismatch.current = key;
+          setPreviewBannerError("The shared banner changed or is unavailable. Refresh and retry.");
+          await refreshSharingRef.current();
+        }
+      } catch (error) {
+        if (current.current !== captured || sequence !== previewBannerSequence.current) return;
+        setPreviewBanner(null);
+        setPreviewPhoto(null);
+        previewBannerMismatch.current = key;
+        setPreviewBannerError("Couldn't load the shared banner. Refresh and retry.");
+        if (isFriendsDenied(error)) await refreshSharingRef.current();
+      }
+    },
+    [uid],
+  );
+
+  const selectBanner = async (peer: string) => {
+    const captured = current.current;
+    const entry = cardCache.current[peer];
+    if (
+      !uid ||
+      captured?.uid !== uid ||
+      document.visibilityState === "hidden" ||
+      entry?.kind !== "published" ||
+      entry.cached ||
+      !entry.card.bannerId
+    )
+      return;
+    const sequence = ++selectedBannerSequence.current;
+    setSelectedBanner(null);
+    setBannerRead({ peer, id: entry.card.bannerId, loading: true, error: null });
+    try {
+      const result = await readFriendBanner(uid, peer, entry.card.bannerId);
+      if (
+        current.current !== captured ||
+        sequence !== selectedBannerSequence.current ||
+        cardCache.current[peer] !== entry
+      )
+        return;
+      if (result.kind === "banner") {
+        setSelectedBanner({ peer, banner: result.banner });
+        setBannerRead({ peer, id: entry.card.bannerId, loading: false, error: null });
+      } else {
+        setBannerRead({
+          peer,
+          id: entry.card.bannerId,
+          loading: false,
+          error: "Banner unavailable. Refresh and retry.",
+        });
+        if (result.kind === "missing") evictBannerCover(peer);
+        await refreshRef.current();
+      }
+    } catch (error) {
+      if (current.current !== captured || sequence !== selectedBannerSequence.current) return;
+      setSelectedBanner(null);
+      setBannerRead({
+        peer,
+        id: entry.card.bannerId,
+        loading: false,
+        error: "Couldn't load this banner. Retry when connected.",
+      });
+      if (isFriendsDenied(error)) {
+        evictBannerCover(peer);
+        await refreshRef.current();
+      }
+    }
+  };
+  const evictBannerCover = (peer: string) => {
+    if (!uid) return;
+    delete cardCache.current[peer];
+    setSelectedBanner(null);
+    setSelectedPhoto(null);
+    setView((value) => {
+      if (!value.snapshot) return value;
+      const snapshot = {
+        ...value.snapshot,
+        cards: { ...cardCache.current },
+        peers: value.snapshot.peers.map((person) =>
+          person.uid === peer ? { ...person, state: "unavailable" as const } : person,
+        ),
+      };
+      saveCache(uid, snapshot, []);
+      return { ...value, snapshot };
+    });
   };
 
   const loadPreviewPhoto = useCallback(async () => {
@@ -830,10 +1204,19 @@ export function useFriendsController({
         edit,
         () => getSource(false, true),
         false,
-        ({ settings, publication }) => acknowledge(captured, settings, publication),
+        (result) => {
+          if (current.current !== captured || friendsActivity(captured.uid).deleting) return;
+          acknowledge(captured, result.settings, result.publication);
+          if ("bannerAsset" in result) {
+            bannerEdited.current = false;
+            installOwnerBanner(result.bannerAsset ?? null, result.settings, true);
+            removingRef.current = false;
+            setBannerRemoving(false);
+          }
+        },
       );
       if (!result.settings.on)
-        return "Sharing is off. Your public card and picture have been removed.";
+        return "Sharing is off. Your public card, picture and banner have been removed.";
       if (result.publication)
         return edit.on
           ? "Sharing is on. Your card is saved."
@@ -942,6 +1325,8 @@ export function useFriendsController({
     } catch (error) {
       if (current.current !== captured || sequence !== photoSequence.current) return;
       if (isFriendsDenied(error)) {
+        setSelectedBanner(null);
+        ++selectedBannerSequence.current;
         delete cardCache.current[peer];
         setView((value) => {
           if (!value.snapshot) return value;
@@ -1036,6 +1421,56 @@ export function useFriendsController({
     selectedPeer,
     selectedPhoto,
     saveSharing: saveSharingEdit,
+    bannerAsset: ownerBanner.uid === uid ? ownerBanner.asset : null,
+    bannerAssetLoaded: ownerBanner.uid === uid && ownerBanner.loaded,
+    bannerAssetLoading: ownerBanner.uid === uid && ownerBanner.loading,
+    bannerAssetError: ownerBanner.uid === uid ? ownerBanner.error : null,
+    loadBannerAsset,
+    bannerRemoving,
+    removeBanner,
+    deselectBanner: () => {
+      bannerEdited.current = true;
+      const local = localBannerRef.current;
+      if (local.scope.uid !== uid || !local.draft) return;
+      const draft = { ...local.draft, selected: false };
+      let error: string | null = null;
+      try {
+        writeBannerDraft(draft);
+      } catch {
+        error = "This device couldn't keep the banner draft.";
+      }
+      const next = { ...local, draft, error };
+      localBannerRef.current = next;
+      setLocalBanner(next);
+    },
+    discardBanner,
+    previewBanner: sharing.uid === uid ? previewBanner : null,
+    previewBannerError: sharing.uid === uid ? previewBannerError : null,
+    loadPreviewBanner,
+    selectedBanner: view.uid === uid ? selectedBanner : null,
+    bannerRead: view.uid === uid ? bannerRead : null,
+    selectBanner,
+    saveLook: (deco: FriendDecoration, revision: string | null) => {
+      const local = localBannerRef.current.scope.uid === uid ? localBannerRef.current.draft : null;
+      const currentId = sharingRef.current.settings?.deco.bannerId;
+      const owner = ownerBannerRef.current.asset;
+      if (removingRef.current)
+        return saveSharingEdit({ deco, banner: { kind: "remove" } }, revision);
+      if (
+        local?.selected &&
+        (!local.id ||
+          local.id !== currentId ||
+          (owner && local.id === owner.id && !sameBannerImage(local, owner)))
+      ) {
+        return saveSharingEdit({ deco, banner: { kind: "upload", draft: local } }, revision);
+      }
+      if (local?.selected && currentId) {
+        const { bk: _scene, ...rest } = deco;
+        return saveSharingEdit({ deco: { ...rest, bannerId: currentId } }, revision);
+      }
+      return saveSharingEdit({ deco }, revision);
+    },
+
     stopSharing: () =>
       saveSharingEdit({ on: false, photo: false }, sharingRef.current.settings?.rev ?? null),
     startSharing: (preview: NonNullable<ReturnType<typeof previewSharing>>) =>

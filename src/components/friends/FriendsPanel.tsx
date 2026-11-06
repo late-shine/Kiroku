@@ -1038,7 +1038,9 @@ function FriendsSharing({
         : card.kind === "published"
           ? "On · accepted friends can see your card."
           : card.kind === "closed"
-            ? waiting
+            ? error
+              ? "On · the card update failed. No card is shared yet."
+              : waiting
             : "On · card status unavailable. Refresh to check it.";
   // Zero friends never disables the switch; On only means ready for people you accept.
   const showReady = (missing ? choice : on) && friendCount === 0;

@@ -215,7 +215,7 @@
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
             },
             "g": {
-              ".validate": "newData.isString() && newData.val().matches(/^(|ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/)"
+              ".validate": "newData.isString() && (newData.val() === '' || newData.val().matches(/^(ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/))"
             },
             "c": {
               ".validate": "newData.isString() && newData.val().matches(/^[2-9A-HJKMNP-TV-Z]{10}$/)"
@@ -240,7 +240,7 @@
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
             },
             "g": {
-              ".validate": "newData.isString() && newData.val().matches(/^(|ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/)"
+              ".validate": "newData.isString() && (newData.val() === '' || newData.val().matches(/^(ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/))"
             },
             "p": {
               ".validate": "newData.val() === true"
@@ -351,7 +351,7 @@
             ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"
           },
           "g": {
-            ".validate": "newData.isString() && newData.val().matches(/^(|ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/)"
+            ".validate": "newData.isString() && (newData.val() === '' || newData.val().matches(/^(ki|neko|tsuki|ha|hana|hoshi|hotaru|koke)$/))"
           },
           "r": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0"

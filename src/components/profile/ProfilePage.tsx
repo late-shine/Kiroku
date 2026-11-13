@@ -305,43 +305,57 @@ export function ProfilePage({
   return (
     <div className="profile-workspace" data-motion-allowed={motionAllowed === true}>
       <BadgeArtDefs />
-      <header className="profile-workspace-heading glass-panel pane-in rounded-2xl">
-        <h1 className="font-display text-xl sm:text-2xl">Your corner of Kiroku</h1>
-        <div className="profile-workspace-tabs" role="tablist" aria-label="Profile sections">
-          {(
-            [
-              ["card", "Calling Card", BookOpen],
-              ["desk", "Desk & Account", Settings2],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
-              id={`profile-tab-${id}`}
-              type="button"
-              role="tab"
-              aria-selected={profileTab === id}
-              aria-controls={`profile-panel-${id}`}
-              tabIndex={profileTab === id ? 0 : -1}
-              onClick={() => setProfileTab(id)}
-              onKeyDown={(event) => {
-                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-                event.preventDefault();
-                const next =
-                  event.key === "Home"
-                    ? "card"
-                    : event.key === "End"
-                      ? "desk"
-                      : id === "card"
+      <header className="profile-workspace-heading pane-in">
+        <div className="social-heading-copy">
+          <p className="social-kicker">
+            <span lang="ja">名刺</span> / YOUR PROFILE
+          </p>
+          <h1 className="social-title">
+            Your story, <em>so far.</em>
+          </h1>
+          <p className="social-description">A calling card for the person behind the progress.</p>
+        </div>
+        <div className="social-heading-actions">
+          <button type="button" className="social-link" onClick={onOpenFriends}>
+            <Users aria-hidden="true" className="size-4" /> Your study circle
+            <ArrowUpRight aria-hidden="true" className="size-4" />
+          </button>
+          <div className="profile-workspace-tabs" role="tablist" aria-label="Profile sections">
+            {(
+              [
+                ["card", "Calling Card", BookOpen],
+                ["desk", "Desk & Account", Settings2],
+              ] as const
+            ).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                id={`profile-tab-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={profileTab === id}
+                aria-controls={`profile-panel-${id}`}
+                tabIndex={profileTab === id ? 0 : -1}
+                onClick={() => setProfileTab(id)}
+                onKeyDown={(event) => {
+                  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                  event.preventDefault();
+                  const next =
+                    event.key === "Home"
+                      ? "card"
+                      : event.key === "End"
                         ? "desk"
-                        : "card";
-                setProfileTab(next);
-                document.getElementById(`profile-tab-${next}`)?.focus();
-              }}
-            >
-              <Icon aria-hidden="true" className="size-4" />
-              {label}
-            </button>
-          ))}
+                        : id === "card"
+                          ? "desk"
+                          : "card";
+                  setProfileTab(next);
+                  document.getElementById(`profile-tab-${next}`)?.focus();
+                }}
+              >
+                <Icon aria-hidden="true" className="size-4" />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -396,6 +410,18 @@ export function ProfilePage({
           onBannerDeselect={friends.deselectBanner}
           rankLine={
             questsOn ? <StampedRankLine carved={carved} saved={quests.prefs.stamp} /> : null
+          }
+          circleInvite={
+            <section className="profile-circle-invite">
+              <p className="social-kicker">
+                <span lang="ja">仲間</span> / GOOD COMPANY
+              </p>
+              <h2>A little encouragement goes a long way.</h2>
+              <p>Swap calling cards, share your weekly rhythm, and cheer each other on.</p>
+              <button type="button" className="social-link" onClick={onOpenFriends}>
+                Find your study circle <ArrowUpRight aria-hidden="true" className="size-4" />
+              </button>
+            </section>
           }
           cardLinks={
             <>
@@ -580,9 +606,9 @@ export function ProfilePage({
                 </p>
               )}
               <p className="mt-3 text-[11px] text-muted-foreground">
-                {account.configured
-                  ? "Name and avatar save as you go, apart from Save look. A picture reaches friends only if you share it."
-                  : "Name and avatar are saved on this device."}
+                {accountLook
+                  ? "Name and avatar save automatically. Choose Save look for the rest."
+                  : "Your changes are saved on this device as you go."}
               </p>
             </div>
           }

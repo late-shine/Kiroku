@@ -133,9 +133,22 @@ export function Frame({
           fill="none"
           stroke="currentColor"
         >
-          <rect x="4" y="4" width="92" height="92" rx="19" strokeWidth="1.6" />
-          <rect x="9" y="9" width="82" height="82" rx="14" strokeWidth=".8" />
-          <path d="M0 25V12Q0 0 12 0H25M75 100H88Q100 100 100 88V75" strokeWidth="2" />
+          <rect x="4" y="4" width="92" height="92" rx="21" strokeWidth="1.4" />
+          <rect x="9" y="9" width="82" height="82" rx="16" strokeWidth=".65" opacity=".6" />
+          <path
+            d="M2 31V23Q2 2 23 2H35M65 2H77Q98 2 98 23V35M98 65V77Q98 98 77 98H65M35 98H23Q2 98 2 77V65"
+            strokeWidth="2.5"
+          />
+          <path
+            d="M8 22L17 8M9 29L24 7M76 7L91 29M83 8L92 22M8 78L17 92M9 71L24 93M76 93L91 71M83 92L92 78"
+            strokeWidth=".75"
+            opacity=".7"
+          />
+          <path
+            d="M50 0L54 4L50 8L46 4ZM0 50L4 46L8 50L4 54Z"
+            fill="currentColor"
+            strokeWidth=".5"
+          />
         </svg>
       )}
       {visual === "archive" && (

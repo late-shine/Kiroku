@@ -418,39 +418,130 @@ rt {
   }
 }
 
-/* F3b glass profile. Surfaces use the `glass-panel` / `glass-panel-strong` utilities on the elements themselves, so this
-   block never sets a panel background, border or shadow on those elements, and no backdrop-filter panel sits inside
-   another. Tiles and fields inside a panel use a light translucent tint (no blur). Colors derive from existing tokens. */
+/* Calling card studio and study circle. */
 .profile-workspace {
   --studio-soft: color-mix(in oklab, var(--primary) 10%, transparent);
-  --studio-field: color-mix(in oklab, var(--background) 40%, transparent);
-  max-width: 70rem; /* about 1120px */
+  --studio-field: color-mix(in oklab, var(--background) 55%, transparent);
+  width: 100%;
+  min-width: 0;
+  max-width: 75rem;
   margin-inline: auto;
-  padding-bottom: 1.5rem;
+  padding-top: 1.875rem;
+  padding-bottom: 2rem;
 }
-.profile-workspace-heading {
+.profile-workspace-heading,
+.social-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  padding: 0 0 0.5rem;
+}
+.social-heading-copy {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+.social-kicker,
+.studio-eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--primary);
+  font-family: var(--font-body);
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.social-title {
+  margin: 0;
+  color: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.social-title em {
+  color: var(--primary);
+  font-weight: 400;
+}
+.social-description {
+  max-width: 36rem;
+  margin: 0.875rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+.social-heading-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1.5rem;
-  padding: 0.9rem 1.25rem;
-  margin-bottom: 1.25rem;
+  justify-content: flex-end;
+  gap: 0.75rem 1.25rem;
+  min-width: 0;
 }
-.studio-eyebrow {
-  margin-bottom: 0.5rem;
-  font-size: 0.625rem;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.profile-workspace-heading .social-heading-actions {
+  flex-direction: column;
+  align-items: flex-end;
+}
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.5rem 0;
+  border-radius: 0.25rem;
   color: var(--primary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-underline-offset: 0.3em;
+}
+.social-link svg,
+.social-primary-button svg,
+.social-icon-button svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.social-primary-button,
+.social-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-height: 44px;
+  max-width: 100%;
+  border: 1px solid var(--primary);
+  border-radius: 0.625rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0.7rem 1.125rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.social-icon-button {
+  flex-shrink: 0;
+  width: 44px;
+  padding: 0.625rem;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
 }
 .profile-workspace-tabs {
   display: flex;
   gap: 0.25rem;
+  max-width: 100%;
   padding: 0.25rem;
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border-radius: 0.75rem;
   background: var(--studio-field);
 }
 .profile-workspace-tabs button {
@@ -458,42 +549,96 @@ rt {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  min-width: 0;
   min-height: 44px;
   padding: 0.5rem 1rem;
-  border-radius: 0.55rem;
+  border-radius: 0.5rem;
   font-size: 0.75rem;
+  line-height: 1.5;
   color: var(--muted-foreground);
 }
 .profile-workspace-tabs button[aria-selected="true"] {
   background: var(--studio-soft);
   color: var(--primary);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 40%, transparent);
+  box-shadow: inset 0 -2px 0 var(--primary);
 }
-
-/* Calling Card: one grid. The side wrapper holds the preview and the two shortcut links; on narrow screens it
-   disappears (display: contents) so the preview can stay sticky over the whole editor. */
 .card-studio {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 1.25rem;
+  gap: 2rem;
 }
 .card-studio-side {
-  display: contents;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
 }
 .card-studio-preview {
   min-width: 0;
-  padding: 0.75rem 0.9rem 0.9rem;
+  padding: 1.25rem;
+  border: 1px solid color-mix(in oklab, var(--muted-foreground) 22%, transparent);
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, color-mix(in oklab, var(--secondary) 68%, transparent), var(--glass));
+  box-shadow: inset 0 1px 0 var(--highlight);
 }
 .card-studio-editor {
-  order: 2;
   min-width: 0;
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--glass-strong) 94%, var(--muted-foreground));
+  box-shadow: inset 0 1px 0 var(--highlight), 0 18px 48px -32px var(--shadow-deep);
 }
 .card-studio-links {
-  order: 3;
   display: flex;
   flex-wrap: wrap;
-  gap: 0 1rem;
-  padding: 0.15rem 0.9rem;
+  gap: 0 1.25rem;
+  min-width: 0;
+  padding: 0 1.25rem;
+}
+.studio-card-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.375rem 1rem;
+  padding-top: 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+.studio-card-caption p {
+  margin: 0;
+}
+.studio-card-caption > span {
+  color: var(--primary);
+  font-size: 0.5625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.profile-circle-invite {
+  min-width: 0;
+  margin: 0.25rem 0 0;
+  padding: 1.5rem 1.25rem 1rem;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 1rem 1rem;
+  background: linear-gradient(180deg, var(--glass), transparent);
+}
+.profile-circle-invite h2 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.025em;
+}
+.profile-circle-invite > p:not(.social-kicker) {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.8;
+}
+.profile-circle-invite .social-link {
+  margin-top: 0.5rem;
 }
 .studio-preview-bar {
   display: flex;
@@ -501,7 +646,7 @@ rt {
   align-items: center;
   justify-content: space-between;
   gap: 0.25rem 0.75rem;
-  padding-bottom: 0.5rem;
+  padding-bottom: 1rem;
 }
 .studio-preview-heading {
   min-width: 0;
@@ -513,16 +658,17 @@ rt {
 }
 .studio-preview-state {
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   font-size: 0.6875rem;
-  line-height: 1.4;
+  line-height: 1.5;
   color: var(--muted-foreground);
 }
 .studio-preview-tools {
   display: flex;
-  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
+  min-width: 0;
 }
 .studio-preview-switch {
   display: inline-flex;
@@ -552,13 +698,39 @@ rt {
   border-radius: 1rem;
   background: var(--glass-strong);
   font-size: 0.875rem;
+  line-height: 1.7;
   color: var(--muted-foreground);
+}
+.studio-editor-heading {
+  padding: 1.75rem 1.75rem 1.25rem;
+}
+.studio-editor-heading > p:first-child {
+  margin: 0 0 0.625rem;
+  color: var(--primary);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.studio-editor-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: -0.035em;
+}
+.studio-editor-heading > p:last-child {
+  margin: 0.625rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.7;
 }
 .studio-section-picker {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding: 0 1rem;
+  gap: 0.5rem;
+  padding: 0 1.75rem;
   border-bottom: 1px solid var(--border);
 }
 .studio-section-picker button {
@@ -566,27 +738,53 @@ rt {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  min-width: 0;
   min-height: 48px;
-  padding: 0.5rem 0.25rem;
+  padding: 0.75rem 0.25rem;
   border-bottom: 2px solid transparent;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
   color: var(--muted-foreground);
 }
 .studio-section-picker button[aria-pressed="true"] {
   color: var(--primary);
   border-bottom-color: var(--primary);
+  font-weight: 500;
 }
 .studio-editor-content {
-  padding: 1.25rem 1.5rem 1.5rem;
+  min-width: 0;
+  padding: 1.5rem 1.75rem 1.75rem;
+}
+.card-studio-editor :is(input:not([type]), input[type="text"], input[type="url"], textarea, select) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--studio-field);
+  padding: 0.75rem 0.875rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.card-studio-editor :is(input, textarea)::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.8;
+}
+.card-studio-editor :is(input, textarea, select)[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+.card-studio-editor textarea {
+  resize: vertical;
 }
 .studio-fieldset {
   min-width: 0;
 }
 .studio-fieldset + .studio-fieldset,
 .studio-identity-editor + .studio-fieldset {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
 }
 .studio-field-label {
   float: left;
@@ -607,15 +805,17 @@ rt {
 .studio-scene-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
 .studio-scene {
   position: relative;
+  display: flex;
+  align-items: flex-end;
   min-width: 0;
-  min-height: 100px;
+  min-height: 112px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 0.7rem;
+  border-radius: 0.625rem;
   background: var(--studio-field);
   text-align: left;
 }
@@ -635,15 +835,17 @@ rt {
 }
 .studio-scene[aria-pressed="true"] {
   border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), 0 5px 16px -6px var(--shadow-deep);
 }
 .studio-scene-name {
   position: relative;
   z-index: 1;
   display: block;
-  padding: 3.8rem 0.65rem 0.65rem;
-  font-size: 0.625rem;
-  line-height: 1.4;
+  padding: 3.8rem 0.75rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
   color: var(--foreground);
 }
 .studio-scene-ink {
@@ -665,9 +867,10 @@ rt {
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 1.2rem;
-  height: 1.2rem;
-  border-radius: 50%;
+  width: 1.375rem;
+  height: 1.375rem;
+  border: 1px solid var(--primary-foreground);
+  border-radius: 0.375rem;
   background: var(--primary);
   color: var(--primary-foreground);
 }
@@ -695,8 +898,12 @@ rt {
 }
 .studio-frame-choice[aria-pressed="true"],
 .studio-badge-choice[aria-pressed="true"] {
-  border-color: color-mix(in oklab, var(--primary) 65%, transparent);
+  border-color: var(--primary);
   background: var(--studio-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 60%, transparent);
+}
+.studio-frame-choice[aria-pressed="true"] .studio-choice-caption {
+  color: var(--primary);
 }
 .studio-frame-choice[aria-disabled="true"] {
   opacity: 0.65;
@@ -734,10 +941,12 @@ rt {
 }
 .studio-chip {
   min-height: 44px;
-  padding: 0.5rem 0.8rem;
+  max-width: 100%;
+  padding: 0.5rem 0.875rem;
   border: 1px solid var(--border);
-  border-radius: 2rem;
+  border-radius: 0.5rem;
   font-size: 0.75rem;
+  line-height: 1.5;
   color: var(--muted-foreground);
 }
 .studio-chip[aria-pressed="true"] {
@@ -745,9 +954,34 @@ rt {
   background: var(--studio-soft);
   color: var(--primary);
 }
+.studio-status-presets {
+  margin-top: 0.75rem;
+}
+.studio-status-presets > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  list-style: none;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  padding-block: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.studio-status-presets > summary::marker {
+  color: var(--primary);
+  font-size: 0.75em;
+}
+.studio-status-presets[open] > summary {
+  color: var(--foreground);
+}
 .studio-status-options {
   display: grid;
   gap: 0.4rem;
+  padding-top: 0.25rem;
 }
 .studio-status {
   display: flex;
@@ -821,10 +1055,12 @@ rt {
   line-height: 1.6;
   color: var(--muted-foreground);
 }
-/* The save row sits at the end of the editor in normal flow: it never floats over a focused field or the last choice. */
+/* Keep save controls in flow so fields are never covered. */
 .studio-savebar {
-  padding: 1rem 1.5rem 1.25rem;
+  padding: 1.25rem 1.75rem 1.5rem;
   border-top: 1px solid var(--border);
+  border-radius: 0 0 1.25rem 1.25rem;
+  background: color-mix(in oklab, var(--background) 22%, transparent);
 }
 .studio-savebar-row {
   display: flex;
@@ -835,8 +1071,8 @@ rt {
 .studio-savebar-hint {
   flex: 1 1 12rem;
   min-width: 0;
-  font-size: 0.6875rem;
-  line-height: 1.5;
+  font-size: 0.75rem;
+  line-height: 1.6;
   color: var(--muted-foreground);
 }
 .studio-button {
@@ -893,91 +1129,192 @@ rt {
 .profile-desk-grid > * {
   min-width: 0;
 }
-.profile-workspace :is(button, input, select, summary):focus-visible {
+
+/* Shared social controls retain visible focus inside the modal top layer. */
+:is(.profile-workspace, .friends-view, .friends-drawer, .friends-panel, .profile-card)
+  :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
-.profile-workspace button:disabled,
+:is(.social-link, .social-primary-button, .social-icon-button):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+:is(.profile-workspace, .friends-view, .friends-drawer, .friends-panel) button:disabled,
 .profile-workspace fieldset:disabled {
   opacity: 0.5;
 }
-.profile-workspace :is(button:disabled, [aria-disabled="true"]) {
+:is(.profile-workspace, .friends-view, .friends-drawer, .friends-panel)
+  :is(button:disabled, [aria-disabled="true"]) {
   cursor: not-allowed;
 }
 @media (hover: hover) {
-  .studio-button-quiet:hover,
-  .studio-chip:hover,
-  .studio-status:hover,
-  .studio-preview-toggle:hover {
+  :is(.studio-button-quiet, .studio-chip, .studio-status, .studio-preview-toggle, .social-icon-button):not(:disabled):not([aria-disabled="true"]):hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+  :is(.studio-frame-choice, .studio-badge-choice, .studio-scene):not(:disabled):not([aria-disabled="true"]):not([aria-pressed="true"]):hover {
+    border-color: color-mix(in oklab, var(--primary) 65%, var(--border));
+    box-shadow: 0 4px 12px -8px var(--shadow-deep);
+  }
+  :is(.studio-button-primary, .social-primary-button):not(:disabled):hover {
+    background: color-mix(in oklab, var(--primary) 88%, var(--foreground));
+    border-color: var(--primary);
+  }
+  .social-link:not(:disabled):hover {
+    text-decoration: underline;
+  }
+  :is(.studio-section-picker, .profile-workspace-tabs) button:not(:disabled):hover {
+    color: var(--foreground);
+    background: var(--highlight);
+  }
+  .friend-person-tab:not(:disabled):not([aria-selected="true"]):hover {
+    border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
     background: var(--accent);
   }
-  .studio-frame-choice:not([aria-disabled="true"]):hover,
-  .studio-badge-choice:not([aria-disabled="true"]):hover {
-    border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+  :is(.studio-status-presets, .studio-unlock-list) > summary:hover {
+    color: var(--foreground);
+  }
+  button.profile-card-stat:hover {
+    background: var(--highlight);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is(.social-link, .social-primary-button, .social-icon-button, .studio-button, .studio-chip, .studio-status, .studio-scene, .studio-frame-choice, .studio-badge-choice, .friend-person-tab) {
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
   }
 }
 
-/* Shared calling card. Compact presentation is scoped to the editor preview on phones. */
+/* Shared calling card; only the explicitly collapsed studio preview is compact. */
 .profile-card {
-  max-width: 440px;
+  width: 100%;
+  min-width: 0;
+  max-width: 480px;
   border: 1px solid color-mix(in oklab, var(--primary) 25%, var(--border));
-  /* Reading area: stronger glass, but no backdrop-filter of its own (the preview panel around it already blurs). */
   background: var(--glass-strong);
-  box-shadow: 0 22px 45px -25px var(--shadow-deep-strong);
+  box-shadow: 0 26px 50px -28px var(--shadow-deep-strong), inset 0 1px 0 var(--highlight);
+}
+.card-studio-preview .profile-card {
+  max-width: none;
 }
 .profile-card-banner {
-  height: 152px;
+  height: 184px;
 }
 .profile-card-banner-ink {
   background: radial-gradient(
-    ellipse at top right,
-    color-mix(in oklab, var(--primary) 12%, var(--background)),
-    var(--background) 80%
+    ellipse at 72% 10%,
+    color-mix(in oklab, var(--primary) 13%, var(--background)),
+    var(--background) 85%
   );
 }
-.profile-card-banner-ink::before {
-  content: "";
+.profile-ink-landscape {
   position: absolute;
-  width: 200px;
-  height: 200px;
-  right: -50px;
-  top: -90px;
-  border: 1px solid color-mix(in oklab, var(--primary) 25%, transparent);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 20px color-mix(in oklab, var(--primary) 4%, transparent),
-    0 0 0 45px color-mix(in oklab, var(--primary) 3%, transparent);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--muted-foreground);
+  fill: currentColor;
+  pointer-events: none;
 }
 .profile-card-wordmark {
   position: absolute;
   top: 1rem;
-  left: 1.5rem;
+  left: 1.625rem;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  align-items: flex-start;
+  gap: 0.5rem;
+  max-width: calc(100% - 7rem);
   color: var(--foreground);
   font-family: var(--font-display);
-  font-size: 0.875rem;
   text-shadow: 0 1px 6px var(--scrim);
 }
+.profile-card-wordmark b {
+  flex-shrink: 0;
+  padding: 0.3rem 0.2rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 70%, transparent);
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--scrim) 45%, transparent);
+  color: var(--primary);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: 0.1em;
+  writing-mode: vertical-rl;
+}
 .profile-card-wordmark span {
+  max-width: 4.75rem;
+  padding-top: 0.2rem;
   font-family: var(--font-body);
-  font-size: 0.5rem;
-  letter-spacing: 0.22em;
+  font-size: 0.4375rem;
+  line-height: 1.9;
+  letter-spacing: 0.16em;
 }
 .profile-card-body {
   position: relative;
-  padding: 0 1.5rem 1.35rem;
+  padding: 0 1.625rem 1.375rem;
+}
+.profile-card-name-row {
+  margin-top: 1.25rem;
+  gap: 0.5rem 0.75rem;
+}
+.profile-card-name-row h2 {
+  font-size: 1.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: -0.035em;
+}
+.profile-card-intro {
+  margin: 0.625rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.profile-card-intro p {
+  margin: 0;
 }
 .profile-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 1.5rem;
+  padding-block: 0.5rem;
   border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+}
+.profile-card-stat {
+  min-width: 0;
+  padding: 0.625rem 0.25rem;
+  border-radius: 0.25rem;
+  text-align: center;
+}
+.profile-card-stat > span:first-child {
+  font-size: 1.625rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.profile-card-stat > span:last-child {
+  margin-top: 0.375rem;
+  font-size: 0.5625rem;
+  line-height: 1.6;
+  letter-spacing: 0.09em;
+  overflow-wrap: anywhere;
 }
 .profile-card-stat + .profile-card-stat {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid color-mix(in oklab, var(--border) 65%, transparent);
 }
 .profile-card-footer {
-  line-height: 1.5;
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.profile-card-footer + .profile-card-footer {
+  margin-top: 0.25rem;
+  padding-top: 0;
+  border-top: 0;
 }
 .profile-frame-art {
   position: absolute;
@@ -1015,27 +1352,12 @@ rt {
   transform: rotate(3deg);
 }
 
-@media (min-width: 900px) {
-  /* Card column about 40%, editor about 60%. The side column (card + links) is the sticky unit. */
+@media (min-width: 1000px) {
   .card-studio {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-    gap: 1.5rem;
+    grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
   }
-  .card-studio-side {
-    display: block;
-    position: sticky;
-    top: 1.25rem;
-    min-width: 0;
-  }
-  .card-studio-side:has(.profile-card-shelf, .card-studio-preview[data-crop="true"]) {
-    position: static;
-  }
-  .card-studio-links {
-    margin-top: 0.75rem;
-  }
-  .card-studio-preview .profile-card {
-    max-width: none;
-  }
+}
+@media (min-width: 900px) {
   .profile-desk-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 1.5rem;
@@ -1044,40 +1366,14 @@ rt {
     grid-column: 1 / -1;
   }
 }
-/* Phones and narrow windows: a compact sticky preview (banner, avatar, name, status; about 150px) above the editor, with
-   an explicit control for the full card. Expanded, or while the crop editor is open, it stops being sticky. */
-@media (max-width: 899px) {
-  .profile-workspace-heading {
-    padding: 0.8rem 1rem;
-  }
-  .profile-workspace-tabs {
-    width: 100%;
-  }
-  .profile-workspace-tabs button {
-    flex: 1;
-    padding-inline: 0.5rem;
-  }
-  .card-studio-preview {
-    position: sticky;
-    top: 0.5rem;
-    z-index: 20;
-    padding: 0.2rem 0.6rem 0.6rem;
-  }
-  .card-studio-preview[data-expanded="true"],
-  .card-studio-preview[data-crop="true"],
-  .card-studio-preview:has(.profile-card-shelf) {
-    position: relative;
-    top: auto;
-  }
+/* Both full and compact previews stay in flow, including with the keyboard open. */
+@media (max-width: 999px) {
+  .card-studio-side { display: contents; }
+  .card-studio-links { order: 1; }
+  .card-studio-editor { order: 2; }
+  .profile-circle-invite { order: 3; }
   .studio-preview-toggle {
     display: grid;
-  }
-  .studio-preview-bar {
-    padding-bottom: 0.15rem;
-  }
-  .card-studio-preview .profile-card {
-    max-width: none;
-    box-shadow: none;
   }
   .card-studio-preview:not([data-expanded="true"]) .profile-card-banner {
     height: 52px;
@@ -1085,7 +1381,15 @@ rt {
   .card-studio-preview:not([data-expanded="true"]) .profile-card-wordmark {
     top: 0.4rem;
     left: 0.8rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-wordmark b {
+    writing-mode: horizontal-tb;
+    padding: 0.15rem 0.25rem;
     font-size: 0.6875rem;
+  }
+  .card-studio-preview:not([data-expanded="true"]) .profile-card-wordmark span {
+    max-width: none;
+    font-size: 0.375rem;
   }
   .card-studio-preview:not([data-expanded="true"]) .profile-card-body {
     padding: 0 0.85rem 0.6rem;
@@ -1118,19 +1422,90 @@ rt {
       .profile-card-stats,
       .profile-card-rank,
       .profile-card-footer,
-      .profile-card-draft
+      .profile-card-draft,
+      .profile-card-intro,
+      .studio-card-caption
     ) {
     display: none;
   }
-  /* Focus and in-page jumps land below the sticky preview, not under it. */
-  html:has(.card-studio-preview:not([data-expanded="true"], [data-crop="true"])) {
-    scroll-padding-top: 11rem;
+}
+@media (max-width: 600px) {
+  .profile-workspace {
+    padding-top: 1.25rem;
+  }
+  .profile-workspace-heading,
+  .social-heading {
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0;
+  }
+  .social-title {
+    font-size: 1.875rem;
+    letter-spacing: -0.04em;
+  }
+  .social-description {
+    margin-top: 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+  }
+  .social-heading-actions,
+  .profile-workspace-heading .social-heading-actions {
+    width: 100%;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.5rem;
+  }
+  .profile-workspace-tabs {
+    width: 100%;
+  }
+  .profile-workspace-tabs button {
+    flex: 1;
+    padding-inline: 0.5rem;
+  }
+  .card-studio {
+    gap: 1.25rem;
+  }
+  .card-studio-preview {
+    padding: 0.875rem;
+    border-radius: 1rem;
+  }
+  .studio-preview-bar {
+    padding-bottom: 0.75rem;
+  }
+  .card-studio-links {
+    gap: 0 1rem;
+    padding-inline: 0.75rem;
+  }
+  .profile-circle-invite {
+    padding: 1.25rem 0.875rem 0.75rem;
+  }
+  .studio-editor-heading {
+    padding: 1.25rem 1rem 1rem;
+  }
+  .studio-editor-heading h2 {
+    font-size: 1.5rem;
+  }
+  .studio-section-picker {
+    padding-inline: 1rem;
+    gap: 0.25rem;
   }
   .studio-editor-content {
-    padding: 1.1rem;
+    padding: 1.25rem 1rem;
+  }
+  .card-studio-editor :is(input:not([type]), input[type="text"], input[type="url"], textarea, select) {
+    font-size: 1rem;
   }
   .studio-savebar {
-    padding: 0.9rem 1rem 1.1rem;
+    padding: 1rem;
+  }
+  .studio-savebar-hint {
+    flex-basis: 100%;
+  }
+  .profile-card-banner:not([data-uploaded="true"]) {
+    height: 164px;
+  }
+  .profile-card-body {
+    padding-inline: 1.25rem;
   }
 }
 @media (max-width: 390px) {
@@ -1139,7 +1514,8 @@ rt {
   }
   .studio-frame-grid,
   .studio-badge-grid {
-    gap: 0.4rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
   }
   .studio-section-picker {
     padding-inline: 0.5rem;
@@ -1148,19 +1524,20 @@ rt {
     gap: 0.35rem;
     font-size: 0.6875rem;
   }
-  .studio-savebar-hint {
-    flex-basis: 100%;
-  }
-}
-/* A short viewport (including an open mobile keyboard) must not be trapped under a sticky card. */
-@media (max-height: 600px) {
-  .card-studio-side,
   .card-studio-preview {
-    position: static;
-    top: auto;
+    padding: 0.75rem;
   }
-  html:has(.card-studio-preview:not([data-expanded="true"], [data-crop="true"])) {
-    scroll-padding-top: 0;
+  .profile-card-body {
+    padding-inline: 1rem;
+  }
+  .profile-card-name-row h2 {
+    font-size: 1.5rem;
+  }
+  .profile-card-stat > span:first-child {
+    font-size: 1.375rem;
+  }
+  .profile-card-stat > span:last-child {
+    letter-spacing: 0.025em;
   }
 }
 
@@ -1175,7 +1552,7 @@ rt {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-@media (max-width: 899px) {
+@media (max-width: 999px) {
   .card-studio-preview:not([data-expanded="true"]) .profile-card-status-text {
     -webkit-line-clamp: 1;
   }
@@ -1193,9 +1570,14 @@ rt {
 
 /* F3g: static catalogue artwork. F3h owns motion; these shapes never animate. */
 .profile-frame-orbit,
-.profile-frame-woven,
-.profile-frame-archive {
+.profile-frame-woven {
   color: var(--primary);
+}
+.profile-frame-archive {
+  color: var(--accent-amber);
+}
+.profile-frame[data-frame="archive"] {
+  background: linear-gradient(145deg, var(--accent-amber), var(--background) 42% 65%, var(--accent-amber));
 }
 .profile-frame-petals {
   color: var(--accent-sakura);
@@ -1219,10 +1601,10 @@ rt {
   place-items: center;
   width: 1.35em;
   height: 1.35em;
-  border: 1px solid var(--primary);
+  border: 1px solid var(--accent-amber);
   border-radius: 0.2em;
   background: var(--background);
-  color: var(--primary);
+  color: var(--accent-amber);
   font-family: var(--font-display);
   font-size: 0.7em;
   pointer-events: none;
@@ -1306,18 +1688,34 @@ rt {
   transform: rotate(180deg);
 }
 .profile-card-border[data-card-border="archival"] {
-  border: 3px double color-mix(in oklab, var(--primary) 55%, transparent);
+  color: var(--accent-amber);
+  border: 1px solid color-mix(in oklab, currentColor 55%, transparent);
+  box-shadow: inset 0 0 0 3px var(--background), inset 0 0 0 4px color-mix(in oklab, currentColor 18%, transparent);
 }
 .profile-card-border[data-card-border="archival"]::after {
   content: "";
   position: absolute;
-  width: 1.5rem;
-  height: 5px;
-  left: calc(50% - 0.75rem);
+  width: 6px;
+  height: 6px;
+  left: calc(50% - 3px);
   bottom: -3px;
-  border: 1px solid var(--primary);
-  border-radius: 2px 2px 0 0;
-  background: var(--glass-strong);
+  border: 1px solid currentColor;
+  background: var(--background);
+  transform: rotate(45deg);
+}
+.profile-border-crane {
+  position: absolute;
+  width: calc(var(--ornament-size) * 1.65);
+  height: calc(var(--ornament-size) * 1.65);
+}
+.profile-border-crane-top {
+  top: -2px;
+  right: -2px;
+}
+.profile-border-crane-bottom {
+  bottom: -2px;
+  left: -2px;
+  transform: rotate(180deg);
 }
 .profile-card-charm {
   position: absolute;
@@ -1330,10 +1728,13 @@ rt {
   pointer-events: none;
 }
 .profile-card-charm[data-card-charm="moon"] {
-  top: 3.5rem;
+  top: 2.4rem;
   left: 1.5rem;
   right: auto;
   bottom: auto;
+  width: 2rem;
+  height: 2.6rem;
+  color: var(--accent-amber);
 }
 .profile-card-charm[data-card-charm="blossom"] {
   bottom: -0.65rem;
@@ -1380,10 +1781,52 @@ rt {
 .studio-decoration-choice {
   padding-top: 1.1rem;
 }
+.studio-choice-art {
+  display: grid;
+  place-items: center;
+  min-height: 3.5rem;
+}
+.studio-keepsake-grid {
+  display: grid;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+}
+.studio-keepsake-grid .studio-decoration-choice {
+  display: grid;
+  grid-template-columns: 4.75rem minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  min-height: 7rem;
+  padding: 1rem;
+  border-color: color-mix(in oklab, var(--accent-amber) 25%, var(--border));
+  background: linear-gradient(115deg, color-mix(in oklab, var(--accent-amber) 5%, var(--studio-field)), var(--studio-field));
+  text-align: left;
+  opacity: 1;
+}
+.studio-keepsake-grid .studio-choice-art {
+  grid-column: 1;
+  grid-row: 1 / 4;
+}
+.studio-keepsake-grid :is(.studio-choice-name, .studio-choice-caption, .studio-choice-task) {
+  grid-column: 2;
+}
+.studio-keepsake-grid .studio-choice-name {
+  align-self: end;
+  font-size: 0.8125rem;
+}
+.studio-keepsake-grid .studio-choice-caption {
+  justify-content: start;
+  color: var(--accent-amber);
+}
 .studio-choice-task {
   color: var(--muted-foreground);
   font-size: 0.6875rem;
   line-height: 1.5;
+}
+.studio-keepsake-grid .studio-choice-task {
+  align-self: start;
+  max-width: 36ch;
 }
 .decoration-mini-card {
   position: relative;
@@ -1426,7 +1869,9 @@ rt {
 }
 .decoration-mini-card .profile-card-charm[data-card-charm="moon"] {
   left: 10px;
-  top: 6px;
+  top: 1px;
+  width: 1rem;
+  height: 1.3rem;
 }
 .decoration-mini-card .profile-card-charm[data-card-charm="blossom"] {
   bottom: -0.35rem;
@@ -1438,7 +1883,7 @@ rt {
   width: 0.55rem;
   height: 1rem;
 }
-@media (max-width: 899px) {
+@media (max-width: 999px) {
   .card-studio-preview:not([data-expanded="true"]) .profile-card-border {
     --ornament-size: 0.9rem;
     inset: 4px;
@@ -1450,8 +1895,9 @@ rt {
     bottom: 0.45rem;
   }
   .card-studio-preview:not([data-expanded="true"]) .profile-card-charm[data-card-charm="moon"] {
-    top: 0.4rem;
+    top: 0.25rem;
     left: 9rem;
+    height: 1.2rem;
   }
   .card-studio-preview:not([data-expanded="true"]) .profile-card-charm[data-card-charm="blossom"] {
     bottom: -0.4rem;
@@ -1663,7 +2109,7 @@ rt {
     animation: none !important;
   }
 }
-@media (max-width: 899px) {
+@media (max-width: 999px) {
   .card-studio-preview:not([data-expanded="true"]) .card-effect-vine {
     width: 1rem;
     height: 1rem;
@@ -1677,37 +2123,428 @@ rt {
   }
 }
 
-/* F4: contained Friends navigation and a read-only two-notebook ledger. */
+/* Study circle. */
 .friends-view {
+  width: 100%;
+  max-width: 75rem;
   min-width: 0;
+  margin-inline: auto;
+  padding-top: 1.875rem;
+  padding-bottom: 2rem;
   overflow-wrap: anywhere;
+}
+.friends-toolbar {
+  display: block;
+  padding: 1.125rem 1.5rem;
+  border-radius: 1rem;
+  box-shadow: inset 0 1px 0 var(--highlight);
+}
+.friends-toolbar-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.friends-toolbar-title {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+.social-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.625rem;
+  min-height: 1.625rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  color: var(--muted-foreground);
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+.social-primary-button .social-count {
+  color: inherit;
+  border-color: color-mix(in oklab, var(--primary-foreground) 25%, transparent);
+}
+.friends-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+.friends-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 1rem 2.5rem;
+  margin-top: 1.5rem;
+  padding: 2.75rem clamp(1.25rem, 4vw, 3.5rem) 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: linear-gradient(125deg, color-mix(in oklab, var(--secondary) 45%, transparent), var(--glass));
+}
+.friends-empty-art {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 21rem;
+  height: 17rem;
+  justify-self: center;
+}
+.friends-empty-card {
+  position: absolute;
+  top: 1.75rem;
+  left: calc(50% - 8.5rem);
+  width: 9.75rem;
+  height: 12.75rem;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 1rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 32%, var(--border));
+  border-radius: 0.625rem;
+  background: color-mix(in oklab, var(--background) 94%, var(--muted-foreground));
+  box-shadow: 0 18px 30px -16px var(--shadow-deep-strong), inset 4px 0 0 var(--highlight);
+  color: var(--primary);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.3;
+  text-align: right;
+  transform: rotate(-12deg);
+}
+.friends-empty-card::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: 7.5rem;
+  background: linear-gradient(155deg, color-mix(in oklab, var(--muted-foreground) 42%, var(--background)), var(--secondary));
+  clip-path: polygon(0 0, 100% 0, 100% 83%, 82% 68%, 68% 81%, 43% 56%, 17% 88%, 0 75%);
+}
+.friends-empty-card::after {
+  content: "";
+  position: absolute;
+  left: 3.5rem;
+  right: 1rem;
+  bottom: 1.25rem;
+  height: 1.25rem;
+  background: linear-gradient(var(--border), var(--border)) 0 0 / 100% 1px no-repeat,
+    linear-gradient(var(--border), var(--border)) 0 50% / 78% 1px no-repeat,
+    linear-gradient(var(--border), var(--border)) 0 100% / 48% 1px no-repeat;
+}
+.friends-empty-card > b {
+  display: block;
+  font-weight: 400;
+  font-size: 2rem;
+}
+.friends-empty-card > small {
+  display: block;
+  margin-top: 0.5rem;
+  max-width: 9ch;
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-size: 0.5rem;
+  line-height: 1.8;
+  letter-spacing: 0.16em;
+}
+.friends-empty-card > svg {
+  position: absolute;
+  bottom: 1.2rem;
+  left: 1.125rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  stroke-width: 1.25;
+}
+.friends-empty-card + .friends-empty-card {
+  top: 3.25rem;
+  left: calc(50% - 1.75rem);
+  transform: rotate(9deg);
+  background: color-mix(in oklab, var(--background) 90%, var(--muted-foreground));
+  color: var(--muted-foreground);
+}
+.friends-empty-card + .friends-empty-card::before {
+  height: 7.5rem;
+  background:
+    radial-gradient(ellipse at 39% 60%, color-mix(in oklab, var(--muted-foreground) 42%, transparent) 0 12%, transparent 13%),
+    radial-gradient(ellipse at 63% 45%, color-mix(in oklab, var(--muted-foreground) 35%, transparent) 0 13%, transparent 14%),
+    radial-gradient(ellipse at 44% 22%, color-mix(in oklab, var(--muted-foreground) 30%, transparent) 0 11%, transparent 12%),
+    linear-gradient(100deg, transparent 49%, var(--border) 50% 51%, transparent 52%),
+    linear-gradient(145deg, var(--secondary), var(--background));
+  clip-path: none;
+  border-bottom: 1px solid var(--border);
+}
+.friends-empty-copy {
+  min-width: 0;
+  max-width: 28rem;
+}
+.friends-empty-copy h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.875rem;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.friends-empty-copy > p:not(.social-kicker) {
+  margin: 1rem 0 1.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.9;
+  text-wrap: pretty;
+}
+.friends-empty-features {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.875rem 2rem;
+  margin-top: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+.friends-empty-features > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.friends-empty-features svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: var(--primary);
+  opacity: 0.8;
+}
+.friends-loading {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.875rem;
+  min-height: 18rem;
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--glass);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.8;
+  text-align: center;
+}
+.friends-loading > svg {
+  color: var(--primary);
+}
+.friends-tabs {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-block: 1rem;
+  scroll-padding-inline: 0.5rem;
+}
+.friends-tab-list {
+  display: flex;
+  width: max-content;
+  gap: 0.625rem;
+  padding: 0.25rem;
+}
+.friend-person-tab {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 64px;
+  min-width: 10rem;
+  max-width: 16rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--glass);
+  color: var(--foreground);
+  text-align: left;
+}
+.friend-person-tab[aria-selected="true"] {
+  border-color: color-mix(in oklab, var(--primary) 65%, var(--border));
+  background: color-mix(in oklab, var(--primary) 8%, var(--glass-strong));
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+.friend-person-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.friend-person-copy > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.friend-person-detail {
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.friend-cheer-indicator {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent-sakura);
+}
+.friend-study-indicator {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 12%, transparent);
 }
 .friends-comparison-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
+  align-items: start;
+  gap: 1.5rem;
+}
+.friends-comparison-content {
+  min-width: 0;
+}
+.friends-selected-card {
+  min-width: 0;
+}
+.friend-notebooks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--glass);
+}
+.friend-notebook {
+  min-width: 0;
+  padding: 1.375rem;
+}
+.friend-notebook + .friend-notebook {
+  border-left: 1px solid var(--border);
+}
+.friend-notebook > header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.friend-notebook h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.friend-notebook-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 0.75rem;
+  margin-top: 1.125rem;
+}
+.friend-notebook-stats > div {
+  min-width: 0;
+}
+.friend-notebook-stats dt {
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1.5;
+}
+.friend-notebook-stats dd {
+  margin: 0.25rem 0 0;
+  color: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.friend-notebook-note {
+  margin-top: 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1.7;
+}
+.friends-panel {
+  min-width: 0;
+  padding: 1.5rem;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.friends-panel > div:first-child > h2 {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+.friends-panel :is(input:not([type]), input[type="text"]) {
+  background: color-mix(in oklab, var(--background) 70%, var(--secondary));
+  border-radius: 0.625rem;
+  font-size: 1rem;
+}
+.friend-code-card {
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 25%, var(--border));
+  border-radius: 0.75rem;
+  background: linear-gradient(130deg, color-mix(in oklab, var(--primary) 5%, var(--background)), var(--glass));
+}
+.friend-code-value {
+  margin-top: 0.875rem;
+  color: var(--primary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(1rem, 2vw, 1.375rem);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .friends-drawer {
   position: fixed;
   inset: 0 0 0 auto;
   margin: 0;
-  width: min(100%, 34rem);
+  width: min(100%, 30rem);
   max-width: 100%;
   height: 100dvh;
   max-height: 100dvh;
   overflow-y: auto;
-  border: 1px solid var(--border);
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  border: 0;
+  border-left: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border));
+  border-radius: 1.25rem 0 0 1.25rem;
   background: var(--background);
   color: var(--foreground);
-  padding: 0;
+  box-shadow: -24px 0 80px -24px var(--shadow-deep-strong);
+  padding: 0 0 env(safe-area-inset-bottom);
 }
 .friends-drawer::backdrop {
-  background: var(--scrim);
-  opacity: 0.7;
+  background: color-mix(in oklab, var(--scrim) 76%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.friends-drawer > header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
 }
 .friends-closed-card {
   position: relative;
-  max-width: 440px;
+  width: 100%;
+  max-width: 480px;
 }
 .friends-cover-strap {
   position: absolute;
@@ -1846,53 +2683,133 @@ rt {
     transform: translateX(-50%) scale(0.9);
   }
 }
-@media (min-width: 1280px) {
+@media (min-width: 1050px) {
   .friends-comparison-grid {
-    grid-template-columns: 380px minmax(0, 1fr);
-    gap: 1.5rem;
+    grid-template-columns: 360px minmax(0, 1fr);
   }
+}
+@media (min-width: 1280px) {
   .friends-mirror {
     --mirror-half: 56px;
   }
 }
-@media (max-width: 1279px) {
-  .friends-selected-card .profile-card {
-    max-width: none;
+@media (max-width: 1049px) {
+  .friends-selected-card .profile-card,
+  .friends-closed-card {
+    max-width: 36rem;
+    margin-inline: auto;
   }
-  .friends-selected-card .profile-card-banner {
-    height: 72px;
+}
+@media (max-width: 760px) {
+  .friends-empty {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1.5rem;
   }
-  .friends-selected-card .profile-card-banner[data-uploaded="true"] {
-    height: 72px;
-    aspect-ratio: auto;
+  .friends-empty-copy {
+    justify-self: center;
+    text-align: center;
   }
-  .friends-selected-card .profile-card-avatar-frame {
-    margin-top: -24px;
+  .friends-empty-copy h2 {
+    font-size: 1.625rem;
   }
-  .friends-selected-card .profile-card-avatar-frame .profile-avatar {
-    width: 48px;
-    height: 48px;
-    font-size: 1.4rem;
+  .friends-empty-art {
+    height: 16rem;
   }
-  .friends-selected-card .profile-card-body {
-    padding: 0 1.1rem 1rem;
+}
+@media (max-width: 600px) {
+  .friends-view {
+    padding-top: 1.25rem;
   }
-  .friends-selected-card .profile-card-name-row {
-    margin-top: 0.65rem;
+  .friends-toolbar {
+    gap: 0.875rem;
+    padding: 1rem;
   }
-  .friends-selected-card .profile-card-name-row h2 {
+  .friends-toolbar-actions {
+    gap: 0.5rem;
+  }
+  .friends-empty {
+    margin-top: 1.25rem;
+    padding: 1.25rem 1rem;
+  }
+  .friends-empty-art {
+    height: 13.5rem;
+    max-width: 16rem;
+  }
+  .friends-empty-card {
+    top: 1rem;
+    left: 8%;
+    width: 46%;
+    height: 10.5rem;
+    padding: 0.75rem;
     font-size: 1.25rem;
+    transform: rotate(-9deg);
   }
-  .friends-selected-card :is(.profile-card-rank, .profile-card-stats, .profile-card-footer) {
-    display: none;
+  .friends-empty-card + .friends-empty-card {
+    top: 2rem;
+    left: 44%;
+    transform: rotate(8deg);
   }
-  .friends-selected-card .profile-card-border {
-    --ornament-size: 1rem;
+  .friends-empty-card::before,
+  .friends-empty-card + .friends-empty-card::before {
+    height: 6rem;
   }
-  .friends-selected-card .profile-card-charm[data-card-charm="moon"] {
-    top: 0.6rem;
-    left: 11rem;
-    width: 1rem;
-    height: 1rem;
+  .friends-empty-card::after {
+    left: 2.75rem;
+    right: 0.75rem;
+  }
+  .friends-empty-card > svg {
+    left: 0.875rem;
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .friends-empty-copy h2 {
+    font-size: 1.5rem;
+  }
+  .friends-empty-copy > p:not(.social-kicker) {
+    font-size: 0.8125rem;
+    line-height: 1.8;
+  }
+  .friends-empty-features {
+    gap: 0.75rem 1rem;
+    margin-top: 0.5rem;
+    padding-top: 1.25rem;
+  }
+  .friend-person-tab {
+    min-width: 9rem;
+    max-width: 14rem;
+    padding: 0.625rem 0.75rem;
+  }
+  .friends-comparison-grid {
+    gap: 1.25rem;
+  }
+  .friend-notebook {
+    padding: 1rem;
+  }
+  .friends-panel,
+  .friends-drawer > header {
+    padding: 1.25rem;
+  }
+  .friends-drawer {
+    border-radius: 0;
+  }
+  .friend-code-card {
+    padding: 1rem;
+  }
+  .friend-code-value {
+    letter-spacing: 0.1em;
+  }
+}
+@media (max-width: 480px) {
+  .friend-notebooks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .friend-notebook + .friend-notebook {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .friends-loading {
+    min-height: 12rem;
+    padding: 1.5rem 1rem;
   }
 }

@@ -1,5 +1,16 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowLeft, Plus, RefreshCw, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  BookOpen,
+  Heart,
+  LockKeyhole,
+  Plus,
+  RefreshCw,
+  Users,
+} from "lucide-react";
+import { AccountCard } from "@/components/account/AccountCard";
+import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { ProfileCard } from "@/components/profile/ProfileCard";
 import { BadgeArtDefs } from "@/components/profile/BadgeArt";
 import { useMotionPreference } from "@/hooks/use-motion-preference";
@@ -33,6 +44,7 @@ export function FriendsView({
   onBack: () => void;
 }) {
   const friends = useFriends();
+  const { account } = useAccountSync();
   const [selected, setSelected] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -150,31 +162,57 @@ export function FriendsView({
     setImageRefresh((old) => old + 1);
   };
   return (
-    <div className="friends-view mx-auto max-w-5xl" data-motion-allowed={motionAllowed === true}>
+    <div className="friends-view mx-auto" data-motion-allowed={motionAllowed === true}>
       <BadgeArtDefs />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1
-          ref={heading}
-          tabIndex={-1}
-          className="flex items-center gap-2 font-display text-xl outline-none"
-        >
-          <Users aria-hidden="true" className="size-5" />
-          Friends
-        </h1>
-        <div className="flex gap-2">
-          <button type="button" className={friendButton} onClick={onBack}>
-            <ArrowLeft aria-hidden="true" className="mr-1 inline size-3.5" />
-            Back
+      <header className="social-heading pane-in">
+        <div className="social-heading-copy">
+          <p className="social-kicker">
+            <span lang="ja">仲間</span> / FRIENDS
+          </p>
+          <h1 ref={heading} tabIndex={-1} className="social-title outline-none">
+            Better, <em>together.</em>
+          </h1>
+          <p className="social-description">Different notebooks. A little shared momentum.</p>
+        </div>
+        <div className="social-heading-actions">
+          <button type="button" className="social-link" onClick={onBack}>
+            <ArrowLeft aria-hidden="true" className="size-3.5" /> Back to your desk
           </button>
           <button type="button" className={friendButton} onClick={onProfile}>
-            Profile & sharing
+            Your calling card <ArrowUpRight aria-hidden="true" className="ml-2 inline size-3.5" />
           </button>
         </div>
-      </div>
+      </header>
       {!friends.available ? (
-        <p className="glass-panel rounded-xl p-5 text-sm">
-          Open Profile to sign in and set up Friends.
-        </p>
+        <>
+          <CircleWelcome
+            actionLabel={account.configured ? "Sign in to connect" : "Personalise your card"}
+            onStart={
+              account.configured
+                ? () =>
+                    document
+                      .getElementById("friends-account")
+                      ?.scrollIntoView({
+                        block: "center",
+                        behavior: motionAllowed ? "smooth" : "instant",
+                      })
+                : onProfile
+            }
+          />
+          {account.configured && (
+            <section
+              id="friends-account"
+              className="glass-panel mt-6 rounded-2xl p-6"
+              aria-label="Account sign in"
+            >
+              <h2 className="font-display text-lg">Bring your people along.</h2>
+              <p className="mb-4 mt-2 text-sm text-muted-foreground">
+                Sign in to create a friend code. You choose what your friends can see.
+              </p>
+              <AccountCard />
+            </section>
+          )}
+        </>
       ) : friends.activity.deleting || snapshot?.own?.deleting ? (
         <FriendsPanel managementOnly refreshOnOpen={false} />
       ) : (
@@ -224,36 +262,45 @@ export function FriendsView({
               )}
             </div>
           )}
-          <div className="glass-panel min-w-0 rounded-xl p-4">
+          <div className="friends-toolbar glass-panel min-w-0 rounded-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">
-                {friends.loading
-                  ? "Refreshing Friends…"
-                  : snapshot
-                    ? friendCardAge(snapshot.fetchedAt, comparisonNow).replace(
-                        "Updated",
-                        "Refreshed",
-                      )
-                    : "No confirmed snapshot yet."}
-              </p>
-              <div className="flex flex-wrap gap-2">
+              <div>
+                <h2 className="friends-toolbar-title">
+                  Your circle <span className="social-count">{peers.length}</span>
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {friends.loading
+                    ? "Refreshing Friends…"
+                    : snapshot
+                      ? friendCardAge(snapshot.fetchedAt, comparisonNow).replace(
+                          "Updated",
+                          "Refreshed",
+                        )
+                      : "Getting your circle ready…"}
+                </p>
+              </div>
+              <div className="friends-toolbar-actions flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className={friendButton}
+                  className="social-primary-button"
                   disabled={friends.activity.busy}
                   onClick={() => setDrawer(true)}
                 >
                   <Plus aria-hidden="true" className="mr-1 inline size-3.5" />
-                  Add friend · Requests ({incoming.length})
+                  Add a friend
+                  {incoming.length > 0 && (
+                    <span className="social-count">{incoming.length} requests</span>
+                  )}
                 </button>
                 <button
                   type="button"
-                  className={friendButton}
+                  className="social-icon-button"
+                  aria-label="Refresh friends"
+                  title="Refresh friends"
                   disabled={friends.activity.busy || friends.loading}
                   onClick={() => void refresh()}
                 >
-                  <RefreshCw aria-hidden="true" className="mr-1 inline size-3.5" />
-                  Refresh
+                  <RefreshCw aria-hidden="true" className="size-4" />
                 </button>
               </div>
             </div>
@@ -293,14 +340,17 @@ export function FriendsView({
             )}
           </div>
           {peers.length === 0 ? (
-            <div className="glass-panel mt-4 rounded-xl">
-              <p className="px-5 pt-5 text-sm text-muted-foreground">
-                {snapshot?.own
-                  ? "Friends see only what you choose to share."
-                  : "Study alongside someone you know."}
-              </p>
-              {!drawer && <FriendsPanel managementOnly refreshOnOpen={false} />}
-            </div>
+            friends.loading && !snapshot ? (
+              <div className="friends-loading glass-panel rounded-2xl p-10" role="status">
+                <BookOpen aria-hidden="true" className="mb-4 size-8 text-primary" />
+                <p>Opening your study circle…</p>
+              </div>
+            ) : (
+              <CircleWelcome
+                actionLabel={snapshot?.own ? "Invite your first friend" : "Create your friend code"}
+                onStart={() => setDrawer(true)}
+              />
+            )
           ) : (
             peers.map((peer) => (
               <section
@@ -340,6 +390,51 @@ export function FriendsView({
         <FriendsConfirmation confirmation={confirmation} onClose={() => setConfirmation(null)} />
       )}
     </div>
+  );
+}
+
+function CircleWelcome({ actionLabel, onStart }: { actionLabel: string; onStart: () => void }) {
+  return (
+    <section className="friends-empty glass-panel pane-in rounded-2xl">
+      <div className="friends-empty-art" aria-hidden="true">
+        <span className="friends-empty-card">
+          <BookOpen />
+          <b lang="ja">学</b>
+          <small>ONE PAGE AT A TIME</small>
+        </span>
+        <span className="friends-empty-card">
+          <Users />
+          <b lang="ja">友</b>
+          <small>A LITTLE COMPANY</small>
+        </span>
+      </div>
+      <div className="friends-empty-copy">
+        <p className="social-kicker">MAKE ROOM AT YOUR DESK</p>
+        <h2>
+          A shared journey starts
+          <br />
+          with one friend.
+        </h2>
+        <p>
+          Trade a friend code with someone you know. Follow each other’s progress, compare your
+          week, and send a little encouragement.
+        </p>
+        <button type="button" className="social-primary-button" onClick={onStart}>
+          <Plus aria-hidden="true" className="size-4" /> {actionLabel}
+        </button>
+      </div>
+      <div className="friends-empty-features">
+        <span>
+          <BookOpen aria-hidden="true" className="size-3.5" /> Shared rhythms
+        </span>
+        <span>
+          <Heart aria-hidden="true" className="size-3.5" /> Little cheers
+        </span>
+        <span>
+          <LockKeyhole aria-hidden="true" className="size-3.5" /> Only your friends
+        </span>
+      </div>
+    </section>
   );
 }
 

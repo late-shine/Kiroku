@@ -114,9 +114,7 @@ export function ProfileCard(props: Props) {
   const extra = earned.length - pins.length;
   const rank = data ? RANKS.find((item) => item.level === data.r) : undefined;
   const onStat = props.mode === "self" ? props.onStat : undefined;
-  const active =
-    data !== null &&
-    (props.mode === "friend" || earned.length > 0 || data.s > 0 || data.c > 0 || data.m > 0);
+  const active = data !== null;
   const menu =
     props.mode === "friend" && (props.onRemove || props.onBlock) ? (
       <details className="absolute right-3 top-3 z-10">
@@ -174,9 +172,37 @@ export function ProfileCard(props: Props) {
           ) : (
             scene && <img src={scene.url} alt="" className="size-full object-cover" />
           )}
+          {!scene && !visibleUpload && (
+            <svg
+              className="profile-ink-landscape"
+              viewBox="0 0 480 200"
+              preserveAspectRatio="xMidYMid slice"
+              aria-hidden="true"
+            >
+              <circle cx="365" cy="60" r="27" opacity="0.38" />
+              <path d="M0 160 90 95 140 122 225 43 345 143 420 96 480 134V200H0Z" opacity="0.12" />
+              <path
+                d="M0 185 75 134 168 167 290 102 370 155 440 122 480 150V200H0Z"
+                opacity="0.18"
+              />
+              <path d="M0 200V170Q90 138 175 182T350 168T480 178V200Z" opacity="0.22" />
+              <path
+                d="m296 53 6-4 6 4m14 9 5-3 5 3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                opacity="0.5"
+              />
+            </svg>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-scrim/70 to-transparent" />
           <span className="profile-card-wordmark">
-            記録 <span>CALLING CARD</span>
+            <b lang="ja">記録</b>{" "}
+            <span>
+              KIROKU
+              <br />
+              CALLING CARD
+            </span>
           </span>
         </div>
         {data && <LittleDetail charm={deco.charm ?? "none"} />}
@@ -251,6 +277,13 @@ export function ProfileCard(props: Props) {
             </span>
           )}
         </div>
+        {data && (
+          <p className="profile-card-intro">
+            {data.l > 0
+              ? `${data.l} ${data.l === 1 ? "lesson" : "lessons"} into a lifelong adventure.`
+              : "Every story starts with a single word."}
+          </p>
+        )}
         {props.draft && (
           <p className="profile-card-draft mt-2 text-xs font-medium text-primary">Draft preview</p>
         )}
@@ -262,7 +295,7 @@ export function ProfileCard(props: Props) {
               <>
                 <div className="profile-card-rank mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground [&>[data-stamp]]:size-6 [&>[data-stamp]]:text-[10px]">
                   {rank && <RankStamp glyph={rank.glyph} stamp={resolveStamp(data.st, data.r)} />}
-                  <span>{rank ? `${rank.glyph} ${rank.name}` : "No rank yet"}</span>
+                  <span>{rank ? `${rank.glyph} ${rank.name}` : "A new chapter"}</span>
                 </div>
                 {earned.length > 0 && (
                   <div className="profile-card-pins mt-4 flex min-h-7 flex-wrap items-center gap-2">

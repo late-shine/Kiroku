@@ -53,6 +53,7 @@ export function DecorChooser({
   identityEditor,
   rankLine,
   cardLinks,
+  circleInvite,
   cropActive,
   bannerDraft,
   bannerScope,
@@ -97,6 +98,7 @@ export function DecorChooser({
   rankLine: ReactNode;
   /** Two small shortcut links drawn below the card. */
   cardLinks: ReactNode;
+  circleInvite: ReactNode;
   /** True while the avatar crop editor is open: the preview then stops being sticky. */
   cropActive: boolean;
   bannerDraft: BannerDraft | null;
@@ -119,16 +121,18 @@ export function DecorChooser({
   onManageSharing: () => void;
 }) {
   const [panel, setPanel] = useState<Panel>("about");
+  const [stylePanel, setStylePanel] = useState<"scene" | "frame" | "details" | "motion">("scene");
   const [motionRun, setMotionRun] = useState<CardEffectRun | null>(null);
   const motionEntry = useRef(false);
   const motionToken = useRef(0);
   // The entry animation replays on a section only after the learner has switched sections, so the first section does
   // not animate twice (the whole panel already rose in). A choice inside a section never changes its class or display.
   const [sectionsAnimate, setSectionsAnimate] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [draft, setDraft] = useState(localDraft ?? saved);
   const [dirty, setDirty] = useState(localDraft !== null);
   const [baseRevision, setBaseRevision] = useState(revision);
+  const [baseDecoration, setBaseDecoration] = useState(JSON.stringify(saved));
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -145,9 +149,10 @@ export function DecorChooser({
   const draftKey = JSON.stringify(draft);
   useEffect(() => {
     if (!loaded) return;
-    if (!hasBase.current || !pending) {
+    if (!hasBase.current || !pending || savedKey === baseDecoration) {
       hasBase.current = true;
       setBaseRevision(revision);
+      setBaseDecoration(savedKey);
       if (!pending) setDraft(JSON.parse(savedKey) as FriendDecoration);
     }
     if (accountMode && draftKey === savedKey && dirty && !bannerDirty) {
@@ -155,14 +160,25 @@ export function DecorChooser({
       setBaseRevision(revision);
       onDraftRef.current(null);
     }
-  }, [revision, loaded, savedKey, draftKey, dirty, pending, bannerDirty, accountMode]);
+  }, [
+    revision,
+    loaded,
+    savedKey,
+    draftKey,
+    dirty,
+    pending,
+    bannerDirty,
+    accountMode,
+    baseDecoration,
+  ]);
   const resolved = resolveDeco(draft, badges);
   useEffect(() => {
     if (!motionReady || motionEntry.current || (!dirty && draftKey !== savedKey)) return;
     motionEntry.current = true;
     setMotionRun(cardEffectRun(resolved.fx, ++motionToken.current));
   }, [motionReady, dirty, draftKey, savedKey, resolved.fx]);
-  const changedElsewhere = accountMode && loaded && pending && revision !== baseRevision;
+  const changedElsewhere =
+    accountMode && loaded && pending && revision !== baseRevision && savedKey !== baseDecoration;
   const selectedPins = resolved.pin?.split(",") ?? [];
   const sectionClass = sectionsAnimate ? "pane-in" : undefined;
   const stateText = previewAsFriend
@@ -190,6 +206,7 @@ export function DecorChooser({
     setDraft(saved);
     setDirty(false);
     setBaseRevision(revision);
+    setBaseDecoration(savedKey);
     onDraft(null);
     onPreviewChange(false);
     setNotice(accountMode ? "Back to your saved look." : "Back to the original look.");
@@ -202,7 +219,7 @@ export function DecorChooser({
       scope={bannerScope}
       disabled={disabled || saving}
       storageError={bannerError}
-      active={panel === "style"}
+      active={panel === "style" && stylePanel === "scene"}
       accountMode={accountMode}
       loading={bannerLoading}
       loadError={bannerLoadError}
@@ -224,16 +241,11 @@ export function DecorChooser({
     { index: undefined as number | undefined, name: "Quiet ink", url: null as string | null },
     ...scenes.slice(0, 4).map((scene, index) => ({ index, name: scene.name, url: scene.url })),
   ];
-  bannerChoices.sort(
-    (a, b) =>
-      Number(!uploadSelected && b.index === draft.bk) -
-      Number(!uploadSelected && a.index === draft.bk),
-  );
   return (
     <div className="card-studio">
       <div className="card-studio-side">
         <aside
-          className="card-studio-preview glass-panel pane-in rounded-2xl"
+          className="card-studio-preview pane-in rounded-2xl"
           aria-label="Card preview"
           data-expanded={expanded}
           data-crop={cropActive || bannerCropActive}
@@ -287,16 +299,21 @@ export function DecorChooser({
               On this device · friends still see your saved banner
             </p>
           )}
+          <div className="studio-card-caption">
+            <p>Your own small corner of Kiroku.</p>
+            <span lang="ja">一歩ずつ · One step at a time</span>
+          </div>
         </aside>
         {cardLinks && (
           <nav
-            className="card-studio-links glass-panel pane-in rounded-xl"
+            className="card-studio-links pane-in"
             style={{ animationDelay: "60ms" }}
             aria-label="Study shortcuts"
           >
             {cardLinks}
           </nav>
         )}
+        {circleInvite}
       </div>
 
       <section
@@ -304,6 +321,11 @@ export function DecorChooser({
         style={{ animationDelay: "60ms" }}
         aria-label="Edit your card"
       >
+        <div className="studio-editor-heading">
+          <p className="social-kicker">THE CARD STUDIO</p>
+          <h2>Make it yours.</h2>
+          <p>A familiar face. A favourite scene. A few things that feel like you.</p>
+        </div>
         <div className="studio-section-picker" role="group" aria-label="Card editor section">
           {PANELS.map(({ id, label, icon: Icon }) => (
             <button
@@ -360,13 +382,16 @@ export function DecorChooser({
               </div>
             </fieldset>
             <fieldset disabled={disabled || saving} className="studio-fieldset">
-              <legend className="studio-field-label">Status</legend>
-              <p className="studio-field-hint">A quiet note on your card.</p>
-              <label className="mt-3 block text-sm" htmlFor="card-status-text">
+              <legend className="studio-field-label">A note from you</legend>
+              <p className="studio-field-hint">
+                What are you learning, reading, or looking forward to?
+              </p>
+              <label className="sr-only" htmlFor="card-status-text">
                 Status
               </label>
               <input
                 id="card-status-text"
+                placeholder="One page closer, one day at a time…"
                 type="text"
                 value={draft.statusText ?? ""}
                 aria-describedby="card-status-count card-status-error"
@@ -409,41 +434,70 @@ export function DecorChooser({
               >
                 {statusError}
               </p>
-              <div className="studio-status-options" role="group" aria-label="Card status">
-                <button
-                  type="button"
-                  className="studio-status"
-                  aria-pressed={!draft.sb && !draft.statusText}
-                  onClick={() => {
-                    const { sb: _old, statusText: _text, ...rest } = draft;
-                    setStatusError(null);
-                    change(rest);
-                  }}
-                >
-                  Clear<span aria-hidden="true">—</span>
-                </button>
-                {FRIEND_STATUSES.map((id) => (
+              <details className="studio-status-presets">
+                <summary>
+                  Or choose a little note <ChevronDown aria-hidden="true" className="size-3.5" />
+                </summary>
+                <div className="studio-status-options" role="group" aria-label="Card status">
                   <button
-                    key={id}
                     type="button"
                     className="studio-status"
-                    aria-pressed={draft.sb === id}
+                    aria-pressed={!draft.sb && !draft.statusText}
                     onClick={() => {
-                      const { statusText: _text, ...rest } = draft;
+                      const { sb: _old, statusText: _text, ...rest } = draft;
                       setStatusError(null);
-                      change({ ...rest, sb: id });
+                      change(rest);
                     }}
                   >
-                    {FRIEND_STATUS_LABELS[id]}
-                    {draft.sb === id && <Check aria-hidden="true" className="size-4 shrink-0" />}
+                    Clear<span aria-hidden="true">—</span>
                   </button>
-                ))}
-              </div>
+                  {FRIEND_STATUSES.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="studio-status"
+                      aria-pressed={draft.sb === id}
+                      onClick={() => {
+                        const { statusText: _text, ...rest } = draft;
+                        setStatusError(null);
+                        change({ ...rest, sb: id });
+                      }}
+                    >
+                      {FRIEND_STATUS_LABELS[id]}
+                      {draft.sb === id && <Check aria-hidden="true" className="size-4 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </details>
             </fieldset>
           </div>
 
           <div id="studio-section-style" hidden={panel !== "style"} className={sectionClass}>
-            <fieldset disabled={disabled || saving} className="studio-fieldset">
+            <div className="studio-chip-row mb-6" role="group" aria-label="Style category">
+              {(
+                [
+                  ["scene", "Cover scene"],
+                  ["frame", "Avatar frame"],
+                  ["details", "Finishing touches"],
+                  ["motion", "Motion"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="studio-chip"
+                  aria-pressed={stylePanel === id}
+                  onClick={() => setStylePanel(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <fieldset
+              hidden={stylePanel !== "scene"}
+              disabled={disabled || saving}
+              className="studio-fieldset"
+            >
               <legend className="studio-field-label">Banner</legend>
               <p className="studio-field-hint">A little atmosphere behind your name.</p>
               {uploadSelected && uploadEditor}
@@ -482,69 +536,75 @@ export function DecorChooser({
               {!uploadSelected && uploadEditor}
             </fieldset>
 
-            <DecorationCollection
-              slot="frame"
-              label="Avatar frame"
-              hint="A small collection, earned as you study."
-              selected={draft.fr}
-              badges={badges}
-              disabled={disabled || saving}
-              onSelect={(fr) => change({ ...draft, fr })}
-              thumbnail={(id) => (
-                <Frame frame={id}>
-                  <span aria-hidden="true" className="profile-avatar studio-frame-sample">
-                    記
-                  </span>
-                </Frame>
-              )}
-            />
-            <DecorationCollection
-              slot="border"
-              label="Card border"
-              hint="A quiet edge around your card."
-              selected={draft.border ?? "none"}
-              badges={badges}
-              disabled={disabled || saving}
-              onSelect={(border) => {
-                const { border: _old, ...rest } = draft;
-                change(border === "none" ? rest : { ...rest, border });
-              }}
-              thumbnail={(id) => <OrnamentSample border={id} />}
-            />
-            <DecorationCollection
-              slot="charm"
-              label="Little detail"
-              hint="One small finishing touch."
-              selected={draft.charm ?? "none"}
-              badges={badges}
-              disabled={disabled || saving}
-              onSelect={(charm) => {
-                const { charm: _old, ...rest } = draft;
-                change(charm === "none" ? rest : { ...rest, charm });
-              }}
-              thumbnail={(id) => <OrnamentSample charm={id} />}
-            />
-            <DecorationCollection
-              slot="effect"
-              label="Motion"
-              hint="One quiet effect, then your card settles."
-              selected={draft.fx}
-              badges={badges}
-              disabled={disabled || saving}
-              onSelect={(fx) => {
-                if (disabled || saving || fx === draft.fx) return;
-                change({ ...draft, fx });
-                motionEntry.current = true;
-                setMotionRun(cardEffectRun(fx, ++motionToken.current));
-              }}
-              onReplay={() => {
-                if (disabled || saving) return;
-                onPreviewChange(false);
-                motionEntry.current = true;
-                setMotionRun(cardEffectRun(resolved.fx, ++motionToken.current));
-              }}
-              thumbnail={(id) => <EffectSample effect={id} />}
-            />
+            <div hidden={stylePanel !== "frame"}>
+              <DecorationCollection
+                slot="frame"
+                label="Avatar frame"
+                hint="Make it yours with an everyday frame, or earn a keepsake through study."
+                selected={draft.fr}
+                badges={badges}
+                disabled={disabled || saving}
+                onSelect={(fr) => change({ ...draft, fr })}
+                thumbnail={(id) => (
+                  <Frame frame={id}>
+                    <span aria-hidden="true" className="profile-avatar studio-frame-sample">
+                      記
+                    </span>
+                  </Frame>
+                )}
+              />
+            </div>
+            <div hidden={stylePanel !== "details"}>
+              <DecorationCollection
+                slot="border"
+                label="Card border"
+                hint="A quiet edge around your card."
+                selected={draft.border ?? "none"}
+                badges={badges}
+                disabled={disabled || saving}
+                onSelect={(border) => {
+                  const { border: _old, ...rest } = draft;
+                  change(border === "none" ? rest : { ...rest, border });
+                }}
+                thumbnail={(id) => <OrnamentSample border={id} />}
+              />
+              <DecorationCollection
+                slot="charm"
+                label="Little detail"
+                hint="One small finishing touch."
+                selected={draft.charm ?? "none"}
+                badges={badges}
+                disabled={disabled || saving}
+                onSelect={(charm) => {
+                  const { charm: _old, ...rest } = draft;
+                  change(charm === "none" ? rest : { ...rest, charm });
+                }}
+                thumbnail={(id) => <OrnamentSample charm={id} />}
+              />
+            </div>
+            <div hidden={stylePanel !== "motion"}>
+              <DecorationCollection
+                slot="effect"
+                label="Motion"
+                hint="One quiet effect, then your card settles."
+                selected={draft.fx}
+                badges={badges}
+                disabled={disabled || saving}
+                onSelect={(fx) => {
+                  if (disabled || saving || fx === draft.fx) return;
+                  change({ ...draft, fx });
+                  motionEntry.current = true;
+                  setMotionRun(cardEffectRun(fx, ++motionToken.current));
+                }}
+                onReplay={() => {
+                  if (disabled || saving) return;
+                  onPreviewChange(false);
+                  motionEntry.current = true;
+                  setMotionRun(cardEffectRun(resolved.fx, ++motionToken.current));
+                }}
+                thumbnail={(id) => <EffectSample effect={id} />}
+              />
+            </div>
           </div>
 
           <div id="studio-section-badges" hidden={panel !== "badges"} className={sectionClass}>
@@ -663,6 +723,7 @@ export function DecorChooser({
                 disabled={disabled || saving}
                 onClick={() => {
                   setBaseRevision(revision);
+                  setBaseDecoration(savedKey);
                   setNotice("Draft kept. Save to apply it to the current look.");
                 }}
               >

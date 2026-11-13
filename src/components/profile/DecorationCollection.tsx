@@ -30,7 +30,6 @@ export function DecorationCollection<S extends CollectionSlot>({
   const ids = decorationIds(slot);
   const available = ids.filter((id) => decorationUnlocked(slot, id, badges));
   const locked = ids.filter((id) => !decorationUnlocked(slot, id, badges));
-  available.sort((a, b) => Number(b === selected) - Number(a === selected));
   const tile = (id: DecorationId<S>, isLocked: boolean) => {
     const definition = decorationDefinition(slot, id)!;
     const task = BADGES.find((badge) => badge.id === definition.requiredBadge)?.how;
@@ -47,19 +46,21 @@ export function DecorationCollection<S extends CollectionSlot>({
             if (!isLocked) onSelect(id);
           }}
         >
-          {thumbnail(id)}
+          <span className="studio-choice-art">{thumbnail(id)}</span>
           <span className="studio-choice-name">{definition.name}</span>
           <span className="studio-choice-caption">
             {isLocked ? (
               <>
                 <Lock aria-hidden="true" className="size-3" />
-                {id === selected ? "Saved choice · locked" : "Locked"}
+                {id === selected ? "Saved choice · study quest" : "Study quest"}
               </>
             ) : id === selected ? (
               <>
                 <Check aria-hidden="true" className="size-3" />
                 Selected
               </>
+            ) : definition.requiredBadge ? (
+              "Earned"
             ) : (
               "Available"
             )}
@@ -94,11 +95,12 @@ export function DecorationCollection<S extends CollectionSlot>({
       )}
       <div className="studio-frame-grid">{available.map((id) => tile(id, false))}</div>
       {locked.length > 0 && (
-        <details className="studio-unlock-list studio-decoration-discover">
+        <details className="studio-unlock-list studio-decoration-discover" open={slot !== "effect"}>
           <summary>
-            Still to discover <span>{locked.length}</span>
+            {slot === "effect" ? "Motion to discover" : "Study keepsakes"}{" "}
+            <span>{locked.length}</span>
           </summary>
-          <div className="studio-frame-grid">{locked.map((id) => tile(id, true))}</div>
+          <div className="studio-keepsake-grid">{locked.map((id) => tile(id, true))}</div>
         </details>
       )}
     </fieldset>

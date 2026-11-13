@@ -617,9 +617,25 @@ export function friendCardSource(
   };
 }
 
+// Publication needs only the already-public subset, not private profile statistics.
+type FriendPublicationSource = Omit<FriendCardSource, "stats"> & {
+  stats: Pick<
+    FriendCardSource["stats"],
+    | "rankId"
+    | "carved"
+    | "streak"
+    | "mastered"
+    | "lessons"
+    | "kanji"
+    | "vocab"
+    | "answers7"
+    | "writing7"
+  >;
+};
+
 export function buildFriendPublication(
   settings: FriendSettings,
-  source: FriendCardSource,
+  source: FriendPublicationSource,
 ): FriendPublication {
   const s = source.stats;
   // Persist the saved choices. Renderers apply badge fallbacks without erasing intent.
@@ -664,6 +680,35 @@ export function buildFriendPublication(
   for (let i = 0; i < serialized.length; i++)
     hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619);
   return { card, photo, fp: `${serialized.length}:${(hash >>> 0).toString(16)}` };
+}
+
+/** Restyle a decoded, revision-checked owner card without reading any local study data. */
+export function restyleFriendPublication(
+  settings: FriendSettings,
+  previous: FriendCard,
+  photoValue: unknown = null,
+): FriendPublication | null {
+  if (!settings.on) return null;
+  const photo = settings.photo && previous.ph ? decodeFriendPhoto(photoValue) : null;
+  return buildFriendPublication(settings, {
+    stats: {
+      rankId: previous.r,
+      carved: previous.c,
+      streak: previous.s,
+      mastered: previous.m,
+      lessons: previous.l,
+      kanji: previous.k,
+      vocab: previous.vc,
+      answers7: previous.a.split(",").map(Number),
+      writing7: previous.w.split(",").map(Number),
+    },
+    badges: previous.bd ?? {},
+    day: previous.d,
+    g: previous.g,
+    photo: photo?.rev === previous.rev ? photo.data : null,
+    acc: previous.acc,
+    st: previous.st,
+  });
 }
 
 export function decodeFriendCard(value: unknown): FriendCardState {

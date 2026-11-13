@@ -25,6 +25,7 @@ import {
   publicName,
   record,
   buildFriendPublication,
+  restyleFriendPublication,
   decodeDecoration,
   decodeFriendCard,
   decodeFriendPhoto,
@@ -767,11 +768,14 @@ async function publicationPaths(
   token: Token,
   publication: FriendPublication | null,
   assetChange?: BannerAsset | null,
+  publishedAt?: number | null,
 ) {
   const { mod } = await getDb(token.uid);
   assertCurrent(token);
   const paths: Record<string, unknown> = {
-    [`cards/${token.uid}`]: publication ? { ...publication.card, t: mod.serverTimestamp() } : null,
+    [`cards/${token.uid}`]: publication
+      ? { ...publication.card, t: publishedAt === undefined ? mod.serverTimestamp() : publishedAt }
+      : null,
     [`photos/${token.uid}`]: publication?.photo ?? null,
   };
   const id = publication?.card.bannerId;
@@ -866,22 +870,46 @@ export function saveFriendSharing(
           ? { since: snapshot?.day ?? localDay() }
           : {}),
     };
-    const publication = snapshot ? buildFriendPublication(settings, snapshot) : null;
+    let publication = snapshot ? buildFriendPublication(settings, snapshot) : null;
+    let preservedPublishedAt: number | null | undefined;
+    if (on && !snapshot && !requireReady && current?.on) {
+      // Only an authoritative, already-published source may stand in for an unapproved device.
+      const existing = decodeFriendCard(await read(token, `cards/${uid}`));
+      if (existing.kind === "published") {
+        if (existing.card.rev !== current.rev)
+          throw new FriendsError(SETTINGS_CONFLICT, "conflict");
+        const photo =
+          settings.photo && existing.card.ph ? await read(token, `photos/${uid}`) : null;
+        publication = restyleFriendPublication(settings, existing.card, photo);
+        // A new look is not new study data, including when the old update time is unknown.
+        preservedPublishedAt = existing.card.t;
+      } else if (existing.kind !== "closed") {
+        throw new FriendsError(
+          "Your shared card couldn't be read safely. Refresh Friends or update the app before saving your look. Nothing was changed.",
+        );
+      }
+    }
     const paths = {
       [`settings/${uid}`]: settings,
-      ...(await publicationPaths(token, publication, assetChange)),
+      ...(await publicationPaths(token, publication, assetChange, preservedPublishedAt)),
     };
     try {
       await friendStep("sharing-save", "save your sharing choice", () =>
         update(token, paths, () => {
-          if (!publication) return true;
+          // Preserved public data does not depend on this device's local source fingerprint.
+          if (!publication || preservedPublishedAt !== undefined) return true;
           const latest = source();
           return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
         }),
       );
     } catch (error) {
       // A rejected CAS is reconciled, never replayed with a newer consent revision.
-      const latest = decodeFriendSettings(await read(token, `settings/${uid}`));
+      let latest: FriendSettings | null;
+      try {
+        latest = decodeFriendSettings(await read(token, `settings/${uid}`));
+      } catch {
+        throw error; // A failed read/decode cannot prove a conflict or replace the save error.
+      }
       if ((latest?.rev ?? null) !== expectedRevision)
         throw new FriendsError(SETTINGS_CONFLICT, "conflict");
       throw error;

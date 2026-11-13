@@ -40,9 +40,14 @@ export function AddFriendDrawer({
         onClose();
       }}
     >
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background p-4">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background">
         <h2 id={title} className="font-display text-lg">
-          Add friend · Requests ({requests})
+          Invite a little company
+          {requests > 0 && (
+            <span className="mt-1 block font-body text-xs text-muted-foreground">
+              {requests} pending {requests === 1 ? "request" : "requests"}
+            </span>
+          )}
         </h2>
         <button
           autoFocus
@@ -53,7 +58,7 @@ export function AddFriendDrawer({
         >
           <X aria-hidden="true" className="size-4" />
         </button>
-      </div>
+      </header>
       <p className="px-5 pt-4 text-xs text-muted-foreground">
         Friends see only what you choose to share.
       </p>

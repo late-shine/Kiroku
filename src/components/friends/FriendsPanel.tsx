@@ -345,11 +345,11 @@ export function FriendsPanel({
     <section
       id="friends-beta"
       aria-labelledby="friends-title"
-      className="min-w-0 border-t border-border p-5 md:p-6"
+      className="friends-panel min-w-0 border-t border-border p-5 md:p-6"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="friends-title" className="font-display text-base">
-          Friends (beta)
+          {snapshot?.own ? "Codes & connections" : "Your study circle"}
         </h2>
         <button
           type="button"
@@ -388,7 +388,7 @@ export function FriendsPanel({
           {snapshot && !snapshot.own && !snapshot.cached && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-muted-foreground">
-                Friends · Off. Study alongside someone you know.
+                A friend code is your invitation to study together.
               </p>
               {!settingUp && (
                 <button
@@ -397,7 +397,7 @@ export function FriendsPanel({
                   disabled={disabled}
                   onClick={() => setSettingUp(true)}
                 >
-                  Set up friends
+                  Get started
                 </button>
               )}
               {friends.invite && (
@@ -466,13 +466,13 @@ export function FriendsPanel({
                 />
               )}
               <div className={`grid gap-4 ${managementOnly ? "" : "lg:grid-cols-2"}`}>
-                <div className="min-w-0 rounded-xl border border-border bg-background/20 p-4">
-                  <h3 className="font-display text-base">Your code</h3>
+                <div className="friend-code-card min-w-0 rounded-xl border border-border bg-background/20 p-4">
+                  <h3 className="font-display text-base">An invitation from you</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Share it with someone you know.
                   </p>
                   <p
-                    className={`mt-2 select-all break-all ${managementOnly ? "font-display" : "font-mono"} text-xl tracking-wider`}
+                    className="friend-code-value mt-2 select-all break-all font-mono text-xl tracking-wider"
                     aria-label={`Friend code: ${snapshot.own.code.slice(0, 5)}, ${snapshot.own.code.slice(5)}`}
                   >
                     {groupedFriendCode(snapshot.own.code)}

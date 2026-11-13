@@ -666,7 +666,7 @@ function Header({
     { id: "progress", label: "Progress", icon: Trophy },
     { id: "atmosphere", label: "Atmosphere", icon: Image },
     ...(showWrite ? [{ id: "write" as const, label: "Write", icon: PenLine }] : []),
-    ...(friends.showFriends ? [{ id: "friends" as const, label: "Friends", icon: Users }] : []),
+    { id: "friends", label: "Friends", icon: Users },
   ];
   return (
     <header className="glass-panel grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl px-3.5 py-2.5 xl:grid-cols-[1fr_auto_1fr]">

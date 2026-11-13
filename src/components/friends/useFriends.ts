@@ -1968,24 +1968,31 @@ export function useFriendsController({
     bannerRead: view.uid === uid ? bannerRead : null,
     selectBanner,
     saveLook: (deco: FriendDecoration, revision: string | null) => {
+      // Partial setup has no saved name yet; never replace an existing public name or consent.
+      const nameEdit = sharingRef.current.settings
+        ? {}
+        : { n: publicName(suggestedName, null) ?? "" };
       const local = localBannerRef.current.scope.uid === uid ? localBannerRef.current.draft : null;
       const currentId = sharingRef.current.settings?.deco.bannerId;
       const owner = ownerBannerRef.current.asset;
       if (removingRef.current)
-        return saveSharingEdit({ deco, banner: { kind: "remove" } }, revision);
+        return saveSharingEdit({ ...nameEdit, deco, banner: { kind: "remove" } }, revision);
       if (
         local?.selected &&
         (!local.id ||
           local.id !== currentId ||
           (owner && local.id === owner.id && !sameBannerImage(local, owner)))
       ) {
-        return saveSharingEdit({ deco, banner: { kind: "upload", draft: local } }, revision);
+        return saveSharingEdit(
+          { ...nameEdit, deco, banner: { kind: "upload", draft: local } },
+          revision,
+        );
       }
       if (local?.selected && currentId) {
         const { bk: _scene, ...rest } = deco;
-        return saveSharingEdit({ deco: { ...rest, bannerId: currentId } }, revision);
+        return saveSharingEdit({ ...nameEdit, deco: { ...rest, bannerId: currentId } }, revision);
       }
-      return saveSharingEdit({ deco }, revision);
+      return saveSharingEdit({ ...nameEdit, deco }, revision);
     },
 
     stopSharing: () =>

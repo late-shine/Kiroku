@@ -107,7 +107,7 @@ export function SideBySide({
         : `Your week: ${stats.answersThisWeek} answers. Last week: ${previousAnswers} answers.`;
   const peerWeekTotal = card.a.split(",").reduce((sum, n) => sum + Number(n), 0);
   return (
-    <div className="min-w-0 space-y-4" data-card-accent={own.acc}>
+    <div className="friends-comparison-content min-w-0 space-y-4" data-card-accent={own.acc}>
       {Math.abs(own.r - other.r) >= 2 || Math.abs(own.l - other.l) >= 15 ? (
         <p className="glass-panel rounded-xl p-4 text-sm text-muted-foreground">
           Your notebooks are at different stages. The weekly view shows each person’s rhythm.
@@ -161,45 +161,46 @@ export function SideBySide({
         />
       )}
       <section
-        className="glass-panel space-y-5 rounded-xl p-4 md:p-5"
+        className="friend-notebooks glass-panel rounded-2xl"
         aria-label="Inside each notebook"
       >
-        <div>
-          <div className="flex items-center gap-3">
-            {ownRank && (
-              <RankStamp glyph={ownRank.glyph} stamp={own.st} className="size-7 text-xs" />
-            )}
-            <h2 className="font-display text-base">
-              Your notebook · {ownRank?.name ?? "Just starting"}
-            </h2>
-          </div>
-          <p className="mt-3 text-sm">
-            Streak: {own.s} days. Words mastered: {own.m}.
-          </p>
-          <p className="mt-1 text-sm">
-            Lessons: {own.l}, kanji taught: {own.k}.
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">{ownWeekSentence}</p>
-        </div>
-        <div className="border-t border-border pt-4">
-          <div className="flex items-center gap-3">
-            {otherRank && (
-              <RankStamp glyph={otherRank.glyph} stamp={other.st} className="size-7 text-xs" />
-            )}
-            <h2 className="font-display text-base">
-              {other.n}’s notebook · {otherRank?.name ?? "Just starting"}
-            </h2>
-          </div>
-          <p className="mt-3 text-sm">
-            Streak: {other.s} days. Words mastered: {other.m}.
-          </p>
-          <p className="mt-1 text-sm">
-            Lessons: {other.l}, kanji taught: {other.k}.
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {peerWeekTotal} answers in this notebook’s saved week through {card.d}.
-          </p>
-        </div>
+        {[
+          { summary: own, rank: ownRank, title: "Your notebook", note: ownWeekSentence },
+          {
+            summary: other,
+            rank: otherRank,
+            title: `${other.n}’s notebook`,
+            note: `${peerWeekTotal} answers in the saved week through ${card.d}.`,
+          },
+        ].map(({ summary, rank, title, note }, index) => (
+          <article key={index} className="friend-notebook">
+            <header className="flex items-center gap-3">
+              {rank && (
+                <RankStamp glyph={rank.glyph} stamp={summary.st} className="size-8 text-xs" />
+              )}
+              <div className="min-w-0">
+                <h2 className="font-display text-base break-words">{title}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {rank?.name ?? "Just starting"}
+                </p>
+              </div>
+            </header>
+            <dl className="friend-notebook-stats">
+              {[
+                ["Day streak", summary.s],
+                ["Words mastered", summary.m],
+                ["Lessons", summary.l],
+                ["Kanji learned", summary.k],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="friend-notebook-note">{note}</p>
+          </article>
+        ))}
       </section>
       <MasteryRings own={own} other={other} />
       <RankLadder own={own} other={other} />

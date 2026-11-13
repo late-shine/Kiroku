@@ -1,4 +1,4 @@
-import { Flower2, Moon } from "lucide-react";
+import { Flower2 } from "lucide-react";
 import { decorationDefinition, type BorderId, type CharmId } from "@/lib/friend-decorations";
 
 /** Resolved static artwork only. Pointer events never intercept card controls. */
@@ -10,6 +10,28 @@ export function CardBorder({ border = "none" }: { border?: BorderId }) {
       {visual === "gilt" &&
         ["tl", "tr", "bl", "br"].map((corner) => (
           <span key={corner} className={`profile-border-corner profile-border-${corner}`} />
+        ))}
+      {visual === "archival" &&
+        ["top", "bottom"].map((position) => (
+          <svg
+            key={position}
+            viewBox="0 0 48 48"
+            fill="none"
+            className={`profile-border-crane profile-border-crane-${position}`}
+          >
+            <path
+              d="M3 35L20 27L9 5L29 24L40 13L44 14L36 17L33 31L20 27Z"
+              fill="var(--background)"
+            />
+            <path d="M9 5L20 27L29 24ZM20 27L33 31L27 42Z" fill="currentColor" opacity=".28" />
+            <path
+              d="M3 35L20 27L9 5L29 24L40 13L44 14L36 17L33 31L27 42L20 27L29 24L33 31L3 35Z"
+              stroke="currentColor"
+              strokeWidth=".9"
+              strokeLinejoin="round"
+            />
+            <path d="M33 4V8M31 6H35M7 42H12" stroke="currentColor" strokeWidth=".7" />
+          </svg>
         ))}
       {visual === "garden" && (
         <>
@@ -47,7 +69,29 @@ export function LittleDetail({ charm = "none" }: { charm?: CharmId }) {
   return (
     <span aria-hidden="true" className="profile-card-charm" data-card-charm={visual}>
       {visual === "bookmark" && <span className="profile-charm-ribbon" />}
-      {visual === "moon" && <Moon className="size-full" strokeWidth={1.4} />}
+      {visual === "moon" && (
+        <svg viewBox="0 0 40 52" fill="none" className="size-full">
+          <path d="M20 0V12" stroke="currentColor" strokeWidth=".8" />
+          <circle cx="20" cy="15" r="3" stroke="currentColor" strokeWidth="1" />
+          <circle
+            cx="20"
+            cy="33"
+            r="16"
+            fill="var(--background)"
+            stroke="currentColor"
+            strokeWidth="1"
+          />
+          <circle cx="20" cy="33" r="13" stroke="currentColor" strokeWidth=".5" opacity=".5" />
+          <path d="M24 23A10 10 0 1 0 29 37A10 10 0 0 1 24 23Z" fill="currentColor" />
+          <path d="M29 23L30 26L33 27L30 28L29 31L28 28L25 27L28 26Z" fill="currentColor" />
+          <path
+            d="M8 39H8.1M10 43H10.1M15 46H15.1M20 47H20.1M25 46H25.1M30 43H30.1M32 39H32.1"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
       {visual === "blossom" && <Flower2 className="size-full" strokeWidth={1.3} />}
       {visual === "seal" && (
         <span className="profile-charm-seal" lang="ja">

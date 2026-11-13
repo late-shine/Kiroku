@@ -1,3 +1,4 @@
+import { Heart } from "lucide-react";
 import { RANKS } from "@/lib/rewards";
 import {
   alignFriendWeek,
@@ -43,12 +44,12 @@ export function FriendTabs({
   };
   return (
     <div
-      className="min-w-0 overflow-x-auto py-2"
+      className="friends-tabs min-w-0 overflow-x-auto py-2"
       role="tablist"
       aria-label="Friends"
       aria-orientation="horizontal"
     >
-      <div className="flex w-max gap-2 px-1">
+      <div className="friends-tab-list flex w-max gap-2 px-1">
         {peers.map((peer, index) => {
           const entry = cards[peer.uid];
           const card = peer.state === "final" && entry?.kind === "published" ? entry.card : null;
@@ -69,7 +70,7 @@ export function FriendTabs({
               aria-controls={`${prefix}-panel-${peer.uid}`}
               aria-selected={peer.uid === selected}
               tabIndex={peer.uid === selected ? 0 : -1}
-              className={`flex min-h-11 max-w-64 shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${focusRing} ${peer.uid === selected ? "border-primary/60 bg-primary/10" : "border-border"}`}
+              className={`friend-person-tab flex min-h-11 max-w-64 shrink-0 items-center gap-3 rounded-xl border px-4 py-3 text-xs ${focusRing} ${peer.uid === selected ? "border-primary/60 bg-primary/10" : "border-border"}`}
               onClick={() => onSelect(peer.uid)}
               onKeyDown={(event) => {
                 const next =
@@ -93,16 +94,19 @@ export function FriendTabs({
                 glyph={card?.g ?? peer.glyph}
                 frame={deco.fr}
               />
-              <span className="truncate">{card?.n ?? peer.name}</span>
-              {card && (
-                <span
-                  aria-label={RANKS.find((rank) => rank.level === card.r)?.name ?? "Just starting"}
-                >
-                  {RANKS.find((rank) => rank.level === card.r)?.glyph}
+              <span className="friend-person-copy min-w-0 text-left">
+                <span className="block truncate">{card?.n ?? peer.name}</span>
+                <span className="friend-person-detail block">
+                  {studied && <span aria-hidden="true" className="friend-study-indicator" />}
+                  {studied
+                    ? "Studied today"
+                    : card
+                      ? (RANKS.find((rank) => rank.level === card.r)?.name ?? "Just starting")
+                      : "Private card"}
                 </span>
-              )}
-              {(studied || unread[peer.uid]) && (
-                <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-primary" />
+              </span>
+              {unread[peer.uid] && (
+                <Heart aria-hidden="true" className="friend-cheer-indicator size-3.5 shrink-0" />
               )}
               {studied && (
                 <span className="sr-only">Studied today, as of the last shared update</span>

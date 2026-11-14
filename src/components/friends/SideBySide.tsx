@@ -1,4 +1,3 @@
-import { RankStamp } from "@/components/write/RankStamp";
 import { resolveAccent, resolveStamp } from "@/lib/quest-prefs";
 import { RANKS } from "@/lib/rewards";
 import { weekdayName } from "@/lib/study-log";
@@ -107,162 +106,144 @@ export function SideBySide({
         : `Your week: ${stats.answersThisWeek} answers. Last week: ${previousAnswers} answers.`;
   const peerWeekTotal = card.a.split(",").reduce((sum, n) => sum + Number(n), 0);
   return (
-    <div className="friends-comparison-content min-w-0 space-y-4" data-card-accent={own.acc}>
-      {Math.abs(own.r - other.r) >= 2 || Math.abs(own.l - other.l) >= 15 ? (
-        <p className="glass-panel rounded-xl p-4 text-sm text-muted-foreground">
-          Your notebooks are at different stages. The weekly view shows each person’s rhythm.
-        </p>
-      ) : null}
-      {fresh && hasCoverage && (
-        <StudyThread
-          run={threadRun}
-          active={bothToday}
-          ownAvatar={
-            <FriendAvatar name={own.n} glyph={own.g} frame={own.fr} size={48} avatar={ownAvatar} />
-          }
-          friendAvatar={
-            <span data-card-accent={other.acc}>
+    <div className="friends-comparison-content" data-card-accent={own.acc}>
+      <header className="circle-journal-heading">
+        <div>
+          <p className="circle-eyebrow">YOU & {card.n.toLocaleUpperCase("en")}</p>
+          <h2>
+            Two notebooks.
+            <br />
+            <em>One shared journey.</em>
+          </h2>
+          <p>{ownWeekSentence}</p>
+        </div>
+        {fresh && hasCoverage && (
+          <StudyThread
+            run={threadRun}
+            active={bothToday}
+            ownAvatar={
               <FriendAvatar
-                name={other.n}
-                glyph={other.g}
-                frame={other.fr}
+                name={own.n}
+                glyph={own.g}
+                frame={own.fr}
                 size={48}
-                photo={photo}
+                avatar={ownAvatar}
               />
-            </span>
-          }
-        />
-      )}
+            }
+            friendAvatar={
+              <span data-card-accent={other.acc}>
+                <FriendAvatar
+                  name={other.n}
+                  glyph={other.g}
+                  frame={other.fr}
+                  size={48}
+                  photo={photo}
+                />
+              </span>
+            }
+          />
+        )}
+      </header>
       {reachedRank && (
-        <p className="text-xs font-medium text-primary">
+        <p className="circle-data-note">
           {card.n} reached a new rank: {reachedRank.name}.
         </p>
       )}
-      {quiet && <p className="text-sm text-muted-foreground">Quiet this week.</p>}
+      {quiet && (
+        <p className="circle-data-note">
+          A quiet week in {card.n}’s notebook. A little encouragement is always welcome.
+        </p>
+      )}
       {(!fullCoverage || !fresh) && (
-        <p className="text-xs text-muted-foreground">
-          {card.n}’s card was updated {weekdayName(card.d)} ({card.d}).
+        <p className="circle-data-note">
+          {cached ? "Saved snapshot" : "Last shared update"} · {card.n}’s activity is recorded
+          through {weekdayName(card.d)} ({card.d}). Unrecorded dates stay blank.
         </p>
       )}
       {(!aligned || !hasCoverage) && (
-        <p className="glass-panel rounded-xl p-4 text-sm text-muted-foreground">
-          This desk’s weekly data isn’t available for these dates. Nothing missing is counted as
-          zero.
+        <p className="circle-data-note">
+          No shared weekly data for these dates. Missing activity is never counted as zero.
         </p>
       )}
-      {ownWeek && (
-        <MirrorBars
-          own={ownWeek}
-          other={otherWeek}
-          name={card.n}
-          sameAccent={own.acc === other.acc}
-          accent={other.acc}
-          togetherFresh={fresh && aligned !== null}
-        />
-      )}
-      <section
-        className="friend-notebooks glass-panel rounded-2xl"
-        aria-label="Inside each notebook"
-      >
-        {[
-          { summary: own, rank: ownRank, title: "Your notebook", note: ownWeekSentence },
-          {
-            summary: other,
-            rank: otherRank,
-            title: `${other.n}’s notebook`,
-            note: `${peerWeekTotal} answers in the saved week through ${card.d}.`,
-          },
-        ].map(({ summary, rank, title, note }, index) => (
-          <article key={index} className="friend-notebook">
-            <header className="flex items-center gap-3">
-              {rank && (
-                <RankStamp glyph={rank.glyph} stamp={summary.st} className="size-8 text-xs" />
-              )}
-              <div className="min-w-0">
-                <h2 className="font-display text-base break-words">{title}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {rank?.name ?? "Just starting"}
-                </p>
-              </div>
-            </header>
-            <dl className="friend-notebook-stats">
-              {[
-                ["Day streak", summary.s],
-                ["Words mastered", summary.m],
-                ["Lessons", summary.l],
-                ["Kanji learned", summary.k],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="friend-notebook-note">{note}</p>
-          </article>
-        ))}
-      </section>
-      <MasteryRings own={own} other={other} />
+      <div className="circle-charts">
+        {ownWeek ? (
+          <MirrorBars
+            own={ownWeek}
+            other={otherWeek}
+            name={card.n}
+            togetherFresh={fresh && aligned !== null}
+          />
+        ) : (
+          <p className="circle-panel circle-data-note">
+            Your weekly activity is not available for these dates yet.
+          </p>
+        )}
+        <MasteryRings own={own} other={other} />
+      </div>
       <RankLadder own={own} other={other} />
       <BadgeOverlap own={source.badges} other={card.bd ?? {}} name={card.n} />
       {ownWeek && (
-        <table className="sr-only">
-          <caption>
-            You and {card.n}, last seven days. Bars use independent scales; no data means an unknown
-            date.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Measure or date</th>
-              <th scope="col">You</th>
-              <th scope="col">{card.n}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              ["Rank", ownRank?.name ?? "Just starting", otherRank?.name ?? "Just starting"],
-              ["Carved kanji", own.c, other.c],
-              ["Study streak", own.s, other.s],
-              ["Words mastered", own.m, other.m],
-              ["Lessons", own.l, other.l],
-              [
-                "Answers in 7 days",
-                stats.answersThisWeek,
-                `${peerWeekTotal} in saved week through ${card.d}`,
-              ],
-              [
-                "Writing marks in 7 days",
-                stats.writing7.reduce((a, b) => a + b, 0),
-                `${card.w.split(",").reduce((a, b) => a + Number(b), 0)} in saved week through ${card.d}`,
-              ],
-            ].map(([label, a, b]) => (
-              <tr key={label}>
-                <th scope="row">{label}</th>
-                <td>{a}</td>
-                <td>{b}</td>
+        <div className="sr-only">
+          <table>
+            <caption>
+              You and {card.n}, last seven days. Both chart lines use the same scale; no data means
+              an unknown date.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Measure or date</th>
+                <th scope="col">You</th>
+                <th scope="col">{card.n}</th>
               </tr>
-            ))}
-            {ownWeek.map((day, i) => {
-              const peer = otherWeek[i];
-              return (
-                <tr key={day.day}>
-                  <th scope="row">
-                    {weekdayName(day.day)}, {day.day}. Studied on {day.day}
-                  </th>
-                  <td>
-                    {day.answers} quiz answers, {day.writing} writing marks;{" "}
-                    {studiedOnDay(ownWeek, day.day) ? "studied" : "no activity recorded"}.
-                  </td>
-                  <td>
-                    {peer?.answers === null || peer?.answers === undefined || peer.writing === null
-                      ? "No data available."
-                      : `${peer.answers} quiz answers, ${peer.writing} writing marks; ${studiedOnDay(otherWeek, day.day) ? "studied" : "no activity recorded"}.`}
-                  </td>
+            </thead>
+            <tbody>
+              {[
+                ["Rank", ownRank?.name ?? "Just starting", otherRank?.name ?? "Just starting"],
+                ["Carved kanji", own.c, other.c],
+                ["Study streak", own.s, other.s],
+                ["Words mastered", own.m, other.m],
+                ["Lessons", own.l, other.l],
+                [
+                  "Answers in 7 days",
+                  stats.answersThisWeek,
+                  `${peerWeekTotal} in saved week through ${card.d}`,
+                ],
+                [
+                  "Writing marks in 7 days",
+                  stats.writing7.reduce((a, b) => a + b, 0),
+                  `${card.w.split(",").reduce((a, b) => a + Number(b), 0)} in saved week through ${card.d}`,
+                ],
+              ].map(([label, a, b]) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td>{a}</td>
+                  <td>{b}</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+              {ownWeek.map((day, i) => {
+                const peer = otherWeek[i];
+                return (
+                  <tr key={day.day}>
+                    <th scope="row">
+                      {weekdayName(day.day)}, {day.day}. Studied on {day.day}
+                    </th>
+                    <td>
+                      {day.answers} quiz answers, {day.writing} writing marks;{" "}
+                      {studiedOnDay(ownWeek, day.day) ? "studied" : "no activity recorded"}.
+                    </td>
+                    <td>
+                      {peer?.answers === null ||
+                      peer?.answers === undefined ||
+                      peer.writing === null
+                        ? "No data available."
+                        : `${peer.answers} quiz answers, ${peer.writing} writing marks; ${studiedOnDay(otherWeek, day.day) ? "studied" : "no activity recorded"}.`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

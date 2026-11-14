@@ -2125,6 +2125,9 @@ rt {
 
 /* Study circle. */
 .friends-view {
+  --circle-self: var(--accent-amber);
+  --circle-peer: #a3ccd4;
+  --circle-surface: color-mix(in oklab, var(--background) 90%, var(--secondary));
   width: 100%;
   max-width: 75rem;
   min-width: 0;
@@ -2407,79 +2410,702 @@ rt {
   background: var(--success);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 12%, transparent);
 }
-.friends-comparison-grid {
+.friends-comparison-grid,
+.friends-comparison-content {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: start;
   gap: 1.5rem;
+  min-width: 0;
 }
-.friends-comparison-content {
+.circle-featured,
+.circle-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
   min-width: 0;
 }
 .friends-selected-card {
   min-width: 0;
 }
-.friend-notebooks {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  background: var(--glass);
+.circle-featured-card .profile-card {
+  max-width: none;
+  box-shadow: 0 20px 60px -36px var(--shadow-deep-strong);
 }
-.friend-notebook {
+.circle-featured-card > p,
+.circle-featured-card > button {
+  margin-left: 0.5rem;
+}
+.circle-journal-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+  padding: 2rem 0 0.25rem;
+}
+.circle-journal-heading > div:first-child {
   min-width: 0;
-  padding: 1.375rem;
+  flex: 1 1 22rem;
 }
-.friend-notebook + .friend-notebook {
-  border-left: 1px solid var(--border);
+.circle-eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+  font-weight: 500;
+  line-height: 1.8;
+  letter-spacing: 0.18em;
+  overflow-wrap: anywhere;
 }
-.friend-notebook > header {
+.circle-eyebrow [lang="ja"] {
+  color: var(--circle-self);
+  margin-right: 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+.circle-journal-heading h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: -0.05em;
+}
+.circle-journal-heading h2 em {
+  color: var(--circle-self);
+  font-weight: 400;
+}
+.circle-journal-heading > div > p:last-child {
+  max-width: 40rem;
+  margin-top: 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.8;
+}
+.circle-study-thread {
+  flex: 0 1 18rem;
+  width: 100%;
+  padding: 1rem 0;
+  text-align: center;
+}
+.circle-thread-avatars {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+  padding-inline: 1rem;
 }
-.friend-notebook h2 {
-  margin: 0;
+.circle-study-thread p {
+  margin-top: 1rem;
   font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
 }
-.friend-notebook-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem 0.75rem;
-  margin-top: 1.125rem;
-}
-.friend-notebook-stats > div {
-  min-width: 0;
-}
-.friend-notebook-stats dt {
+.circle-thread-caption {
+  display: block;
+  margin-top: 0.4rem;
   color: var(--muted-foreground);
   font-size: 0.625rem;
-  line-height: 1.5;
 }
-.friend-notebook-stats dd {
-  margin: 0.25rem 0 0;
-  color: var(--foreground);
+.circle-data-note {
+  padding: 0.875rem 1rem;
+  border-left: 2px solid var(--circle-peer);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: color-mix(in oklab, var(--circle-peer) 5%, var(--background));
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+.circle-panel {
+  min-width: 0;
+  padding: clamp(1.125rem, 2.5vw, 2rem);
+  border: 1px solid color-mix(in oklab, var(--muted-foreground) 20%, transparent);
+  border-radius: 1.25rem;
+  background: var(--circle-surface);
+  box-shadow: inset 0 1px 0 var(--highlight);
+}
+.circle-panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.circle-panel-heading > div {
+  min-width: 0;
+}
+.circle-panel-heading h2 {
   font-family: var(--font-display);
-  font-size: 1.375rem;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.125rem, 1.8vw, 1.5rem);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.circle-panel-aside,
+.circle-footnote {
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1.8;
+}
+.circle-panel-aside {
+  text-align: right;
+}
+.circle-footnote {
+  margin: 1.25rem 0 0;
+}
+.friends-view [data-ink="self"] {
+  --person-ink: var(--circle-self);
+}
+.friends-view [data-ink="peer"] {
+  --person-ink: var(--circle-peer);
+}
+.rhythm-panel {
+  background: radial-gradient(ellipse at 50% 35%, color-mix(in oklab, var(--circle-self) 3%, transparent), transparent 70%), var(--circle-surface);
+}
+.rhythm-measures {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+}
+.rhythm-measures button {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+.rhythm-measures button[aria-pressed="true"] {
+  background: var(--secondary);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.rhythm-measures svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.friends-view :is(.rhythm-measures button, .rhythm-days button):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.rhythm-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.75rem 0 0;
+}
+.rhythm-totals > div + div {
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--border);
+}
+.rhythm-person {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--person-ink);
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
-.friend-notebook-note {
-  margin-top: 1rem;
+.rhythm-person i {
+  flex: 0 0 auto;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--person-ink);
+}
+[data-ink="peer"] .rhythm-person i {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.rhythm-totals p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.65rem;
+}
+.rhythm-totals strong {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.2;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.rhythm-totals p > span,
+.rhythm-totals small {
   color: var(--muted-foreground);
   font-size: 0.625rem;
   line-height: 1.7;
 }
+.rhythm-totals small {
+  display: block;
+  margin-top: 0.35rem;
+}
+.rhythm-plot {
+  margin: 1.5rem -0.5rem 0;
+}
+.rhythm-plot > svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.rhythm-gridline line {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+.rhythm-gridline text {
+  fill: var(--muted-foreground);
+  font-family: var(--font-body);
+  font-size: 11px;
+}
+.rhythm-selected-column {
+  fill: var(--highlight);
+}
+.rhythm-line {
+  fill: none;
+  stroke: var(--person-ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+[data-ink="peer"] .rhythm-line {
+  stroke-dasharray: 5 5;
+}
+.rhythm-point {
+  fill: var(--circle-surface);
+  stroke: var(--person-ink);
+  stroke-width: 2;
+}
+.rhythm-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.rhythm-days button {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  min-height: 4.5rem;
+  padding: 0.65rem 0.125rem;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+}
+.rhythm-days button[aria-pressed="true"] {
+  border-color: color-mix(in oklab, var(--circle-self) 35%, var(--border));
+  background: color-mix(in oklab, var(--circle-self) 6%, transparent);
+}
+.rhythm-days button > span {
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+}
+.rhythm-days strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.rhythm-days i {
+  width: 0.3rem;
+  height: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+.rhythm-days i[data-shared="true"] {
+  border-color: var(--circle-self);
+  background: var(--circle-self);
+}
+.rhythm-days i[data-unknown="true"] {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.rhythm-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-top: 1rem;
+  padding: 0.875rem 0;
+  border-block: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+.rhythm-readout > span:first-child {
+  margin-right: auto;
+}
+.rhythm-readout b {
+  margin-left: 0.35rem;
+  color: var(--person-ink);
+  font-weight: 500;
+}
+.rhythm-together {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+.rhythm-together > span {
+  color: var(--circle-self);
+}
+.mastery-panel {
+  display: flex;
+  flex-direction: column;
+}
+.mastery-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: auto 0;
+  padding-block: 2rem;
+}
+.mastery-person {
+  min-width: 0;
+  text-align: center;
+}
+.mastery-dial {
+  position: relative;
+  width: min(100%, 9rem);
+  margin-inline: auto;
+  aspect-ratio: 1;
+}
+.mastery-dial svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-width: 5;
+}
+.mastery-track {
+  stroke: var(--border);
+}
+.mastery-value {
+  stroke: var(--person-ink);
+  stroke-linecap: butt;
+}
+.mastery-dial > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.mastery-dial strong {
+  font-family: var(--font-display);
+  color: var(--person-ink);
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-weight: 400;
+}
+.mastery-dial small {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  margin-left: 0.125rem;
+}
+.mastery-dial span,
+.mastery-person > small {
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+}
+.mastery-person h3 {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.mastery-person > p {
+  margin-top: 0.375rem;
+  font-size: 0.6875rem;
+}
+.mastery-person > p span {
+  color: var(--muted-foreground);
+}
+.mastery-notebook-totals {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+.mastery-notebook-totals > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding-block: 0.625rem;
+  font-size: 0.6875rem;
+}
+.mastery-notebook-totals span {
+  color: var(--muted-foreground);
+}
+.mastery-notebook-totals b {
+  color: var(--person-ink);
+  text-align: center;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.rank-books {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 2rem;
+  list-style: none;
+}
+.rank-books li {
+  min-width: 0;
+  text-align: center;
+}
+.rank-book-glyph {
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 6.5rem);
+  height: 6.5rem;
+  margin-inline: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem 0.75rem 0.75rem 0.25rem;
+  background: linear-gradient(90deg, var(--highlight) 0 5%, transparent 5% 9%, var(--border) 9% 10%, transparent 10%), var(--background);
+  color: var(--muted-foreground);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.05em;
+  box-shadow: 4px 4px 0 -1px var(--circle-surface), 4px 4px 0 0 var(--border);
+}
+.rank-books li[data-reached="true"] .rank-book-glyph {
+  color: var(--circle-self);
+  border-color: color-mix(in oklab, var(--circle-self) 35%, var(--border));
+  background-color: color-mix(in oklab, var(--circle-self) 8%, var(--background));
+}
+.rank-books h3 {
+  margin-top: 1.125rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.rank-book-threshold {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+}
+.rank-book-readers {
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+.rank-book-readers i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border: 1px solid var(--muted-foreground);
+  border-radius: 50%;
+}
+.rank-book-readers i[data-ink="peer"] {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.rank-book-readers i[data-reached="true"] {
+  background: var(--person-ink);
+  border-color: var(--person-ink);
+}
+.rank-next-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.rank-next-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  font-size: 0.75rem;
+}
+.rank-next-heading h3 {
+  color: var(--person-ink);
+}
+.rank-next-heading > span {
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+}
+.rank-next-track {
+  height: 0.3rem;
+  margin-top: 0.875rem;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background: var(--border);
+}
+.rank-next-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--person-ink);
+}
+.rank-next-pair p {
+  margin-top: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+.rank-next-pair strong {
+  color: var(--foreground);
+  font-weight: 400;
+}
+.milestone-intro {
+  margin-top: 0.65rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+.milestone-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+  list-style: none;
+}
+.milestone-grid > li {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  align-items: center;
+  padding: 1.25rem 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--background);
+  text-align: center;
+}
+.milestone-grid > li[data-shared="true"] {
+  border-color: color-mix(in oklab, var(--circle-self) 40%, var(--border));
+  background: radial-gradient(ellipse at 50% 20%, color-mix(in oklab, var(--circle-self) 7%, transparent), transparent 70%), var(--background);
+}
+.milestone-art {
+  display: grid;
+  place-items: center;
+  width: 5rem;
+  height: 4.5rem;
+}
+.milestone-grid > li:not([data-collected="true"]) .milestone-art {
+  opacity: 0.38;
+  filter: grayscale(1);
+}
+.milestone-grid h3 {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.milestone-grid li > p {
+  max-width: 23ch;
+  margin: 0.5rem 0 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  line-height: 1.7;
+}
+.milestone-owners {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.milestone-owners > span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.5625rem;
+}
+.milestone-owner-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.milestone-owners svg {
+  flex-shrink: 0;
+  width: 0.65rem;
+  height: 0.65rem;
+  visibility: hidden;
+}
+.milestone-owners [data-earned="true"] {
+  color: var(--person-ink);
+}
+.milestone-owners [data-earned="true"] svg {
+  visibility: visible;
+}
+.milestone-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+}
+.milestone-empty > span {
+  color: var(--circle-self);
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+}
+.milestone-empty h3 {
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+.milestone-empty p {
+  max-width: 40ch;
+  margin: 0.75rem auto;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.8;
+}
+.circle-cheer {
+  position: relative;
+  min-width: 0;
+  padding: 1.5rem;
+  border: 1px solid color-mix(in oklab, var(--circle-self) 25%, var(--border));
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, color-mix(in oklab, var(--circle-self) 7%, var(--circle-surface)), var(--circle-surface) 60%);
+}
+.circle-cheer > * + * {
+  margin-top: 1rem;
+}
+.circle-cheer h3 {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.04em;
+}
+.circle-cheer header > p:last-child {
+  margin-top: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.7;
+}
+.circle-cheer-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.circle-cheer-choices button {
+  min-width: 0;
+  min-height: 4rem;
+  padding: 0.75rem 0.375rem;
+  border-radius: 0.65rem;
+  background: color-mix(in oklab, var(--background) 70%, transparent);
+}
+.circle-cheer-choices button:last-child {
+  grid-column: 1 / -1;
+}
+.circle-cheer-choices button > [lang="ja"] {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--circle-self);
+  font-size: 0.9375rem;
+  letter-spacing: 0.025em;
+}
+
 .friends-panel {
   min-width: 0;
   padding: 1.5rem;
@@ -2555,92 +3181,8 @@ rt {
   background: color-mix(in oklab, var(--primary) 30%, transparent);
   pointer-events: none;
 }
-.friends-mirror {
-  --mirror-half: 40px;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0;
-}
-.friends-mirror-column {
-  min-width: 0;
-}
-.friends-mirror-half {
-  height: var(--mirror-half);
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-}
-.friends-mirror-upper {
-  justify-content: end;
-}
-.friends-mirror-lower {
-  justify-content: start;
-}
-.friends-mirror-axis {
-  display: block;
-  height: 1px;
-  background: var(--border);
-}
-.friends-bar {
-  display: block;
-  width: 60%;
-  max-width: 1.5rem;
-  min-height: 2px;
-  border-radius: 2px;
-}
-.friends-bar-zero {
-  background: color-mix(in oklab, var(--foreground) 15%, transparent);
-  height: 2px;
-}
-.friends-same-accent {
-  background: color-mix(in oklab, var(--foreground) 55%, transparent);
-  border: 1px dashed var(--foreground);
-}
-.friends-no-data {
-  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--border) 3px 5px);
-  border: 1px solid var(--border);
-}
-.friends-bar-unknown {
-  display: block;
-  height: 100%;
-  width: 60%;
-  max-width: 1.5rem;
-}
 .friends-thread-shared {
   box-shadow: 0 0 7px var(--glow);
-}
-.friends-ladder {
-  padding: 0 14px;
-  height: 7.5rem;
-  margin-top: 0.5rem;
-}
-.friends-ladder-track {
-  position: relative;
-  top: 50%;
-  border-top: 1px solid var(--border);
-}
-.friends-ladder-rung {
-  position: absolute;
-  top: -0.55rem;
-  transform: translateX(-50%);
-  background: var(--glass-strong);
-  padding: 0 0.2rem;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.friends-ladder-marker {
-  position: absolute;
-  transform: translateX(-50%);
-}
-.friends-ladder-yours {
-  top: -2.8rem;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--primary);
-}
-.friends-ladder-theirs {
-  top: 1.2rem;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 55%, transparent);
 }
 @keyframes thread-draw {
   from {
@@ -2650,54 +3192,131 @@ rt {
     transform: scaleX(1);
   }
 }
-@keyframes friends-ring-draw {
-  from {
-    stroke-dashoffset: var(--ring-length);
-  }
-  to {
-    stroke-dashoffset: var(--ring-end);
-  }
-}
 @media (prefers-reduced-motion: no-preference) {
-  .friends-view[data-motion-allowed="true"] .friends-bar-up {
-    animation: bar-grow 700ms ease-out 1 both;
-    transform-origin: bottom;
-  }
-  .friends-view[data-motion-allowed="true"] .bar-grow-down {
-    animation: bar-grow 700ms ease-out 1 both;
-    transform-origin: top;
-  }
   .friends-view[data-motion-allowed="true"] .friends-thread-shared[data-thread-phase="running"] {
     animation: thread-draw 600ms ease-out 1 both;
     transform-origin: left;
   }
-  .friends-view[data-motion-allowed="true"] .friends-mastery-circle {
-    animation: friends-ring-draw 700ms ease-out 1 both;
+}
+@media (min-width: 800px) {
+  .circle-featured-card .profile-card {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   }
-  .friends-view[data-motion-allowed="true"] .friends-ladder-marker {
-    transition: transform 400ms ease-out;
+  .circle-featured-card .profile-card-banner-shell {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 24rem;
   }
-  .friends-view[data-motion-allowed="true"]
-    .friends-ladder[data-entered="false"]
-    .friends-ladder-marker {
-    transform: translateX(-50%) scale(0.9);
+  .circle-featured-card .profile-card-banner {
+    height: 100%;
+    min-height: 100%;
+    aspect-ratio: auto;
+  }
+  .circle-featured-card .profile-card-upload {
+    position: absolute;
+    inset: 0;
+    object-fit: contain;
+  }
+  .circle-featured-card .profile-card-body {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 2rem;
+  }
+  .circle-featured-card .profile-card-avatar-frame {
+    margin-top: 0;
+  }
+  .circle-featured-card .profile-card > [role="status"] {
+    grid-column: 1 / -1;
+    padding-bottom: 1rem;
+  }
+  .circle-charts {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    align-items: stretch;
   }
 }
-@media (min-width: 1050px) {
-  .friends-comparison-grid {
-    grid-template-columns: 360px minmax(0, 1fr);
+@media (min-width: 1150px) {
+  .circle-featured {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    align-items: start;
+  }
+  .milestone-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
-@media (min-width: 1280px) {
-  .friends-mirror {
-    --mirror-half: 56px;
+@media (max-width: 799px) {
+  .circle-featured-card .profile-card-banner:not([data-uploaded="true"]) {
+    height: clamp(12rem, 35vw, 20rem);
+  }
+  .circle-featured > .circle-cheer .circle-cheer-choices {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .circle-featured > .circle-cheer .circle-cheer-choices button:last-child {
+    grid-column: auto;
+  }
+  .circle-study-thread {
+    flex-basis: 15rem;
   }
 }
-@media (max-width: 1049px) {
-  .friends-selected-card .profile-card,
-  .friends-closed-card {
-    max-width: 36rem;
+@media (max-width: 600px) {
+  .circle-featured,
+  .circle-charts,
+  .friends-comparison-content {
+    gap: 1rem;
+  }
+  .circle-journal-heading {
+    padding-top: 1rem;
+  }
+  .circle-journal-heading > div:first-child {
+    flex-basis: 100%;
+  }
+  .circle-study-thread {
+    flex-basis: 100%;
+    max-width: 20rem;
+    justify-self: center;
     margin-inline: auto;
+  }
+  .circle-featured > .circle-cheer .circle-cheer-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .circle-featured > .circle-cheer .circle-cheer-choices button:last-child {
+    grid-column: 1 / -1;
+  }
+  .rank-books {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem 0.875rem;
+  }
+  .rank-book-glyph {
+    height: 5.5rem;
+  }
+  .rank-next-pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+  .circle-panel-aside {
+    text-align: left;
+  }
+  .milestone-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rhythm-plot {
+    margin-top: 1rem;
+  }
+  .rhythm-totals > div + div {
+    padding-left: 0.75rem;
+  }
+  .rhythm-readout > span:first-child {
+    flex-basis: 100%;
+  }
+}
+@media (hover: hover) {
+  .rhythm-measures button:hover,
+  .rhythm-days button:hover {
+    background: var(--secondary);
+  }
+  .circle-cheer-choices button:not(:disabled):hover {
+    border-color: var(--circle-self);
+    background: color-mix(in oklab, var(--circle-self) 8%, var(--background));
   }
 }
 @media (max-width: 760px) {
@@ -2783,9 +3402,6 @@ rt {
   .friends-comparison-grid {
     gap: 1.25rem;
   }
-  .friend-notebook {
-    padding: 1rem;
-  }
   .friends-panel,
   .friends-drawer > header {
     padding: 1.25rem;
@@ -2801,13 +3417,6 @@ rt {
   }
 }
 @media (max-width: 480px) {
-  .friend-notebooks {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .friend-notebook + .friend-notebook {
-    border-left: 0;
-    border-top: 1px solid var(--border);
-  }
   .friends-loading {
     min-height: 12rem;
     padding: 1.5rem 1rem;

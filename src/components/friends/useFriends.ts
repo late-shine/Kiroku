@@ -2059,7 +2059,7 @@ export function useFriendsController({
         const result = await saveFriendSharing(
           uid!,
           null,
-          { on: share, photo: false, n },
+          { on: share, photo: share, n },
           () => getSource(false, true),
           false,
           ({ settings, publication }) => acknowledge(captured, settings, publication),

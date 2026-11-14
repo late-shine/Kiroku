@@ -172,7 +172,9 @@ export function FriendsView({
           <h1 ref={heading} tabIndex={-1} className="social-title outline-none">
             Better, <em>together.</em>
           </h1>
-          <p className="social-description">Different notebooks. A little shared momentum.</p>
+          <p className="social-description">
+            A place for your people, your progress, and the little things that keep you going.
+          </p>
         </div>
         <div className="social-heading-actions">
           <button type="button" className="social-link" onClick={onBack}>
@@ -190,12 +192,10 @@ export function FriendsView({
             onStart={
               account.configured
                 ? () =>
-                    document
-                      .getElementById("friends-account")
-                      ?.scrollIntoView({
-                        block: "center",
-                        behavior: motionAllowed ? "smooth" : "instant",
-                      })
+                    document.getElementById("friends-account")?.scrollIntoView({
+                      block: "center",
+                      behavior: motionAllowed ? "smooth" : "instant",
+                    })
                 : onProfile
             }
           />
@@ -559,46 +559,51 @@ function SelectedDesk({
     );
   return (
     <div className="friends-comparison-grid">
-      <aside className="friends-selected-card min-w-0">
-        {cached && (
-          <p className="mb-3 text-xs text-muted-foreground">
-            {offline
-              ? `Offline: showing what we saw ${friendCardAge(entry?.fetchedAt ?? friends.snapshot?.fetchedAt ?? now, now).replace(/^Updated /, "")}.`
-              : `Saved on this device · ${new Date(entry?.fetchedAt ?? friends.snapshot?.fetchedAt ?? now).toLocaleString()}.`}
-          </p>
-        )}
-        <ProfileCard
-          mode="friend"
-          data={card}
-          cover={{ n: peer.name, g: peer.glyph }}
-          scenes={scenes}
-          photo={photo}
-          banner={banner}
-          bannerError={imageError}
-          onRetryBanner={() => void friends.selectBanner(peer.uid)}
-          motionRun={run}
-          motionActive={!cached}
-          renderDefs={false}
-          {...(!cached && !friends.activity.busy ? { onRemove, onBlock } : {})}
-        />
-        <p className="mt-3 text-xs text-muted-foreground">{friendCardAge(card.t, now)}.</p>
-        {card.d <= addDays(today, -14) && (
-          <p className="mt-2 text-xs text-muted-foreground">No update since {card.d}.</p>
-        )}
-        {(card.ph || card.bannerId) && !cached && (
-          <button
-            type="button"
-            className={`${friendButton} mt-3`}
-            onClick={() => {
-              if (card.ph) void friends.selectPhoto(peer.uid);
-              if (card.bannerId) void friends.selectBanner(peer.uid);
-            }}
-          >
-            Reload shared images
-          </button>
-        )}
+      <div className="circle-featured">
+        <section
+          className="friends-selected-card circle-featured-card min-w-0"
+          aria-label={`${card.n}’s calling card`}
+        >
+          {cached && (
+            <p className="mb-3 text-xs text-muted-foreground">
+              {offline
+                ? `Offline: showing what we saw ${friendCardAge(entry?.fetchedAt ?? friends.snapshot?.fetchedAt ?? now, now).replace(/^Updated /, "")}.`
+                : `Saved on this device · ${new Date(entry?.fetchedAt ?? friends.snapshot?.fetchedAt ?? now).toLocaleString()}.`}
+            </p>
+          )}
+          <ProfileCard
+            mode="friend"
+            data={card}
+            cover={{ n: peer.name, g: peer.glyph }}
+            scenes={scenes}
+            photo={photo}
+            banner={banner}
+            bannerError={imageError}
+            onRetryBanner={() => void friends.selectBanner(peer.uid)}
+            motionRun={run}
+            motionActive={!cached}
+            renderDefs={false}
+            {...(!cached && !friends.activity.busy ? { onRemove, onBlock } : {})}
+          />
+          <p className="mt-3 text-xs text-muted-foreground">{friendCardAge(card.t, now)}.</p>
+          {card.d <= addDays(today, -14) && (
+            <p className="mt-2 text-xs text-muted-foreground">No update since {card.d}.</p>
+          )}
+          {(card.ph || card.bannerId) && !cached && (
+            <button
+              type="button"
+              className={`${friendButton} mt-3`}
+              onClick={() => {
+                if (card.ph) void friends.selectPhoto(peer.uid);
+                if (card.bannerId) void friends.selectBanner(peer.uid);
+              }}
+            >
+              Reload shared images
+            </button>
+          )}
+        </section>
         <CheerRow peer={peer.uid} name={card.n} today={today} offline={offline} />
-      </aside>
+      </div>
       {local ? (
         <SideBySide
           source={local.source}

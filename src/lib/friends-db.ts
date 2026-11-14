@@ -768,16 +768,44 @@ async function publicationPaths(
   token: Token,
   publication: FriendPublication | null,
   assetChange?: BannerAsset | null,
-  publishedAt?: number | null,
+  preserveStudy = false,
 ) {
+  if (preserveStudy && !publication) {
+    // The card was closed when read. Do not delete a card published in the meantime:
+    // the settings revision rule will reject that concurrent change atomically.
+    return assetChange === undefined ? {} : { [`bannerAssets/${token.uid}`]: assetChange };
+  }
   const { mod } = await getDb(token.uid);
   assertCurrent(token);
   const paths: Record<string, unknown> = {
-    [`cards/${token.uid}`]: publication
-      ? { ...publication.card, t: publishedAt === undefined ? mod.serverTimestamp() : publishedAt }
-      : null,
     [`photos/${token.uid}`]: publication?.photo ?? null,
   };
+  if (preserveStudy && publication) {
+    // Ordinary publishing keeps the same settings revision, so checking that revision
+    // cannot detect newer study data. Patch only the saved look in this atomic update;
+    // never write the old totals, activity, badges, identity or publication timestamp.
+    for (const key of [
+      "v",
+      "rev",
+      "ph",
+      "n",
+      "fr",
+      "fx",
+      "border",
+      "charm",
+      "bk",
+      "tg",
+      "sb",
+      "statusText",
+      "bannerId",
+      "pin",
+    ] as const)
+      paths[`cards/${token.uid}/${key}`] = publication.card[key] ?? null;
+  } else {
+    paths[`cards/${token.uid}`] = publication
+      ? { ...publication.card, t: mod.serverTimestamp() }
+      : null;
+  }
   const id = publication?.card.bannerId;
   if (!id) paths[`banners/${token.uid}`] = null;
   else if (assetChange && assetChange.id === id)
@@ -861,7 +889,7 @@ export function saveFriendSharing(
       rev: newFriendRevision(),
       prev: current?.rev ?? "",
       on,
-      photo: on ? (edit.photo ?? current?.photo ?? false) : false,
+      photo: on ? (edit.photo ?? current?.photo ?? true) : false,
       n,
       deco,
       ...(current?.since
@@ -871,8 +899,9 @@ export function saveFriendSharing(
           : {}),
     };
     let publication = snapshot ? buildFriendPublication(settings, snapshot) : null;
-    let preservedPublishedAt: number | null | undefined;
+    let preserveStudy = false;
     if (on && !snapshot && !requireReady && current?.on) {
+      preserveStudy = true;
       // Only an authoritative, already-published source may stand in for an unapproved device.
       const existing = decodeFriendCard(await read(token, `cards/${uid}`));
       if (existing.kind === "published") {
@@ -881,8 +910,6 @@ export function saveFriendSharing(
         const photo =
           settings.photo && existing.card.ph ? await read(token, `photos/${uid}`) : null;
         publication = restyleFriendPublication(settings, existing.card, photo);
-        // A new look is not new study data, including when the old update time is unknown.
-        preservedPublishedAt = existing.card.t;
       } else if (existing.kind !== "closed") {
         throw new FriendsError(
           "Your shared card couldn't be read safely. Refresh Friends or update the app before saving your look. Nothing was changed.",
@@ -891,13 +918,13 @@ export function saveFriendSharing(
     }
     const paths = {
       [`settings/${uid}`]: settings,
-      ...(await publicationPaths(token, publication, assetChange, preservedPublishedAt)),
+      ...(await publicationPaths(token, publication, assetChange, preserveStudy)),
     };
     try {
       await friendStep("sharing-save", "save your sharing choice", () =>
         update(token, paths, () => {
           // Preserved public data does not depend on this device's local source fingerprint.
-          if (!publication || preservedPublishedAt !== undefined) return true;
+          if (!publication || preserveStudy) return true;
           const latest = source();
           return latest !== null && buildFriendPublication(settings, latest).fp === publication.fp;
         }),

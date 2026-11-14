@@ -1,127 +1,214 @@
-import { useState } from "react";
-import {
-  comparisonScale,
-  sharedStudyDays,
-  type AlignedFriendDay,
-  type FriendCard,
-} from "@/lib/friends";
+import { useId, useState } from "react";
+import { BookOpen, PenLine } from "lucide-react";
+import { comparisonScale, sharedStudyDays, type AlignedFriendDay } from "@/lib/friends";
 import { weekdayName } from "@/lib/study-log";
-import { friendButton } from "./friends-ui";
+
+type Point = { x: number; y: number };
+function segments(values: readonly (number | null)[], maximum: number): Point[][] {
+  const runs: Point[][] = [];
+  let run: Point[] = [];
+  values.forEach((value, index) => {
+    if (value === null) {
+      if (run.length) runs.push(run);
+      run = [];
+    } else run.push({ x: 48 + index * 104, y: 194 - (value / maximum) * 156 });
+  });
+  if (run.length) runs.push(run);
+  return runs;
+}
 
 export function MirrorBars({
   own,
   other,
   name,
-  sameAccent,
-  accent,
   togetherFresh,
 }: {
   own: readonly AlignedFriendDay[];
   other: readonly AlignedFriendDay[];
   name: string;
-  sameAccent: boolean;
-  accent: FriendCard["acc"];
   togetherFresh: boolean;
 }) {
+  const id = useId();
   const [metric, setMetric] = useState<"answers" | "writing">("answers");
-  const ownScale = comparisonScale(own.map((row) => row[metric]));
-  const otherScale = comparisonScale(other.map((row) => row[metric]));
+  const [selected, setSelected] = useState(6);
+  const theirs = own.map((row) => other.find((peer) => peer.day === row.day)?.[metric] ?? null);
+  const yours = own.map((row) => row[metric]);
+  const maximum = Math.ceil(comparisonScale([...yours, ...theirs]) / 4) * 4;
   const together = sharedStudyDays(own, other, togetherFresh);
-  const label = `${metric === "answers" ? "Quiz answers" : "Writing marks"}, last seven calendar days. Bars are scaled to each person's own best day. ${own.map((row, i) => `${row.day}: you ${row[metric] ?? "no data"}; ${name} ${other[i]?.[metric] ?? "no data"}.`).join(" ")}`;
+  const measure = metric === "answers" ? "quiz answers" : "writing marks";
+  const day = own[selected];
+  const label = `${measure}, last seven calendar days. Both lines use the same scale, zero to ${maximum}. ${own.map((row, index) => `${row.day}: you ${yours[index] ?? "no data"}; ${name} ${theirs[index] ?? "no data"}.`).join(" ")}`;
+  const people = [
+    { label: "You", values: yours, ink: "self" },
+    { label: name, values: theirs, ink: "peer" },
+  ];
   return (
-    <section aria-label="Weekly rhythm" className="glass-panel rounded-xl p-4 md:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-base">This week</h2>
-        <div className="flex gap-2" role="group" aria-label="Rhythm measure">
-          {(["answers", "writing"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={`${friendButton} text-[11px] ${metric === value ? "border-primary/60 bg-primary/10" : ""}`}
-              aria-pressed={metric === value}
-              onClick={() => setMetric(value)}
-            >
-              {value === "answers" ? "Quiz answers" : "Writing marks"}
-            </button>
-          ))}
+    <section className="circle-panel rhythm-panel" aria-label="Weekly rhythm">
+      <header className="circle-panel-heading">
+        <div>
+          <p className="circle-eyebrow">
+            <span lang="ja">七日</span> / WEEKLY RHYTHM
+          </p>
+          <h2>A week, written together.</h2>
         </div>
-      </div>
-      <div role="img" aria-label={label} className="friends-mirror mt-4">
-        {own.map((row, i) => {
-          const yours = row[metric],
-            theirs = other[i]?.[metric] ?? null;
+        <div className="rhythm-measures" role="group" aria-label="Rhythm measure">
+          <button
+            type="button"
+            aria-pressed={metric === "answers"}
+            onClick={() => setMetric("answers")}
+          >
+            <BookOpen aria-hidden="true" /> Quiz
+          </button>
+          <button
+            type="button"
+            aria-pressed={metric === "writing"}
+            onClick={() => setMetric("writing")}
+          >
+            <PenLine aria-hidden="true" /> Writing
+          </button>
+        </div>
+      </header>
+      <div className="rhythm-totals">
+        {people.map((person) => {
+          const known = person.values.filter((value): value is number => value !== null);
           return (
-            <div key={row.day} className="friends-mirror-column" aria-hidden="true">
-              <div className="friends-mirror-half friends-mirror-upper">
-                {yours === null ? (
-                  <span className="friends-no-data friends-bar-unknown" />
-                ) : (
-                  <span
-                    className={`friends-bar friends-bar-up ${yours === 0 ? "friends-bar-zero" : "bg-primary"}`}
-                    style={{
-                      height: yours === 0 ? "2px" : `${(yours / ownScale) * 100}%`,
-                      animationDelay: `${i * 60}ms`,
-                    }}
-                  />
-                )}
-              </div>
-              <span className="friends-mirror-axis" />
-              <div data-card-accent={accent} className="friends-mirror-half friends-mirror-lower">
-                {theirs === null ? (
-                  <span className="friends-no-data friends-bar-unknown" />
-                ) : (
-                  <span
-                    className={`friends-bar bar-grow-down ${theirs === 0 ? "friends-bar-zero" : sameAccent ? "friends-same-accent" : "bg-primary"}`}
-                    style={{
-                      height: theirs === 0 ? "2px" : `${(theirs / otherScale) * 100}%`,
-                      animationDelay: `${i * 60}ms`,
-                    }}
-                  />
-                )}
-              </div>
+            <div key={person.ink} data-ink={person.ink}>
+              <span className="rhythm-person">
+                <i aria-hidden="true" />
+                {person.label}
+              </span>
+              <p>
+                <strong>
+                  {known.length
+                    ? known.reduce((sum, value) => sum + value, 0).toLocaleString("en")
+                    : "—"}
+                </strong>{" "}
+                <span>{measure}</span>
+              </p>
+              <small>
+                {known.length === 7
+                  ? "Over the last seven days"
+                  : `${known.length} of 7 days recorded`}
+              </small>
             </div>
           );
         })}
       </div>
-      <div
-        aria-hidden="true"
-        className="mt-2 grid grid-cols-7 justify-items-center text-[10px] text-muted-foreground"
-      >
-        {own.map((row, i) => (
-          <span
+      <div className="rhythm-plot">
+        <svg viewBox="0 0 720 220" role="img" aria-label={label}>
+          <defs>
+            {people.map((person) => (
+              <linearGradient
+                key={person.ink}
+                id={`${id}-${person.ink}`}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor={`var(--circle-${person.ink})`} stopOpacity=".2" />
+                <stop offset="100%" stopColor={`var(--circle-${person.ink})`} stopOpacity="0" />
+              </linearGradient>
+            ))}
+          </defs>
+          {[0, 0.5, 1].map((fraction) => (
+            <g key={fraction} className="rhythm-gridline">
+              <line x1="48" x2="672" y1={194 - fraction * 156} y2={194 - fraction * 156} />
+              <text x="33" y={198 - fraction * 156} textAnchor="end">
+                {(maximum * fraction).toLocaleString("en")}
+              </text>
+            </g>
+          ))}
+          <rect
+            className="rhythm-selected-column"
+            x={24 + selected * 104}
+            y="22"
+            width="48"
+            height="180"
+            rx="12"
+          />
+          {people.map((person) => (
+            <g key={person.ink} data-ink={person.ink}>
+              {segments(person.values, maximum).map((run, index) => (
+                <g key={index}>
+                  {run.length > 1 && (
+                    <path
+                      d={`M${run.map((point) => `${point.x},${point.y}`).join(" L")} L${run[run.length - 1]!.x},194 L${run[0]!.x},194 Z`}
+                      fill={`url(#${id}-${person.ink})`}
+                    />
+                  )}
+                  <polyline
+                    className="rhythm-line"
+                    points={run.map((point) => `${point.x},${point.y}`).join(" ")}
+                  />
+                </g>
+              ))}
+              {person.values.map((value, index) =>
+                value === null ? null : person.ink === "self" ? (
+                  <circle
+                    key={index}
+                    className="rhythm-point"
+                    cx={48 + index * 104}
+                    cy={194 - (value / maximum) * 156}
+                    r={selected === index ? 5 : 3.5}
+                  />
+                ) : (
+                  <rect
+                    key={index}
+                    className="rhythm-point"
+                    x={44 + index * 104}
+                    y={190 - (value / maximum) * 156}
+                    width="8"
+                    height="8"
+                    rx="1"
+                    transform={`rotate(45 ${48 + index * 104} ${194 - (value / maximum) * 156})`}
+                  />
+                ),
+              )}
+            </g>
+          ))}
+        </svg>
+      </div>
+      <div className="rhythm-days" role="group" aria-label="Inspect a day">
+        {own.map((row, index) => (
+          <button
             key={row.day}
-            className={`grid size-5 place-items-center rounded-full ${i === 6 ? "font-semibold text-primary" : ""} ${together?.days[i]?.shared ? "bg-primary/15 ring-1 ring-primary/50" : ""}`}
+            type="button"
+            aria-pressed={selected === index}
+            onClick={() => setSelected(index)}
+            aria-label={`${weekdayName(row.day)}, ${row.day}${together?.days[index]?.shared ? ", both studied" : ""}`}
           >
-            {weekdayName(row.day).slice(0, 1)}
-          </span>
+            <span>{weekdayName(row.day).slice(0, 3)}</span>
+            <strong>{Number(row.day.slice(-2))}</strong>
+            <i
+              aria-hidden="true"
+              data-shared={together?.days[index]?.shared === true}
+              data-unknown={yours[index] === null || theirs[index] === null}
+            />
+          </button>
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        You above · {name} below. Bars are scaled to each person's own best day.
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">Hatched cells mean no data available.</p>
+      <div className="rhythm-readout" aria-live="polite" aria-atomic="true">
+        <span>{day ? `${weekdayName(day.day)} · ${day.day}` : "Choose a day"}</span>
+        <span data-ink="self">
+          You <b>{yours[selected] ?? "No data"}</b>
+        </span>
+        <span data-ink="peer">
+          {name} <b>{theirs[selected] ?? "No data"}</b>
+        </span>
+        <span className="sr-only">{measure}</span>
+      </div>
       {together && (
-        <div className="mt-4 border-t border-border pt-3">
-          <div className="grid grid-cols-7 justify-items-center" aria-hidden="true">
-            {together.days.map((day) => (
-              <span
-                key={day.day}
-                className={`size-2.5 rounded-full ${day.shared === null ? "friends-no-data" : day.shared ? "bg-primary ring-1 ring-primary/60" : "bg-foreground/15"}`}
-              />
-            ))}
-          </div>
-          <p className="mt-3 text-xs">
-            {together.count === 0
-              ? "No shared study days in the available data."
-              : together.covered === 7
-                ? `You both studied on ${together.count} of the last 7 days.`
-                : `You both studied on ${together.count} of ${together.covered} days with shared data.`}
-          </p>
-        </div>
+        <p className="rhythm-together">
+          <span aria-hidden="true">↔</span>{" "}
+          {together.count
+            ? `You both made time to study on ${together.count} of ${together.covered} recorded days.`
+            : "No shared study days in the available dates yet."}
+        </p>
       )}
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Dates follow each person’s local day; this is not simultaneous activity. Today’s activity is
-        known only up to the shared update.
+      <p className="circle-footnote">
+        One scale for both people. Gaps mean no data, not zero. Each date follows your own local
+        day; today is recorded up to the shared update.
       </p>
     </section>
   );

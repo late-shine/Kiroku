@@ -42,11 +42,14 @@ export function CheerRow({
   }, [peer, receivedAt, status.cached, offline]);
   const busy = friends.activity.busy || friends.activity.deleting;
   return (
-    <section
-      className="mt-4 space-y-3 border-t border-border pt-4"
-      aria-label={`Cheers with ${name}`}
-    >
-      <h3 className="font-display text-sm">Send a cheer</h3>
+    <section className="circle-cheer" aria-label={`Cheers with ${name}`}>
+      <header>
+        <p className="circle-eyebrow">
+          <span lang="ja">ひとこと</span> / A LITTLE ENCOURAGEMENT
+        </p>
+        <h3>Leave a little kindness.</h3>
+        <p>A small note for {name}’s day.</p>
+      </header>
       {incoming && phrase && (
         <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
           <p className="text-xs text-muted-foreground">
@@ -65,7 +68,7 @@ export function CheerRow({
           </button>
         </div>
       )}
-      <div className="flex flex-wrap gap-2" role="group" aria-label={`Preset cheers for ${name}`}>
+      <div className="circle-cheer-choices" role="group" aria-label={`Preset cheers for ${name}`}>
         {CHEERS.map((cheer) => {
           const chosen = status.sentKind === cheer.id;
           return (

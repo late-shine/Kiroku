@@ -81,8 +81,8 @@ export function StudyThread({
     playback.run === run &&
     playback.running;
   return (
-    <div ref={root} className="glass-panel rounded-xl p-4">
-      <div className="flex items-center gap-4" aria-hidden="true">
+    <div ref={root} className="circle-study-thread" data-shared={active}>
+      <div className="circle-thread-avatars" aria-hidden="true">
         {ownAvatar}
         <span
           data-thread-phase={running ? "running" : "settled"}
@@ -90,9 +90,12 @@ export function StudyThread({
         />
         {friendAvatar}
       </div>
-      <p className="mt-3 text-center text-xs text-muted-foreground">
-        {active ? "You both studied today, as of the shared update." : "Two notebooks, one week."}
-      </p>
+      <p>{active ? "A little company, today." : "Learning alongside each other."}</p>
+      <span className="circle-thread-caption">
+        {active
+          ? "Both studied, as of the shared update"
+          : "Two individual rhythms. Room for both."}
+      </span>
     </div>
   );
 }

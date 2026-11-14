@@ -422,8 +422,9 @@ export function FriendsPanel({
                 />
               </label>
               <p className="break-words text-xs text-muted-foreground">
-                Avatar: {symbol}. Change it in your profile. Picture sharing is a separate choice.
+                Avatar symbol: {symbol}. Change it in your profile.
               </p>
+              <p className="text-xs text-muted-foreground">{SHARING_PICTURE}</p>
               {!clean && (
                 <p className="text-sm text-muted-foreground">Enter a name to use Friends.</p>
               )}
@@ -828,14 +829,14 @@ function PlainFriendCard({ peer }: { peer: FriendPeer }) {
 const SHARING_SUMMARY =
   "Accepted friends can see your card and study summary. Lessons, email and API keys stay private.";
 const SHARING_FIELDS = [
-  "Your public name and avatar symbol.",
+  "Your public name and avatar symbol, plus your uploaded avatar by default when sharing is on (unless you opted out).",
   "Rank, study streak, kanji carved, words mastered, and lesson, taught-kanji and vocabulary counts.",
   "Your last 7 days of quiz answers and writing marks.",
   "Earned badges and up to three pinned badges.",
-  "Your card look: accent, stamp, avatar frame, card border, little detail, effect, banner scene or cropped uploaded banner, study tag, and status preset or personal status text (up to 60 characters).",
+  "Your saved card look, including your banner and earned decorations, is included by default when sharing is on: accent, stamp, avatar frame, card border, little detail, effect, banner scene or cropped uploaded banner, study tag, and status preset or personal status text (up to 60 characters).",
 ];
 const SHARING_PICTURE =
-  "Your uploaded picture is shown only if you turn on the separate picture choice. Your Google picture is never shared.";
+  "When sharing is on, your uploaded avatar, saved banner and earned decorations are included by default. Your Google sign-in picture stays private. Your existing avatar preference is kept and can be changed in sharing settings.";
 const SHARING_PRIVATE =
   "Never shared: your email, lesson text, word lists, Gemini key, or the private banner source and crop controls.";
 const READY_TEXT = "Ready for your first friend. Only people you accept can see your shared card.";
@@ -993,12 +994,12 @@ function FriendsSharing({
 }) {
   const friends = useFriends();
   const { loaded, settings, card, error } = friends.sharing;
-  const [photo, setPhoto] = useState(false);
+  const [photo, setPhoto] = useState(settings?.photo ?? true);
   const [choice, setChoice] = useState(true); // Draft for confirmed-missing settings only.
   const [savingChoice, setSavingChoice] = useState<boolean | null>(null);
   const choiceSequence = useRef(0);
   useEffect(() => {
-    setPhoto(settings?.photo ?? false);
+    setPhoto(settings?.photo ?? true);
   }, [settings?.rev, settings?.photo]);
   useEffect(() => {
     setChoice(true);
@@ -1123,10 +1124,10 @@ function FriendsSharing({
               type="checkbox"
               className="size-5 accent-primary focus-visible:outline-2 focus-visible:outline-ring"
               checked={photo}
-              disabled={disabled || (!friends.uploadedPhotoAvailable && !photo)}
+              disabled={disabled || !loaded}
               onChange={(event) => setPhoto(event.target.checked)}
             />
-            <span>Also show my uploaded picture</span>
+            <span>Show my uploaded avatar</span>
           </label>
           <button
             type="button"
@@ -1136,7 +1137,7 @@ function FriendsSharing({
               void friends.saveSharing({ photo }, settings.rev);
             }}
           >
-            Save picture choice
+            Save avatar preference
           </button>
           <div className="flex flex-wrap gap-2">
             <button

@@ -456,7 +456,7 @@ export function CheckinStudio({
             <p className="ci-subtitle mt-4">
               {step === "copy"
                 ? "Copy your prompt into a fresh chat with your preferred AI. It will ask the questions first and wait for you."
-                : "After you say SUBMIT, your AI returns an assessment and a Kiroku block. Paste the final reply below."}
+                : "After you send SUBMIT in a separate message, your AI returns a review and a Kiroku block. Paste the final reply below."}
             </p>
             <div className="ci-actions mb-5">
               <button
@@ -557,18 +557,19 @@ export function CheckinStudio({
               <div>
                 <strong>Your own words</strong>
                 <p>
-                  Reply with question numbers. You can answer in several messages, skip an item, or
-                  ask for a hint. Assisted answers are labelled.
+                  Reply with question numbers, in one message or several. Before submitting, you can
+                  revise an answer; your latest numbered version counts. You can skip an item or ask
+                  for a hint. Assisted answers are labelled.
                 </p>
               </div>
             </div>
             <div className="ci-instruction">
               <ClipboardPaste size={20} />
               <div>
-                <strong>Say SUBMIT when you’re ready</strong>
+                <strong>Send SUBMIT when you’re ready</strong>
                 <p>
-                  Only then does the AI review your answers and produce the final block to paste
-                  here.
+                  Send only SUBMIT in a separate message. The AI then reviews your answers and
+                  produces the final block to paste here.
                 </p>
               </div>
             </div>
@@ -578,8 +579,9 @@ export function CheckinStudio({
                 Assisted answers: at most 1 point
               </p>
               <p className="ci-note mt-3">
-                This prompt can guide an AI, not guarantee its judgment. If the AI skips a step, ask
-                it to follow the original instructions.
+                This prompt can guide an AI, not guarantee its judgment. If it loses earlier
+                messages, paste the original questions and answers when asked, then send SUBMIT
+                again. Do not accept a result based on guessed answers.
               </p>
             </div>
             <p className="ci-note mt-5 break-all">Session {active.session.id.slice(3, 11)}</p>

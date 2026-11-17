@@ -26,6 +26,10 @@ import { SpeakButton } from "@/components/voice/SpeakButton";
 import { useSpeechSupported } from "@/hooks/use-speech-supported";
 import { speakableReading } from "@/lib/speak-text";
 import { LessonStudio } from "@/components/ai/LessonStudio";
+import { CheckinStudio, CheckinReminder, CheckinPreferences } from "@/components/ai/CheckinStudio";
+import { CheckinJournal } from "@/components/progress/CheckinJournal";
+import { useCheckinPrefs } from "@/components/ai/useCheckinPrefs";
+import { checkinMapSchema, parseStoredCheckins, recordId, type CheckinRecord } from "@/lib/checkin";
 import cats from "@/assets/images/cats-fog.jpg";
 import castle from "@/assets/images/neusch-mist.jpg";
 import autumn from "@/assets/images/autumn-castle.jpg";
@@ -115,7 +119,15 @@ export const Route = createFileRoute("/")({
 // Phase 20: "studio" is a shell mode like the others — the AI Lesson Studio is a page, not an overlay.
 // Writing quests Q2: "write" is one too (its pill shows only while Writing practice is on).
 type MainTab =
-  "lesson" | "quiz" | "progress" | "atmosphere" | "profile" | "studio" | "write" | "friends";
+  | "lesson"
+  | "quiz"
+  | "progress"
+  | "atmosphere"
+  | "profile"
+  | "studio"
+  | "write"
+  | "friends"
+  | "checkin";
 type LessonTab = "overview" | "grammar" | "kanji" | "vocab";
 const backgrounds = [
   { name: "Misty companions", url: cats },
@@ -139,6 +151,7 @@ const emptyProgress: UserProgressState = {
   writing: {},
   writingLog: {},
   badges: {},
+  checkins: {},
   backgroundIndex: 0,
   bgZoomSpeed: "slow",
   showFurigana: true,
@@ -159,6 +172,7 @@ function loadProgress() {
       writing: parseStoredWriting(saved?.writing),
       writingLog: parseStoredWritingLog(saved?.writingLog),
       badges: parseStoredBadges(saved?.badges),
+      checkins: parseStoredCheckins(saved?.checkins),
     };
   } catch {
     return emptyProgress;
@@ -209,6 +223,42 @@ function JapaneseDesk() {
     setMounted(true);
   }, []);
   const [tab, setTab] = useState<MainTab>("lesson");
+  const checkinPrefs = useCheckinPrefs();
+  const [checkinId, setCheckinId] = useState<string | null>(null);
+  const [checkinVisited, setCheckinVisited] = useState(false);
+  const [checkinEpoch, setCheckinEpoch] = useState(0);
+  const checkinReturnRef = useRef<MainTab>("quiz");
+  const openCheckin = (id: string | null = null) => {
+    if (tab !== "checkin") checkinReturnRef.current = tab;
+    setCheckinId(id);
+    setCheckinVisited(true);
+    setTab("checkin");
+  };
+  const saveCheckin = (record: CheckinRecord): string | null => {
+    const id = recordId(record);
+    const previous = progress.checkins?.[id];
+    if (record.status !== "deleted" && previous?.status === "deleted")
+      return "This check-in was deleted. Start a new check-in instead.";
+    if (record.status !== "deleted" && previous?.status === "complete")
+      return "This result is already saved. Duplicate imports do not create a second entry.";
+    if (
+      record.status === "complete" &&
+      (!previous ||
+        previous.status !== "pending" ||
+        JSON.stringify(previous.session) !== JSON.stringify(record.session))
+    )
+      return "The original check-in is no longer available. Open it from the journal and try again.";
+    const parsed = checkinMapSchema.safeParse({ ...progress.checkins, [id]: record });
+    if (!parsed.success) return "This check-in could not be validated. Nothing was saved.";
+    const next = { ...progress, checkins: parsed.data };
+    try {
+      localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(next));
+      setProgress(next);
+      return null;
+    } catch {
+      return "Your browser could not save this check-in. Export a backup and free some browser storage, then try again.";
+    }
+  };
   const [lessonTab, setLessonTab] = useState<LessonTab>("overview");
   // Phase 20: the Studio is the "studio" mode. Once opened it stays MOUNTED (hidden while another
   // mode shows) so a pasted AI reply, the chosen step and an in-flight Gemini call survive a trip
@@ -385,6 +435,11 @@ function JapaneseDesk() {
     setCycleIndex(null);
     setDay(1);
     quests.reset();
+    checkinPrefs.reset();
+    setCheckinId(null);
+    setCheckinVisited(false);
+    setCheckinEpoch((n) => n + 1);
+    if (tab === "checkin") setTab("lesson");
   };
   return (
     // Phase 9b: one shared account + sync state for the header button and the Progress card.
@@ -460,6 +515,29 @@ function JapaneseDesk() {
                 (`min-h-dvh`), so main never scrolled itself — the window does. The declaration only
                 made main a scroll container, which would capture the Studio's sticky step row. */}
             <main className="flex-1 py-5 md:py-7">
+              {mounted && tab === "lesson" && (
+                <CheckinReminder
+                  lessons={lessons}
+                  progress={progress}
+                  preferences={checkinPrefs}
+                  onOpen={() => openCheckin()}
+                />
+              )}
+              {mounted && checkinVisited && (
+                <div hidden={tab !== "checkin"}>
+                  <CheckinStudio
+                    key={checkinEpoch}
+                    lessons={lessons}
+                    progress={progress}
+                    selectedId={checkinId}
+                    onSelect={setCheckinId}
+                    onSave={saveCheckin}
+                    onBack={() => setTab(checkinReturnRef.current)}
+                    onOpenLessons={openStudio}
+                    preferences={checkinPrefs}
+                  />
+                </div>
+              )}
               {mounted &&
                 tab === "lesson" &&
                 (lesson ? (
@@ -490,6 +568,24 @@ function JapaneseDesk() {
                   {tips.isVisible("quiz") && (
                     <TipCard id="quiz" onDismiss={tips.dismiss} className="mb-4 max-w-3xl" />
                   )}
+                  <div className="checkin ci-reminder">
+                    <span className="ci-seal" aria-hidden="true">
+                      記
+                    </span>
+                    <div className="flex-1">
+                      <p className="ci-eyebrow">Beyond word recall</p>
+                      <h2 className="font-display text-xl mt-2">
+                        Put your Japanese into practice.
+                      </h2>
+                      <p>
+                        A short AI check-in, built from your lessons. Keep the answers and feedback
+                        in your journal.
+                      </p>
+                    </div>
+                    <button className="ci-primary" onClick={() => openCheckin(checkinId)}>
+                      AI check-in <Sparkles size={16} />
+                    </button>
+                  </div>
                   <QuizView
                     lessons={lessons}
                     day={activeDay ?? day}
@@ -511,6 +607,11 @@ function JapaneseDesk() {
                     setProgress={setProgress}
                     onAI={openStudio}
                     onRestore={() => setTab("profile")}
+                  />
+                  <CheckinJournal
+                    records={progress.checkins ?? {}}
+                    onOpen={(id) => openCheckin(id)}
+                    onNew={() => openCheckin()}
                   />
                 </>
               )}
@@ -539,6 +640,7 @@ function JapaneseDesk() {
                     onOpenQuiz={() => setTab("quiz")}
                     onOpenAtmosphere={() => setTab("atmosphere")}
                     onShowTipsAgain={tips.showAgain}
+                    checkinPreferences={<CheckinPreferences preferences={checkinPrefs} />}
                     questsOn={questsOn}
                     onSetQuestsOn={quests.setOn}
                     quests={quests}
@@ -696,9 +798,9 @@ function Header({
                     ? `${label}${friends.unreadCheerCount > 0 ? `, ${friends.cheersStale ? "last known: " : ""}${friends.unreadCheerCount} new cheer${friends.unreadCheerCount === 1 ? "" : "s"}` : friends.cheersStale ? ", cheer status not confirmed" : ""}`
                     : label
             }
-            aria-current={tab === id ? "page" : undefined}
+            aria-current={tab === id || (tab === "checkin" && id === "quiz") ? "page" : undefined}
             className={`relative flex min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 motion-reduce:transition-none ${
-              tab === id
+              tab === id || (tab === "checkin" && id === "quiz")
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
             }`}
@@ -734,7 +836,7 @@ function Header({
                 aria-label={`${quizDue} words due today`}
                 title={`${quizDue} words due today`}
                 className={`rounded-full px-1.5 text-[9px] font-bold leading-3.5 ${
-                  tab === id
+                  tab === id || (tab === "checkin" && id === "quiz")
                     ? "bg-primary-foreground/20 text-primary-foreground"
                     : "bg-primary/25 text-primary"
                 }`}

@@ -4,7 +4,7 @@
  * Pure functions only (no React, no localStorage, no DOM) so they can be tested without a browser.
  * `ProgressView`'s Export / Restore controls in `src/routes/index.tsx` are the only callers.
  *
- * Format (version 6):  { app: "kiroku", version: 6, exportedAt: <ISO string>, lessons, progress }
+ * Format (version 7):  { app: "kiroku", version: 7, exportedAt: <ISO string>, lessons, progress }
  *
  * What is deliberately NOT in a backup:
  * - The Gemini API key (BYOK rule — backup files get shared and emailed). `buildBackup` only accepts
@@ -16,6 +16,7 @@
  * `BACKUP_VERSION` and adds a step to `MIGRATIONS` below, so older backup files keep restoring.
  */
 import { z } from "zod";
+import { checkinMapSchema } from "@/lib/checkin";
 import {
   MAX_GRAMMAR_PER_DAY,
   asArray,
@@ -30,7 +31,7 @@ import { badgesSchema, writingLogSchema, writingSchema } from "@/lib/writing";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 
 export const BACKUP_APP = "kiroku";
-export const BACKUP_VERSION = 6;
+export const BACKUP_VERSION = 7;
 
 export interface BackupFile {
   app: typeof BACKUP_APP;
@@ -102,6 +103,7 @@ const progressSchema = z
     writing: writingSchema,
     writingLog: writingLogSchema,
     badges: badgesSchema,
+    checkins: checkinMapSchema,
     lastQuizScore: z.object({
       correct: z.number().int().nonnegative(),
       total: z.number().int().nonnegative(),
@@ -131,6 +133,7 @@ function fillProgress(
     writing: parsed.writing ?? defaults.writing,
     writingLog: parsed.writingLog ?? defaults.writingLog,
     badges: parsed.badges ?? defaults.badges,
+    checkins: parsed.checkins ?? {},
     ...(lastQuizScore ? { lastQuizScore } : {}),
     backgroundIndex: parsed.backgroundIndex ?? defaults.backgroundIndex,
     bgZoomSpeed: parsed.bgZoomSpeed ?? defaults.bgZoomSpeed,
@@ -197,6 +200,11 @@ const MIGRATIONS: ReadonlyArray<(file: RawFile) => RawFile> = [
         badges: "badges" in progress ? progress["badges"] : {},
       },
     };
+  },
+  (file) => {
+    const progress = file["progress"];
+    if (!isRecord(progress)) return file;
+    return { ...file, progress: { ...progress, checkins: progress["checkins"] ?? {} } };
   },
 ];
 

@@ -69,6 +69,13 @@
  * changes here, change the rules too (the check script evaluates the real rules file against real trees).
  */
 import { restoredLessonSchema } from "@/lib/backup";
+import {
+  CHECKIN_ID,
+  checkinMapSchema,
+  mergeCheckins,
+  MAX_CHECKIN_RECORD_CHARS,
+  type CheckinRecord,
+} from "@/lib/checkin";
 import { MAX_NAME_LENGTH, isGlyphId, isPhotoValue } from "@/lib/profile";
 import { mergeLogs, pruneLog, type StudyLog } from "@/lib/study-log";
 import {
@@ -110,7 +117,8 @@ import type {
  * writing. This build still reads accounts at 1 and 2, which simply have none. Rolling a deployment back to a build
  * that knows 2 leaves it unable to sync until it is updated again, and the database rules must be the Q10 ones first.
  */
-export const SYNC_SCHEMA = 3;
+// Schema 4 prevents older clients from overwriting the private check-in journal.
+export const SYNC_SCHEMA = 4;
 
 /** Keys the rules accept: `d13` for a day, `d13-4` for a word, `quiz` for a tip. */
 export const DAY_KEY_RE = /^d[0-9]{1,5}$/;
@@ -138,6 +146,7 @@ export interface SyncProgress {
   writing?: Record<string, WritingRecord>;
   writingLog?: Record<string, WritingDay>;
   badges?: Record<string, string>;
+  checkins?: Record<string, CheckinRecord>;
 }
 
 /** Small preferences (9c). Every field is optional: absent = "this side has no opinion". */
@@ -216,6 +225,7 @@ export function snapshotOf(
       writing: { ...progress.writing },
       writingLog: { ...progress.writingLog },
       badges: { ...progress.badges },
+      checkins: { ...progress.checkins },
     },
     prefs: {
       backgroundIndex: progress.backgroundIndex,
@@ -248,7 +258,8 @@ export function isEmptySnapshot(s: SyncSnapshot): boolean {
     Object.keys(p.studyLog).length === 0 &&
     Object.keys(w.writing).length === 0 &&
     Object.keys(w.writingLog).length === 0 &&
-    Object.keys(w.badges).length === 0
+    Object.keys(w.badges).length === 0 &&
+    Object.keys(p.checkins ?? {}).length === 0
   );
 }
 
@@ -276,6 +287,7 @@ export function applyProgress(s: SyncSnapshot, current: UserProgressState): User
     writing: { ...w.writing },
     writingLog: { ...w.writingLog },
     badges: { ...w.badges },
+    checkins: { ...s.progress.checkins },
     backgroundIndex: s.prefs.backgroundIndex ?? current.backgroundIndex,
     bgZoomSpeed: s.prefs.bgZoomSpeed ?? current.bgZoomSpeed,
     showFurigana: s.prefs.showFurigana ?? current.showFurigana,
@@ -369,6 +381,7 @@ function canonicalSnapshot(s: SyncSnapshot): string {
     writing: wireWriting(w.writing),
     writingLog: wireWritingLog(w.writingLog),
     badges: wireBadges(w.badges),
+    checkins: s.progress.checkins ?? {},
     // an empty tip list and no tip list are the same thing (the account never stores an empty node)
     prefs: {
       ...s.prefs,
@@ -498,6 +511,13 @@ export function encodeSnapshot(s: SyncSnapshot, now: Date = new Date()): CloudTr
   if (Object.keys(writingLog).length > 0) progress["writingLog"] = writingLog;
   const badges = wireBadges(w.badges);
   if (Object.keys(badges).length > 0) progress["badges"] = badges;
+  const checkins = Object.fromEntries(
+    Object.entries(checkinMapSchema.parse(p.checkins ?? {})).map(([id, record]) => [
+      id,
+      JSON.stringify(record),
+    ]),
+  );
+  if (Object.keys(checkins).length > 0) progress["checkins"] = checkins;
 
   const memory: Record<string, WordMemory> = {};
   for (const [id, rec] of Object.entries(p.vocabMemory)) {
@@ -687,6 +707,28 @@ export function decodeCloud(raw: unknown): DecodeResult {
   lessons.sort((a, b) => a.dayNumber - b.dayNumber);
 
   const rawProgress = isRecord(raw["progress"]) ? raw["progress"] : {};
+  let checkins: Record<string, CheckinRecord> = {};
+  try {
+    const node = rawProgress["checkins"];
+    if (node !== undefined && !isRecord(node)) throw new Error("Invalid check-in map");
+    const decoded: Record<string, unknown> = {};
+    for (const [id, value] of Object.entries(node ?? {})) {
+      if (
+        !CHECKIN_ID.test(id) ||
+        typeof value !== "string" ||
+        value.length > MAX_CHECKIN_RECORD_CHARS
+      )
+        throw new Error("Invalid check-in record");
+      decoded[id] = JSON.parse(value);
+    }
+    checkins = checkinMapSchema.parse(decoded);
+  } catch {
+    return {
+      ok: false,
+      message:
+        "Your account's check-in journal could not be read. Nothing was changed; update Kiroku or restore a valid backup.",
+    };
+  }
   const completedDays = keysWithTrue(rawProgress["completedDays"], (k) => DAY_KEY_RE.test(k))
     .map((k) => Number(k.slice(1)))
     .sort(byNumber);
@@ -723,6 +765,7 @@ export function decodeCloud(raw: unknown): DecodeResult {
         // the writing day log and the badges are stored in the very form the device keeps them, so the lenient readers do
         writingLog: parseStoredWritingLog(rawProgress["writingLog"]),
         badges: parseStoredBadges(rawProgress["badges"]),
+        checkins,
       },
       prefs: decodePrefs(raw["prefs"]),
       tombstones,
@@ -934,6 +977,7 @@ export function mergeSnapshots(device: SyncSnapshot, cloud: SyncSnapshot): SyncS
       writing: mergeWriting(dw.writing, cw.writing),
       writingLog: mergeWritingLog(dw.writingLog, cw.writingLog),
       badges: mergeBadges(dw.badges, cw.badges),
+      checkins: mergeCheckins(d.checkins ?? {}, c.checkins ?? {}),
     },
     prefs: mergePrefs(device.prefs, cloud.prefs, null),
     tombstones: { ...cloud.tombstones },
@@ -1107,7 +1151,18 @@ export function planSync(
       if (deviceDays.has(dayOfKey(key))) replaced[key] = at;
     for (const day of ctx.pendingReplaces ?? [])
       if (deviceDays.has(day)) replaced[`d${day}`] = ctx.now.toISOString();
-    result = { ...device, tombstones, ...(Object.keys(replaced).length > 0 ? { replaced } : {}) };
+    const checkins = { ...device.progress.checkins };
+    for (const [id, record] of Object.entries(cloud.progress.checkins ?? {})) {
+      if (record.status === "deleted") checkins[id] = record;
+      else if (!checkins[id])
+        checkins[id] = { status: "deleted", id, deletedAt: ctx.now.toISOString() };
+    }
+    result = {
+      ...device,
+      progress: { ...device.progress, checkins },
+      tombstones,
+      ...(Object.keys(replaced).length > 0 ? { replaced } : {}),
+    };
   }
   // 18a: the study log keeps only its last 120 days here too, so a merge can't bring back days a device already pruned
   // (which would otherwise bounce between the device and the account after every answer). Usually returns it unchanged.

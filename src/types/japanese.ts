@@ -1,3 +1,5 @@
+import type { CheckinRecord } from "@/lib/checkin";
+
 export interface VocabWord {
   id: string;
   japanese: string;
@@ -140,6 +142,7 @@ export interface WritingDay {
 }
 
 export interface UserProgressState {
+  checkins?: Record<string, CheckinRecord>;
   completedDays: number[];
   currentDay: number;
   masteredVocabIds: string[];

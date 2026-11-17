@@ -109,6 +109,7 @@ export function ProfilePage({
   onOpenQuiz,
   onOpenAtmosphere,
   onShowTipsAgain,
+  checkinPreferences,
   questsOn,
   onSetQuestsOn,
   quests,
@@ -131,6 +132,7 @@ export function ProfilePage({
   onOpenAtmosphere: () => void;
   /** The shell's `useTips().showAgain`: the shell owns the tip state (a second copy here would not refresh its tip cards). */
   onShowTipsAgain: () => void;
+  checkinPreferences?: ReactNode;
   /** Writing quests Q2: whether Writing practice is on, and the switch that sets it (the shell owns the device-only state). */
   questsOn: boolean;
   onSetQuestsOn: (on: boolean) => void;
@@ -722,6 +724,7 @@ export function ProfilePage({
                   />
                 </button>
               </div>
+              {checkinPreferences}
               {questsOn && (
                 <StampChooser
                   carved={carved}

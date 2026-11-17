@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   progress: "kiroku_progress_v2",
   lessons: "kiroku_lessons_v1",
   aiStudio: "kiroku_ai_studio_v1",
+  checkinPrefs: "kiroku_checkin_prefs_v1",
   geminiKey: "kiroku_gemini_key_v1",
   music: "kiroku_music_v1",
   voice: "kiroku_voice_v1", // Phase 8 — new key, has no legacy (komorebi_*) counterpart

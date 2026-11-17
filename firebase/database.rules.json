@@ -86,6 +86,11 @@
               ".validate": "$id.matches(/^[a-z0-9-]{1,40}$/) && newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
             }
           },
+          "checkins": {
+            "$id": {
+              ".validate": "$id.matches(/^ci_[a-f0-9]{32}$/) && newData.isString() && newData.val().length <= 160000"
+            }
+          },
           "$other": {
             ".validate": false
           }

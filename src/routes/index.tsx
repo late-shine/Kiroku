@@ -26,7 +26,7 @@ import { SpeakButton } from "@/components/voice/SpeakButton";
 import { useSpeechSupported } from "@/hooks/use-speech-supported";
 import { speakableReading } from "@/lib/speak-text";
 import { LessonStudio } from "@/components/ai/LessonStudio";
-import { CheckinStudio, CheckinReminder, CheckinPreferences } from "@/components/ai/CheckinStudio";
+import { CheckinStudio, CheckinEntry, CheckinPreferences } from "@/components/ai/CheckinStudio";
 import { CheckinJournal } from "@/components/progress/CheckinJournal";
 import { useCheckinPrefs } from "@/components/ai/useCheckinPrefs";
 import { checkinMapSchema, parseStoredCheckins, recordId, type CheckinRecord } from "@/lib/checkin";
@@ -227,7 +227,7 @@ function JapaneseDesk() {
   const [checkinId, setCheckinId] = useState<string | null>(null);
   const [checkinVisited, setCheckinVisited] = useState(false);
   const [checkinEpoch, setCheckinEpoch] = useState(0);
-  const checkinReturnRef = useRef<MainTab>("quiz");
+  const checkinReturnRef = useRef<MainTab>("studio");
   const openCheckin = (id: string | null = null) => {
     if (tab !== "checkin") checkinReturnRef.current = tab;
     setCheckinId(id);
@@ -268,7 +268,7 @@ function JapaneseDesk() {
   const studioReturnRef = useRef<MainTab>("lesson");
   useEffect(() => {
     if (tab === "studio") setStudioVisited(true);
-    else studioReturnRef.current = tab;
+    else if (tab !== "checkin") studioReturnRef.current = tab;
     // A mode switch is a page change, so start each mode at the top. The window is the scroller
     // (the content column grows with its content; see the comment on <main> below).
     window.scrollTo({ top: 0 });
@@ -515,14 +515,6 @@ function JapaneseDesk() {
                 (`min-h-dvh`), so main never scrolled itself — the window does. The declaration only
                 made main a scroll container, which would capture the Studio's sticky step row. */}
             <main className="flex-1 py-5 md:py-7">
-              {mounted && tab === "lesson" && (
-                <CheckinReminder
-                  lessons={lessons}
-                  progress={progress}
-                  preferences={checkinPrefs}
-                  onOpen={() => openCheckin()}
-                />
-              )}
               {mounted && checkinVisited && (
                 <div hidden={tab !== "checkin"}>
                   <CheckinStudio
@@ -533,7 +525,13 @@ function JapaneseDesk() {
                     onSelect={setCheckinId}
                     onSave={saveCheckin}
                     onBack={() => setTab(checkinReturnRef.current)}
+                    backLabel={
+                      checkinReturnRef.current === "studio"
+                        ? "Back to AI Lesson Studio"
+                        : "Back to Progress"
+                    }
                     onOpenLessons={openStudio}
+                    onOpenProfile={() => setTab("profile")}
                     preferences={checkinPrefs}
                   />
                 </div>
@@ -568,24 +566,6 @@ function JapaneseDesk() {
                   {tips.isVisible("quiz") && (
                     <TipCard id="quiz" onDismiss={tips.dismiss} className="mb-4 max-w-3xl" />
                   )}
-                  <div className="checkin ci-reminder">
-                    <span className="ci-seal" aria-hidden="true">
-                      記
-                    </span>
-                    <div className="flex-1">
-                      <p className="ci-eyebrow">Beyond word recall</p>
-                      <h2 className="font-display text-xl mt-2">
-                        Put your Japanese into practice.
-                      </h2>
-                      <p>
-                        A short AI check-in, built from your lessons. Keep the answers and feedback
-                        in your journal.
-                      </p>
-                    </div>
-                    <button className="ci-primary" onClick={() => openCheckin(checkinId)}>
-                      AI check-in <Sparkles size={16} />
-                    </button>
-                  </div>
                   <QuizView
                     lessons={lessons}
                     day={activeDay ?? day}
@@ -697,6 +677,15 @@ function JapaneseDesk() {
                     showTip={tips.isVisible("studio")}
                     onDismissTip={() => tips.dismiss("studio")}
                     onClose={closeStudio}
+                    checkinEntry={
+                      <CheckinEntry
+                        lessons={lessons}
+                        progress={progress}
+                        preferences={checkinPrefs}
+                        selectedId={checkinId}
+                        onOpen={openCheckin}
+                      />
+                    }
                     onImport={(newLesson) => {
                       // The Studio has already asked before a replacement. A replaced day starts over: its old word
                       // records, starred/weak ids and "done" mark go, so they cannot attach to new words at the same ids.
@@ -798,9 +787,9 @@ function Header({
                     ? `${label}${friends.unreadCheerCount > 0 ? `, ${friends.cheersStale ? "last known: " : ""}${friends.unreadCheerCount} new cheer${friends.unreadCheerCount === 1 ? "" : "s"}` : friends.cheersStale ? ", cheer status not confirmed" : ""}`
                     : label
             }
-            aria-current={tab === id || (tab === "checkin" && id === "quiz") ? "page" : undefined}
+            aria-current={tab === id ? "page" : undefined}
             className={`relative flex min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 motion-reduce:transition-none ${
-              tab === id || (tab === "checkin" && id === "quiz")
+              tab === id
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
             }`}
@@ -836,7 +825,7 @@ function Header({
                 aria-label={`${quizDue} words due today`}
                 title={`${quizDue} words due today`}
                 className={`rounded-full px-1.5 text-[9px] font-bold leading-3.5 ${
-                  tab === id || (tab === "checkin" && id === "quiz")
+                  tab === id
                     ? "bg-primary-foreground/20 text-primary-foreground"
                     : "bg-primary/25 text-primary"
                 }`}
@@ -879,10 +868,10 @@ function Header({
         <button
           onClick={onAI}
           aria-label="AI Lesson Studio"
-          aria-pressed={tab === "studio"}
+          aria-pressed={tab === "studio" || tab === "checkin"}
           title="AI Lesson Studio"
           className={`hit-area rounded-lg border p-2 transition-colors ${
-            tab === "studio"
+            tab === "studio" || tab === "checkin"
               ? "border-primary/50 bg-primary/15 text-primary"
               : "border-border/80 text-muted-foreground hover:bg-accent hover:text-primary"
           }`}

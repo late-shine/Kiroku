@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronLeft,
@@ -164,6 +164,7 @@ export function LessonStudio({
   onDismissTip,
   onClose,
   onImport,
+  checkinEntry,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
@@ -173,6 +174,7 @@ export function LessonStudio({
   /** Phase 20: the Studio is a page (a shell mode); "close" means going Back to the previous mode. */
   onClose: () => void;
   onImport: (lesson: DayLesson) => void;
+  checkinEntry: ReactNode;
 }) {
   const { sync } = useAccountSync();
   const initial = useRef(loadStored()).current;
@@ -438,11 +440,16 @@ export function LessonStudio({
     // (hidden) after the first open, so `pasted` and an in-flight Gemini call survive a mode trip.
     <div className="mx-auto w-full max-w-3xl">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <span className="font-display text-xs font-semibold tracking-wider text-primary">
             AI LESSON STUDIO
           </span>
-          <h2 className="mt-1 font-display text-xl font-medium text-foreground">Build Day {day}</h2>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            <h2 className="mt-1 font-display text-xl font-medium text-foreground">
+              Build Day {day}
+            </h2>
+            {checkinEntry}
+          </div>
         </div>
         <button
           onClick={onClose}

@@ -1,5 +1,5 @@
 // Phase 9a: Firebase foundation — Google sign-in, CLIENT ONLY. Phase 9b added the Realtime Database calls
-// (`readCloud`, `readCloudStamp`, `writeCloud`, `deleteCloud`) at the bottom. 9c runs them automatically (app start, tab
+// (`readCloud`, `readCloudForSync`, `writeCloud`, `deleteCloud`) at the bottom. 9c runs them automatically (app start, tab
 // focus, a short while after a local change), but still one request at a time and with no realtime listeners.
 //
 // Kiroku renders on the server (TanStack Start), so nothing here may touch the Firebase SDK at
@@ -250,20 +250,56 @@ export async function readCloud(uid: string): Promise<unknown> {
   return snap.exists() ? (snap.val() as unknown) : null;
 }
 
-/** Just the `meta/updatedAt` stamp (a few bytes): lets a sync notice that another device wrote since it read. */
-export async function readCloudStamp(uid: string): Promise<string | null> {
+async function cloudSyncUrl(uid: string): Promise<URL> {
   requireOnline();
-  const { db, mod } = await loadDb();
-  const snap = await withTimeout(mod.get(mod.ref(db, `users/${uid}/meta/updatedAt`)), 20000);
-  const value: unknown = snap.exists() ? snap.val() : null;
-  return typeof value === "string" ? value : null;
+  const { db, mod, token } = await getDb(uid);
+  const url = new URL(mod.ref(db, `users/${uid}`).toString());
+  url.pathname += ".json";
+  url.searchParams.set("auth", token);
+  return url;
 }
 
-/** Replaces everything stored for this person with `tree`. The caller reads first, so a failed read stops a write. */
-export async function writeCloud(uid: string, tree: Record<string, unknown>): Promise<void> {
-  requireOnline();
-  const { db, mod } = await loadDb();
-  await withTimeout(mod.set(mod.ref(db, `users/${uid}`), tree), 30000);
+function checkCloudResponse(response: Response): void {
+  if (!response.ok) {
+    throw Object.assign(new Error(`The database request failed (${response.status}).`), {
+      code:
+        response.status === 401 || response.status === 403
+          ? "permission-denied"
+          : "kiroku/sync-http-error",
+    });
+  }
+}
+
+/** The raw account value and its ETag from the same server read. */
+export async function readCloudForSync(uid: string): Promise<{ value: unknown; etag: string }> {
+  const response = await fetch(await cloudSyncUrl(uid), {
+    headers: { "X-Firebase-ETag": "true" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
+  checkCloudResponse(response);
+  const etag = response.headers.get("ETag");
+  if (!etag) throw new Error("The database response did not include a sync ETag.");
+  const value: unknown = await response.json();
+  return { value, etag };
+}
+
+/** Replaces the account only if its ETag still matches; false means a concurrent write won. */
+export async function writeCloud(
+  uid: string,
+  tree: Record<string, unknown>,
+  etag: string,
+): Promise<boolean> {
+  if (!etag) throw new Error("A sync ETag is required to write.");
+  const response = await fetch(await cloudSyncUrl(uid), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "if-match": etag },
+    body: JSON.stringify(tree),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (response.status === 412) return false;
+  checkCloudResponse(response);
+  return true;
 }
 
 /** Removes everything stored for this person. Nothing on this device is touched. */
@@ -298,7 +334,10 @@ export function describeSyncError(error: unknown): string {
   if (code === "kiroku/offline") {
     return "You're offline. Connect and try again; nothing was changed.";
   }
-  if (error instanceof SyncTimeoutError) {
+  if (
+    error instanceof SyncTimeoutError ||
+    (error instanceof Error && error.name === "TimeoutError")
+  ) {
     return "That took too long. Check your connection and try again; if it was an upload, Sync now again to check it went through.";
   }
   if (

@@ -147,11 +147,13 @@ test("session IDs are unique and blueprint has all four skills", () => {
   assert.equal(next.session.questions.length, 10);
   assert.equal(new Set(session.questions.map((q) => q.kind)).size, 4);
 });
-test("prompt contains full teaching context and explicit waiting/submission protocol", () => {
+test("prompt sends only curriculum labels and retains the waiting/submission protocol", () => {
   const prompt = buildCheckinPrompt(session);
   for (const phrase of [
-    "student",
-    "Polite copula",
+    "学生",
+    "です",
+    "日",
+    "よろしくお願いします",
     "STOP and WAIT",
     "SUBMIT",
     "no answer key",
@@ -160,8 +162,26 @@ test("prompt contains full teaching context and explicit waiting/submission prot
     session.id,
   ])
     assert.ok(prompt.includes(phrase), phrase);
-  assert.ok(!prompt.includes("completedDays"));
-  assert.ok(!prompt.includes("vocabMemory"));
+  const curriculum = JSON.parse(
+    prompt
+      .split("COMPACT CURRICULUM (labels only; IDs connect questions to their source):\n")[1]!
+      .split("\n\nFINAL EXPORT")[0]!,
+  );
+  assert.deepEqual(
+    curriculum,
+    session.sources.map(({ id, day, kind, label }) => ({ id, day, kind, label })),
+  );
+  for (const omitted of [
+    "student",
+    "Polite copula",
+    "がくせい",
+    "日本",
+    "Nice to meet you",
+    "Noun + です",
+    "completedDays",
+    "vocabMemory",
+  ])
+    assert.ok(!prompt.includes(omitted), omitted);
 });
 test("the prompt scaffold cannot masquerade as an actual result", () => {
   assert.equal(parseCheckinResult(buildCheckinPrompt(session), session).ok, false);

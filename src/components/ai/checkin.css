@@ -37,6 +37,11 @@
   font-size: 14px;
   line-height: 1.8;
   max-width: 520px;
+  overflow-wrap: anywhere;
+}
+.ci-no-lessons {
+  padding: 40px;
+  border-radius: 20px;
 }
 .ci-topline {
   display: flex;
@@ -90,11 +95,7 @@
 .ci-folio {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
-  border: 1px solid var(--ci-line);
-  border-radius: 24px;
-  background: var(--glass-strong);
-  backdrop-filter: blur(24px);
-  box-shadow: 0 24px 80px #0003;
+  border-radius: 20px;
   overflow: hidden;
 }
 .ci-left {
@@ -159,10 +160,13 @@
   min-width: 0;
   border: 1px solid var(--ci-line);
   border-radius: 10px;
-  background: var(--background);
+  background: var(--glass);
   color: var(--ci-ink);
   padding: 12px;
   font-size: 13px;
+}
+.ci-input option {
+  background: var(--background);
 }
 .ci-range {
   display: grid;
@@ -344,8 +348,6 @@
   border: 1px solid var(--ci-line);
   border-radius: 16px;
   padding: 22px;
-  background: var(--glass-strong);
-  backdrop-filter: blur(16px);
   transition:
     border-color 0.18s,
     transform 0.18s;
@@ -400,13 +402,11 @@
 .ci-result {
   border: 1px solid var(--ci-line);
   border-radius: 22px;
-  background: var(--glass-strong);
-  backdrop-filter: blur(24px);
   padding: 36px;
 }
 .ci-result-head {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
   align-items: center;
   padding-bottom: 28px;
@@ -508,32 +508,16 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-.ci-reminder {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 20px 24px;
-  border: 1px solid var(--ci-line);
-  border-radius: 16px;
-  background: var(--glass-strong);
-  backdrop-filter: blur(18px);
-  margin-bottom: 24px;
+.ci-studio-entry {
+  white-space: nowrap;
+  cursor: pointer;
 }
-.ci-reminder p {
-  color: var(--ci-subtle);
-  font-size: 12px;
-  margin-top: 4px;
+.ci-studio-entry:hover {
+  text-decoration: underline;
 }
-.ci-reminder-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ci-reminder-actions button {
-  min-height: 44px;
-  padding: 8px 12px;
-  font-size: 12px;
+.ci-studio-entry:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
 }
 .ci-delete-dialog {
   position: fixed;
@@ -601,7 +585,8 @@
 @media (max-width: 520px) {
   .ci-left,
   .ci-right,
-  .ci-result {
+  .ci-result,
+  .ci-no-lessons {
     padding: 22px 18px;
   }
   .ci-topline {
@@ -653,10 +638,6 @@
   .ci-empty {
     padding: 22px 18px;
     gap: 14px;
-  }
-  .ci-reminder {
-    padding: 18px;
-    gap: 12px;
   }
   .ci-actions .ci-primary {
     width: 100%;

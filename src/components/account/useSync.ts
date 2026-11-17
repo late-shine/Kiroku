@@ -35,7 +35,7 @@ import {
   isOfflineError,
   isSyncConfigured,
   readCloud,
-  readCloudStamp,
+  readCloudForSync,
   writeCloud,
 } from "@/lib/firebase";
 import {
@@ -352,9 +352,8 @@ export function useSync({
     };
     const result = await runSync(
       {
-        read: () => readCloud(forUid),
-        readStamp: () => readCloudStamp(forUid),
-        write: (tree) => writeCloud(forUid, tree),
+        read: () => readCloudForSync(forUid),
+        write: (tree, etag) => writeCloud(forUid, tree, etag),
       },
       mode,
       deviceSnapshot,
@@ -408,7 +407,8 @@ export function useSync({
         base: plan.nextBasePrefs,
       });
       startedFor.current = forUid;
-      lastKey.current = deviceKey(plan.replaceDevice ? finalSnap : result.device);
+      // Edits remerged during I/O are still dirty, not part of the acknowledged plan.
+      lastKey.current = deviceKey(plan.replaceDevice ? plan.result : result.device);
       setLastError(null);
       if (retryTimer.current) clearTimeout(retryTimer.current);
       reportResult(plan, manual);
@@ -487,7 +487,17 @@ export function useSync({
       requestAutoRef.current();
     }, AUTO_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [configured, uid, linkedUid, autoOn, lessons, progress, prefsTick, deviceSnapshot]);
+  }, [
+    configured,
+    uid,
+    linkedUid,
+    autoOn,
+    lessons,
+    progress,
+    prefsTick,
+    link?.lastSyncedAt,
+    deviceSnapshot,
+  ]);
 
   useEffect(
     () => () => {

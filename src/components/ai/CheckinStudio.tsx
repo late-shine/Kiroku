@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
   Check,
   ClipboardPaste,
@@ -35,7 +36,9 @@ type Props = {
   onSelect: (id: string | null) => void;
   onSave: (record: CheckinRecord) => string | null;
   onBack: () => void;
+  backLabel: string;
   onOpenLessons: () => void;
+  onOpenProfile: () => void;
   preferences: CheckinPrefsController;
 };
 
@@ -46,12 +49,24 @@ export function CheckinStudio({
   onSelect,
   onSave,
   onBack,
+  backLabel,
   onOpenLessons,
+  onOpenProfile,
   preferences,
 }: Props) {
-  const [scope, setScope] = useState<CheckinScope>("recent");
-  const [from, setFrom] = useState(lessons[0]?.dayNumber ?? 1);
-  const [to, setTo] = useState(lessons[lessons.length - 1]?.dayNumber ?? 1);
+  const [scope, setScope] = useState<CheckinScope>(() =>
+    lessons.some((lesson) => progress.completedDays.includes(lesson.dayNumber))
+      ? "recent"
+      : "range",
+  );
+  const [chosenFrom, setFrom] = useState<number | null>(null);
+  const [chosenTo, setTo] = useState<number | null>(null);
+  const from = lessons.some((lesson) => lesson.dayNumber === chosenFrom)
+    ? chosenFrom!
+    : (lessons[0]?.dayNumber ?? 1);
+  const to = lessons.some((lesson) => lesson.dayNumber === chosenTo)
+    ? chosenTo!
+    : (lessons[lessons.length - 1]?.dayNumber ?? 1);
   const [count, setCount] = useState<5 | 10>(5);
   const [step, setStep] = useState<"copy" | "import">("copy");
   const [pasted, setPasted] = useState("");
@@ -166,7 +181,7 @@ export function CheckinStudio({
     <div className="checkin">
       <div className="ci-topline">
         <button className="ci-back" onClick={onBack}>
-          <ArrowLeft size={15} /> Back to your desk
+          <ArrowLeft size={15} /> {backLabel}
         </button>
         <nav aria-label="Check-in steps" className="ci-stepper">
           <div className="ci-step" aria-current={currentStep === 1 ? "step" : undefined}>
@@ -185,8 +200,31 @@ export function CheckinStudio({
           </div>
         </nav>
       </div>
-      {!active ? (
-        <div className="ci-folio">
+      {!active && lessons.length === 0 ? (
+        <section className="glass-panel ci-no-lessons">
+          <BookOpen size={28} className="text-primary" aria-hidden="true" />
+          <p className="ci-eyebrow mt-5">AI check-in</p>
+          <h1 className="ci-heading mt-3">Add a lesson to begin.</h1>
+          <p className="ci-subtitle mt-4">
+            Check-ins use your saved lessons. Create or import your first lesson in AI Lesson
+            Studio, then come back to choose what to practise.
+          </p>
+          <div className="ci-actions">
+            <button className="ci-primary" onClick={onOpenLessons}>
+              Open Lesson Studio <ArrowRight size={16} />
+            </button>
+            <button className="ci-secondary" onClick={onOpenProfile}>
+              Open Profile
+            </button>
+          </div>
+          <p className="ci-note mt-5">
+            Already have a backup or a synced account? Restore it in Profile → Desk &amp; Account.
+            Any past check-ins remain available in your journal below, even if their lessons were
+            removed.
+          </p>
+        </section>
+      ) : !active ? (
+        <div className="glass-panel ci-folio">
           <section className="ci-left">
             <p className="ci-eyebrow">振り返り · AI check-in</p>
             <h1 className="ci-heading mt-4">
@@ -284,6 +322,10 @@ export function CheckinStudio({
                 </button>
               </div>
             </fieldset>
+            <p className="ci-note mt-5" aria-live="polite">
+              {included.length} saved {included.length === 1 ? "lesson" : "lessons"} selected ·{" "}
+              {count} questions
+            </p>
             <div className="ci-actions">
               <button
                 className="ci-primary"
@@ -292,11 +334,6 @@ export function CheckinStudio({
               >
                 Create check-in <ArrowRight size={16} />
               </button>
-              {lessons.length === 0 && (
-                <button className="ci-secondary" onClick={onOpenLessons}>
-                  Build a lesson first
-                </button>
-              )}
             </div>
             <p className="ci-note mt-3">
               No timer. No API key. Nothing is sent to an AI until you paste it there.
@@ -379,8 +416,8 @@ export function CheckinStudio({
           </div>
           <CheckinResultView session={active.session} result={active.result} />
           <p className="ci-note mt-4">
-            Based on the lessons saved when this check-in began. Later lesson edits or deletions do
-            not rewrite this record.
+            Saved in Progress → Check-in journal, included in backup exports and account sync when
+            linked and enabled. Later lesson edits or deletions do not rewrite this record.
           </p>
         </>
       ) : preview ? (
@@ -406,7 +443,7 @@ export function CheckinStudio({
           )}
         </>
       ) : (
-        <div className="ci-folio">
+        <div className="glass-panel ci-folio">
           <section className="ci-left">
             <p className="ci-eyebrow">
               {lessonRangeLabel(active.session)} · {active.session.questionCount} questions
@@ -462,7 +499,7 @@ export function CheckinStudio({
                 <p className="ci-note mt-3" role="status">
                   {copied
                     ? "Open your AI chat and paste. This check-in is saved so you can return later."
-                    : "Contains selected lesson material, not your profile, account details, or API key."}
+                    : "Only Japanese words, kanji, grammar titles and expressions—no readings, meanings, lesson explanations, profile or API key."}
                 </p>
               </>
             ) : (
@@ -566,16 +603,18 @@ export function CheckinStudio({
           </button>
         </div>
       )}
-      {!active && (
-        <CheckinJournal
-          records={progress.checkins ?? {}}
-          onOpen={onSelect}
-          onNew={() => {
-            onSelect(null);
-            window.scrollTo({ top: 0 });
-          }}
-        />
-      )}
+      {!active &&
+        (lessons.length > 0 ||
+          Object.values(progress.checkins ?? {}).some((record) => record.status !== "deleted")) && (
+          <CheckinJournal
+            records={progress.checkins ?? {}}
+            onOpen={onSelect}
+            onNew={() => {
+              onSelect(null);
+              window.scrollTo({ top: 0 });
+            }}
+          />
+        )}
       <CheckinPreferences preferences={preferences} />
       <dialog
         ref={deleteDialog}
@@ -622,9 +661,27 @@ export function CheckinPreferences({ preferences }: { preferences: CheckinPrefsC
           Gentle check-in reminders
         </label>
         <p className="ci-note">
-          On this device, after five more completed lessons. No push notifications.
+          Suggested in AI Lesson Studio after five more completed lessons. Device-only; no push
+          notifications.
         </p>
+        {preferences.prefs.enabled && preferences.prefs.snoozedUntil > Date.now() && (
+          <p className="ci-note">
+            Paused until {new Date(preferences.prefs.snoozedUntil).toLocaleDateString()}.
+          </p>
+        )}
       </div>
+      {preferences.prefs.enabled && (
+        <button
+          className="ci-back"
+          onClick={() =>
+            preferences.prefs.snoozedUntil > Date.now()
+              ? preferences.setEnabled(true)
+              : preferences.snooze()
+          }
+        >
+          {preferences.prefs.snoozedUntil > Date.now() ? "Resume reminders" : "Remind me in a week"}
+        </button>
+      )}
       {preferences.error && (
         <p className="ci-error" role="alert">
           {preferences.error}
@@ -634,52 +691,36 @@ export function CheckinPreferences({ preferences }: { preferences: CheckinPrefsC
   );
 }
 
-export function CheckinReminder({
+export function CheckinEntry({
   lessons,
   progress,
   preferences,
+  selectedId,
   onOpen,
 }: {
   lessons: DayLesson[];
   progress: UserProgressState;
   preferences: CheckinPrefsController;
-  onOpen: () => void;
+  selectedId: string | null;
+  onOpen: (id: string | null) => void;
 }) {
-  const count = checkinSuggestion(lessons, progress);
-  if (
-    !preferences.loaded ||
-    !preferences.prefs.enabled ||
-    preferences.prefs.snoozedUntil > Date.now() ||
-    !count
-  )
-    return null;
+  const pending = Object.values(progress.checkins ?? {})
+    .filter((record) => record.status === "pending")
+    .sort((a, b) => b.session.createdAt.localeCompare(a.session.createdAt));
+  const resumable = pending.find((record) => record.session.id === selectedId) ?? pending[0];
+  const suggested =
+    preferences.loaded &&
+    preferences.prefs.enabled &&
+    preferences.prefs.snoozedUntil <= Date.now() &&
+    checkinSuggestion(lessons, progress) > 0;
   return (
-    <aside className="checkin ci-reminder">
-      <span className="ci-seal" aria-hidden="true">
-        記
-      </span>
-      <div className="flex-1 min-w-40">
-        <h2 className="font-display text-base">A good moment to look back.</h2>
-        <p>
-          {count} completed lessons{" "}
-          {Object.values(progress.checkins ?? {}).some((r) => r.status === "complete")
-            ? "since your last check-in"
-            : "ready to revisit"}
-          . See what stays with you?
-        </p>
-      </div>
-      <div className="ci-reminder-actions">
-        <button className="ci-primary" onClick={onOpen}>
-          Try a check-in <ArrowRight size={14} />
-        </button>
-        <button onClick={preferences.snooze}>In a week</button>
-        <button onClick={() => preferences.setEnabled(false)}>Turn off</button>
-      </div>
-      {preferences.error && (
-        <p role="alert" className="ci-error">
-          {preferences.error}
-        </p>
-      )}
-    </aside>
+    <button
+      type="button"
+      className="social-link ci-studio-entry"
+      onClick={() => onOpen(resumable?.session.id ?? null)}
+    >
+      {resumable ? "Resume check-in" : suggested ? "Check-in suggested" : "AI check-in"}
+      <ArrowUpRight aria-hidden="true" />
+    </button>
   );
 }

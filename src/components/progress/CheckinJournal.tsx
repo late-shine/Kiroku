@@ -46,7 +46,7 @@ export function CheckinJournal({
         </button>
       </div>
       {entries.length === 0 ? (
-        <div className="ci-empty">
+        <div className="glass-panel ci-empty">
           <span className="ci-seal" aria-hidden="true">
             記
           </span>
@@ -63,7 +63,7 @@ export function CheckinJournal({
           {entries.map((entry) => (
             <button
               key={recordId(entry)}
-              className="ci-entry"
+              className="glass-panel ci-entry"
               onClick={() => onOpen(recordId(entry))}
             >
               <div className="flex items-center justify-between gap-2">
@@ -101,8 +101,9 @@ export function CheckinJournal({
         </div>
       )}
       <p className="ci-note mt-4">
-        Private learning records, included in your backups and optional account sync. Never
-        published to Friends.
+        Saved on this device in Progress → Check-in journal. Backup exports preserve pending
+        check-ins, answers, scores and feedback; account sync includes them when linked and enabled.
+        Backup files contain readable answers. Never published to Friends.
       </p>
     </section>
   );
@@ -119,7 +120,7 @@ export function CheckinResultView({
 }) {
   const score = checkinScore(result);
   return (
-    <div className="ci-result">
+    <div className="glass-panel ci-result">
       <div className="ci-result-head">
         <div>
           <p className="ci-eyebrow">

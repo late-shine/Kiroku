@@ -1,7 +1,8 @@
 // Phase 21: one quiet particle effect per scene — fireflies over the night flowers, a few falling leaves
-// at the autumn château, large blurred mist wisps in the fog, rising pollen around the misty companions.
+// at the autumn château, large blurred mist wisps in the fog, rising pollen around the misty companions,
+// condensation drips in the orchid conservatory and soft bokeh over the fallen leaves.
 // (The PLAN.md Phase 21 table. Deliberately different from Astra-chan's snow, sakura, sparkles, rain and
-// runes: quiet, natural, one per scene.)
+// runes: quiet, natural, one per scene. Drips swell, hang, then fall a short way — single drops, not rain.)
 //
 // Technique, as the plan prescribes: plain DOM nodes + CSS keyframes (transform and opacity only — the
 // keyframes and their utilities live next to `equalize` in styles.css), no canvas and no animation loop,
@@ -17,7 +18,7 @@
 import { memo, useEffect, useState, type CSSProperties } from "react";
 import type { ParticleDensity } from "@/lib/atmosphere-prefs";
 
-type Effect = "fireflies" | "leaves" | "mist" | "pollen";
+type Effect = "fireflies" | "leaves" | "mist" | "pollen" | "drips" | "bokeh";
 
 // The scene name decides the effect (one per scene). A scene this table does not know simply has none.
 const EFFECT_BY_SCENE: Record<string, Effect> = {
@@ -25,6 +26,8 @@ const EFFECT_BY_SCENE: Record<string, Effect> = {
   "Autumn château": "leaves",
   "Castle in fog": "mist",
   "Misty companions": "pollen",
+  "Orchid conservatory": "drips",
+  "Fallen leaves": "bokeh",
 };
 
 // The plan's counts (Subtle about 10 phone / 16 desktop, Lively 18 / 28) are for the small-particle
@@ -34,14 +37,30 @@ const BASE_COUNTS: Record<Exclude<ParticleDensity, "off">, { phone: number; desk
   subtle: { phone: 10, desktop: 16 },
   lively: { phone: 18, desktop: 28 },
 };
-const EFFECT_SCALE: Record<Effect, number> = { fireflies: 1, pollen: 1, leaves: 0.7, mist: 0.25 };
-const EFFECT_MIN: Record<Effect, number> = { fireflies: 5, pollen: 5, leaves: 4, mist: 3 };
+const EFFECT_SCALE: Record<Effect, number> = {
+  fireflies: 1,
+  pollen: 1,
+  leaves: 0.7,
+  mist: 0.25,
+  drips: 0.35,
+  bokeh: 0.45,
+};
+const EFFECT_MIN: Record<Effect, number> = {
+  fireflies: 5,
+  pollen: 5,
+  leaves: 4,
+  mist: 3,
+  drips: 3,
+  bokeh: 4,
+};
 
 const EFFECT_CLASS: Record<Effect, string> = {
   fireflies: "particle-firefly rounded-full bg-primary",
   leaves: "particle-leaf leaf-tone",
   mist: "particle-mist rounded-full bg-foreground/5",
   pollen: "particle-pollen rounded-full bg-primary/50",
+  drips: "particle-drip drip-tone",
+  bokeh: "particle-bokeh rounded-full bokeh-tone",
 };
 
 // Scene-change pacing: fade the old effect out, swap, fade the new one in — inside the 2.8 s image fade.
@@ -131,6 +150,37 @@ function makeDots(effect: Effect, count: number): Dot[] {
           vars: {
             ...baseVars(rand(16, 28), rand(0.4, 0.7)),
             "--drift": `${(rand(8, 24) * (Math.random() < 0.5 ? -1 : 1)).toFixed(0)}px`,
+          },
+        });
+        break;
+      }
+      case "drips": {
+        // Starting points sit in the upper part of the frame, where the roots and baskets hang.
+        const size = rand(2.5, 3.5);
+        dots.push({
+          left: pct(4, 96),
+          top: pct(6, 42),
+          width: `${size.toFixed(1)}px`,
+          height: `${(size * 1.3).toFixed(1)}px`,
+          vars: {
+            ...baseVars(rand(10, 16), rand(0.45, 0.7)),
+            "--fall": `${rand(20, 38).toFixed(0)}lvh`,
+            borderRadius: "50% 50% 50% 50% / 40% 40% 60% 60%",
+          },
+        });
+        break;
+      }
+      case "bokeh": {
+        const size = rand(14, 34).toFixed(0);
+        dots.push({
+          left: pct(3, 97),
+          top: pct(5, 75),
+          width: `${size}px`,
+          height: `${size}px`,
+          vars: {
+            ...baseVars(rand(26, 42), rand(0.12, 0.28)),
+            "--bx": `${(rand(16, 48) * (Math.random() < 0.5 ? -1 : 1)).toFixed(0)}px`,
+            "--by": `${rand(-36, -8).toFixed(0)}px`,
           },
         });
         break;

@@ -118,7 +118,7 @@ The avatar button in the header opens your Profile page: a name, an avatar (a Go
 
 ### Atmosphere, music and voice
 
-- **Atmosphere:** four background scenes with a reading-contrast slider, a Slow / Medium / Still setting for the gentle drift, an optional theme cycle that crossfades to the next scene every 24 seconds, and a quiet particle effect per scene — fireflies, falling leaves, mist and pollen — set to Off, Subtle or Lively. With reduced motion turned on in your system there are no particles at all. These settings are per device.
+- **Atmosphere:** six background scenes in their own scrolling list (swipe sideways on phones), with a reading-contrast slider, a Slow / Medium / Still setting for the gentle drift, an optional theme cycle that crossfades to the next scene every 24 seconds, and a quiet particle effect per scene — fireflies, falling leaves, mist, pollen, condensation drips and soft bokeh — set to Off, Subtle or Lively. With reduced motion turned on in your system there are no particles at all. These settings are per device. Profile card backgrounds still offer the first four scenes.
 - **Music:** a 10-song player in the corner. Every song comes in slowed, normal and sped-up versions, switching speed keeps your place, and shuffle randomizes the speed as well as the song. It has its own volume and loop.
 - **Voice:** pick which Japanese voice your browser uses for the Listen buttons, with a short sample when you tap one. The list comes from your browser and operating system, so it differs from device to device.
 

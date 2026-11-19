@@ -34,6 +34,8 @@ import cats from "@/assets/images/cats-fog.jpg";
 import castle from "@/assets/images/neusch-mist.jpg";
 import autumn from "@/assets/images/autumn-castle.jpg";
 import flowers from "@/assets/images/night-flowers.jpg";
+import orchids from "@/assets/images/orchid-conservatory.png";
+import fallenLeaves from "@/assets/images/fallen-leaves.png";
 import { STORAGE_KEYS, migrateLegacyStorage } from "@/lib/storage";
 import {
   DARKNESS_MAX,
@@ -134,6 +136,9 @@ const backgrounds = [
   { name: "Castle in fog", url: castle },
   { name: "Autumn château", url: autumn },
   { name: "Night flowers", url: flowers },
+  // Appended, never inserted: saved and synced choices are indexes into this list.
+  { name: "Orchid conservatory", url: orchids },
+  { name: "Fallen leaves", url: fallenLeaves },
 ];
 const THEME_CYCLE_MS = 24_000;
 // One empty shape used for both the first-load default and "reset everything" (Phase 11a merged
@@ -1686,6 +1691,50 @@ function AtmosphereView({
   particles: ParticleDensity;
   setParticles: (v: ParticleDensity) => void;
 }) {
+  // The scene list scrolls on its own (styles.css .scene-picker-list). It opens with the chosen scene in
+  // view, without moving the page; cycling never scrolls it afterwards. The data-more-* flags fade the
+  // edges that still have scenes beyond them.
+  const scenesRef = useRef<HTMLDivElement>(null);
+  const openedOn = useRef(active);
+  useEffect(() => {
+    const list = scenesRef.current;
+    if (!list) return;
+    const card = list.children[openedOn.current];
+    if (card instanceof HTMLElement) {
+      const pad = parseFloat(getComputedStyle(list).paddingTop) || 0;
+      const nearest = (start: number, size: number, view: number, viewSize: number) =>
+        start - pad < view
+          ? start - pad
+          : start + size + pad > view + viewSize
+            ? start + size + pad - viewSize
+            : view;
+      list.scrollTo({
+        left: nearest(card.offsetLeft, card.offsetWidth, list.scrollLeft, list.clientWidth),
+        top: nearest(card.offsetTop, card.offsetHeight, list.scrollTop, list.clientHeight),
+      });
+    }
+    const markEdges = () => {
+      const x = list.scrollWidth - list.clientWidth;
+      const y = list.scrollHeight - list.clientHeight;
+      list.toggleAttribute(
+        "data-more-before",
+        (x > 1 && list.scrollLeft > 1) || (y > 1 && list.scrollTop > 1),
+      );
+      list.toggleAttribute(
+        "data-more-after",
+        (x > 1 && list.scrollLeft < x - 1) || (y > 1 && list.scrollTop < y - 1),
+      );
+    };
+    markEdges();
+    list.addEventListener("scroll", markEdges, { passive: true });
+    const resize = new ResizeObserver(markEdges);
+    resize.observe(list);
+    return () => {
+      list.removeEventListener("scroll", markEdges);
+      resize.disconnect();
+    };
+  }, []);
+
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <GlassPane>
@@ -1753,35 +1802,37 @@ function AtmosphereView({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {backgrounds.map((bg, i) => (
-            <button
-              key={bg.name}
-              onClick={() => setActive(i)}
-              className={`group relative aspect-video overflow-hidden rounded-xl border-2 transition-all duration-300 ${
-                active === i
-                  ? "border-primary shadow-lg ring-2 ring-primary/20 scale-[1.01]"
-                  : "border-border/60 hover:border-border hover:shadow-md"
-              }`}
-            >
-              <img
-                src={bg.url}
-                alt={bg.name}
-                loading="lazy"
-                className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
-              />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/85 via-scrim/40 to-transparent p-3 text-left">
-                <span className="font-display text-xs font-medium text-foreground tracking-wide">
-                  {bg.name}
-                </span>
-                {active === i && (
-                  <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary-foreground">
-                    {cycle ? "Current" : "Active"}
+        <div className="scene-picker mt-6">
+          <div ref={scenesRef} role="group" aria-label="Scenes" className="scene-picker-list">
+            {backgrounds.map((bg, i) => (
+              <button
+                key={bg.name}
+                onClick={() => setActive(i)}
+                className={`group relative aspect-video overflow-hidden rounded-xl border-2 transition-all duration-300 ${
+                  active === i
+                    ? "border-primary shadow-lg ring-2 ring-primary/20 scale-[1.01]"
+                    : "border-border/60 hover:border-border hover:shadow-md"
+                }`}
+              >
+                <img
+                  src={bg.url}
+                  alt={bg.name}
+                  loading="lazy"
+                  className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/85 via-scrim/40 to-transparent p-3 text-left">
+                  <span className="font-display text-xs font-medium text-foreground tracking-wide">
+                    {bg.name}
                   </span>
-                )}
-              </div>
-            </button>
-          ))}
+                  {active === i && (
+                    <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary-foreground">
+                      {cycle ? "Current" : "Active"}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
         <div className="mt-6 border-t border-border/40 pt-4">
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">

@@ -474,7 +474,7 @@ export function QuizView({
                   onNext={next}
                 />
               ) : (
-                <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {question.options.map((o) => {
                     const isAnswer = o === correctAnswer(question);
                     const isWrongPick = locked && o === picked && !isAnswer;

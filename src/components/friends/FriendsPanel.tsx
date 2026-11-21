@@ -569,7 +569,7 @@ export function FriendsPanel({
             </div>
           )}
           {snapshot && (snapshot.own || snapshot.cached) && (
-            <div className="mt-5 grid min-w-0 gap-5 border-t border-border pt-4 xl:grid-cols-2">
+            <div className="mt-5 grid min-w-0 grid-cols-1 gap-5 border-t border-border pt-4 xl:grid-cols-2">
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold">Requests ({incoming.length})</h3>
                 {incoming.length ? (

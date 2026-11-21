@@ -109,7 +109,7 @@ export function WordList({
           {emptyListMessage(filter, query)}
         </p>
       ) : (
-        <div className="mt-2 grid max-h-[520px] gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-2">
+        <div className="mt-2 grid max-h-[520px] grid-cols-1 gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-2">
           {shown.map(({ word: w, status }) => {
             const mastery = masteryState(w, starredIds, vocabMemory);
             return (

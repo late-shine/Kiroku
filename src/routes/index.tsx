@@ -990,7 +990,7 @@ function LessonWorkspace({
           <ChevronRight className="size-4" />
         </button>
       </div>
-      <div className="grid items-start gap-5 lg:grid-cols-12">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
         <GlassPane className="lg:col-span-5 lg:ml-2" tilt="-0.5deg">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3">
             <div className="flex items-center gap-2">
@@ -1044,7 +1044,7 @@ function LessonWorkspace({
                 .join(" · ")}
             </p>
           )}
-          <div className="mt-5 flex gap-1 border-b border-border/50 pb-2.5">
+          <div className="mt-5 flex flex-wrap gap-1 border-b border-border/50 pb-2.5">
             {(["overview", "grammar", "kanji", "vocab"] as LessonTab[]).map((id) => (
               <button
                 key={id}
@@ -1608,7 +1608,7 @@ function ProgressView({
         : [...p.masteredVocabIds, id],
     }));
   return (
-    <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-3">
+    <div className="mx-auto grid max-w-5xl grid-cols-1 gap-5 lg:grid-cols-3">
       <GlassPane>
         <span className="font-display text-xs font-semibold tracking-wider text-primary">
           学習 · ARCHIVE

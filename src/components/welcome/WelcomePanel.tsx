@@ -33,7 +33,7 @@ export function WelcomePanel({
 }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <section className="glass-panel pane-in grid gap-6 rounded-2xl p-6 md:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-10">
+      <section className="glass-panel pane-in grid grid-cols-1 gap-6 rounded-2xl p-6 md:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-10">
         <div>
           <span className="font-display text-xs font-semibold tracking-wider text-primary">
             記録 · WELCOME

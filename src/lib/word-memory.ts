@@ -80,9 +80,8 @@ const storedRecordSchema = z.object({
  * (the Firebase SDK throws on an undefined value, and `exactOptionalPropertyTypes` forbids it). A stored `streak: 0`
  * therefore reads back as "no streak", which is what keeps `snapshotsEqual` and the sync fingerprint stable.
  */
-export const wordMemorySchema = storedRecordSchema.transform(
-  ({ streak, ...rest }): WordMemory =>
-    streak !== undefined && streak > 0 ? { ...rest, streak } : rest,
+export const wordMemorySchema = storedRecordSchema.transform(({ streak, ...rest }): WordMemory =>
+  streak !== undefined && streak > 0 ? { ...rest, streak } : rest,
 );
 export const vocabMemorySchema = z.record(
   z.string().regex(ID_RE, "word ids look like d14-3"),

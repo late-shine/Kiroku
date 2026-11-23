@@ -1,4 +1,9 @@
-import { GEMINI_ATTEMPT_TIMEOUT_MS, GEMINI_MODEL_CHAIN, geminiEndpoint, normalizeModelId } from "./gemini-models";
+import {
+  GEMINI_ATTEMPT_TIMEOUT_MS,
+  GEMINI_MODEL_CHAIN,
+  geminiEndpoint,
+  normalizeModelId,
+} from "./gemini-models";
 
 /**
  * The Gemini call + model-fallback loop. Deliberately free of framework imports and of any
@@ -52,7 +57,11 @@ function errorDetail(bodyText: string, apiKey: string): string {
   let detail = "";
   try {
     const parsed: unknown = JSON.parse(bodyText);
-    if (isRecord(parsed) && isRecord(parsed["error"]) && typeof parsed["error"]["message"] === "string") {
+    if (
+      isRecord(parsed) &&
+      isRecord(parsed["error"]) &&
+      typeof parsed["error"]["message"] === "string"
+    ) {
       detail = parsed["error"]["message"];
     }
   } catch {
@@ -73,7 +82,10 @@ function extractReply(body: unknown): ExtractedReply {
   if (!isRecord(body)) return empty;
 
   const feedback = body["promptFeedback"];
-  const blockReason = isRecord(feedback) && typeof feedback["blockReason"] === "string" ? feedback["blockReason"] : null;
+  const blockReason =
+    isRecord(feedback) && typeof feedback["blockReason"] === "string"
+      ? feedback["blockReason"]
+      : null;
 
   const candidates = body["candidates"];
   const first: unknown = Array.isArray(candidates) ? candidates[0] : undefined;
@@ -83,7 +95,10 @@ function extractReply(body: unknown): ExtractedReply {
   const content = first["content"];
   const parts = isRecord(content) && Array.isArray(content["parts"]) ? content["parts"] : [];
   const text = parts
-    .filter((p): p is Record<string, unknown> => isRecord(p) && typeof p["text"] === "string" && p["thought"] !== true)
+    .filter(
+      (p): p is Record<string, unknown> =>
+        isRecord(p) && typeof p["text"] === "string" && p["thought"] !== true,
+    )
     .map((p) => String(p["text"]))
     .join("");
 
@@ -104,7 +119,8 @@ function failureMessage(status: number, model: string, detail: string): string {
   return `Gemini returned an error (${status}) on ${model}.${suffix}`;
 }
 
-type AttemptStep = { kind: "next"; attempt: GeminiAttempt } | { kind: "done"; result: GeminiResult };
+type AttemptStep =
+  { kind: "next"; attempt: GeminiAttempt } | { kind: "done"; result: GeminiResult };
 
 /** One model, one call. Never throws; tells the loop whether to move on or stop. */
 async function attemptModel(
@@ -130,11 +146,22 @@ async function attemptModel(
       signal,
     });
   } catch {
-    return stop("Couldn't reach Gemini — check your internet connection and try again.", { model, outcome: "failed", status: null });
+    return stop("Couldn't reach Gemini — check your internet connection and try again.", {
+      model,
+      outcome: "failed",
+      status: null,
+    });
   }
 
   if (res.status === 429 || res.status === 503) {
-    return { kind: "next", attempt: { model, outcome: res.status === 429 ? "rate-limited" : "overloaded", status: res.status } };
+    return {
+      kind: "next",
+      attempt: {
+        model,
+        outcome: res.status === 429 ? "rate-limited" : "overloaded",
+        status: res.status,
+      },
+    };
   }
 
   if (moveOnNotFound && res.status === 404) {
@@ -148,26 +175,50 @@ async function attemptModel(
     } catch {
       /* unreadable body — message falls back to the status alone */
     }
-    return stop(failureMessage(res.status, model, errorDetail(bodyText, key)), { model, outcome: "failed", status: res.status });
+    return stop(failureMessage(res.status, model, errorDetail(bodyText, key)), {
+      model,
+      outcome: "failed",
+      status: res.status,
+    });
   }
 
   let parsedBody: unknown;
   try {
     parsedBody = await res.json();
   } catch {
-    return stop(`Gemini's reply on ${model} couldn't be read. Try again.`, { model, outcome: "failed", status: res.status });
+    return stop(`Gemini's reply on ${model} couldn't be read. Try again.`, {
+      model,
+      outcome: "failed",
+      status: res.status,
+    });
   }
 
   const reply = extractReply(parsedBody);
   if (!reply.text.trim()) {
     const why = reply.blockReason ? ` It was blocked (${reply.blockReason}).` : "";
-    return stop(`Gemini returned an empty reply on ${model}.${why}`, { model, outcome: "failed", status: res.status });
+    return stop(`Gemini returned an empty reply on ${model}.${why}`, {
+      model,
+      outcome: "failed",
+      status: res.status,
+    });
   }
   if (reply.finishReason === "MAX_TOKENS") {
-    return stop(`Gemini's reply on ${model} was cut off before it finished. Try again.`, { model, outcome: "failed", status: res.status });
+    return stop(`Gemini's reply on ${model} was cut off before it finished. Try again.`, {
+      model,
+      outcome: "failed",
+      status: res.status,
+    });
   }
 
-  return { kind: "done", result: { ok: true, text: reply.text, model, attempts: [...attempts, { model, outcome: "ok", status: res.status }] } };
+  return {
+    kind: "done",
+    result: {
+      ok: true,
+      text: reply.text,
+      model,
+      attempts: [...attempts, { model, outcome: "ok", status: res.status }],
+    },
+  };
 }
 
 export function buildGeminiBody(prompt: string, options?: GeminiRequestOptions): string {
@@ -207,7 +258,8 @@ export async function generateWithFallback(
   const key = apiKey.trim();
 
   if (!key) return { ok: false, message: "Add your Gemini API key first.", attempts };
-  if (models.length === 0) return { ok: false, message: "No Gemini models are configured.", attempts };
+  if (models.length === 0)
+    return { ok: false, message: "No Gemini models are configured.", attempts };
 
   const body = buildGeminiBody(prompt, options);
 

@@ -63,7 +63,12 @@ export const relayGemini = createServerFn({ method: "POST" })
         attempts: [],
       };
     }
-    return generateWithFallback(data.apiKey, data.prompt, undefined, rotateChainAfter(GEMINI_MODEL_CHAIN, data.startAfter));
+    return generateWithFallback(
+      data.apiKey,
+      data.prompt,
+      undefined,
+      rotateChainAfter(GEMINI_MODEL_CHAIN, data.startAfter),
+    );
   });
 
 interface VisionRelayInput {

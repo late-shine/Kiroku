@@ -174,8 +174,7 @@ function DeleteDialog({ onCancel, onConfirm }: { onCancel: () => void; onConfirm
         This erases the copy of your lessons and progress stored in your account. Lessons and
         progress on this device are not touched, and you can upload them again with Sync now. Your
         other devices keep their own copies, and any that still sync automatically will upload them
-        to your account again; switch off "Sync automatically" on them first if you don't want that.
-        {" "}
+        to your account again; switch off "Sync automatically" on them first if you don't want that.{" "}
         This also removes your friend code, your card and your friend links.
       </p>
       <div className="mt-5 flex justify-end gap-2">

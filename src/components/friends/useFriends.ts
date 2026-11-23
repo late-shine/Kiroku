@@ -1118,7 +1118,6 @@ export function useFriendsController({
         }
       }
       // installOwnerBanner reads mutable refs; its identity need not restart an editor load.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
     [uid],
   );

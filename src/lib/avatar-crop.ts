@@ -73,7 +73,11 @@ export function panView(
   const v = clampView(width, height, view);
   if (!(previewSize > 0)) return v;
   const perPixel = sideOf(width, height, v.zoom) / previewSize;
-  return clampView(width, height, { zoom: v.zoom, cx: v.cx - dx * perPixel, cy: v.cy - dy * perPixel });
+  return clampView(width, height, {
+    zoom: v.zoom,
+    cx: v.cx - dx * perPixel,
+    cy: v.cy - dy * perPixel,
+  });
 }
 
 /** Moves the window by a fraction of its own side (arrow keys). Positive `fx` moves it right, `fy` down. */

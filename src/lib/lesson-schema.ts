@@ -137,7 +137,9 @@ export function parseLessonFromText(text: string): LessonImportResult {
   if (!block) {
     return {
       success: false,
-      errors: ["No JSON object found in the pasted text — make sure the AI's reply includes a JSON code block."],
+      errors: [
+        "No JSON object found in the pasted text — make sure the AI's reply includes a JSON code block.",
+      ],
     };
   }
 
@@ -150,7 +152,9 @@ export function parseLessonFromText(text: string): LessonImportResult {
 
   const result = dayLessonSchema.safeParse(rawJson);
   if (!result.success) {
-    const errors = result.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`);
+    const errors = result.error.issues.map(
+      (issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`,
+    );
     return { success: false, errors };
   }
 

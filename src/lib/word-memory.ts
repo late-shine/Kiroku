@@ -21,8 +21,8 @@ import type { VocabWord, WordMemory } from "@/types/japanese";
 
 export const BOX_GAPS = [1, 3, 7, 14, 30] as const;
 export const TOP_BOX = BOX_GAPS.length;
-export type MissRule = "reset" | "down-one";
-export const MISS_RULE: MissRule = "reset";
+export type MissRule = "reset" | "down-one" | "step-down";
+export const MISS_RULE: MissRule = "step-down";
 
 export type VocabMemory = Record<string, WordMemory>;
 
@@ -145,7 +145,13 @@ function uniqueIds(words: readonly VocabWord[]): VocabWord[] {
 /** Badge / button text for a count: "99+" once it gets big, so a number never crowds the tab. */
 export const badgeText = (n: number): string => (n > 99 ? "99+" : String(n));
 
-const gapFor = (box: number): number => BOX_GAPS[box - 1] ?? 30;
+export const gapFor = (box: number): number => BOX_GAPS[box - 1] ?? 30;
+
+export function nextBoxOnMiss(box: number, missRule: MissRule = MISS_RULE): number {
+  if (missRule === "reset") return 1;
+  if (missRule === "down-one") return Math.max(1, box - 1);
+  return Math.max(1, Math.ceil(box / 2));
+}
 
 // ---- miss streak (Reinforcement Phase 2) ------------------------------------------------------
 
@@ -196,7 +202,7 @@ export function applyAnswer(
   let box = prev?.box ?? 1;
   let due = prev?.due ?? today;
   if (!correct) {
-    box = missRule === "reset" ? 1 : Math.max(1, box - 1);
+    box = nextBoxOnMiss(box, missRule);
     due = addDays(today, gapFor(box));
   } else if (!prev || isDue(prev, today)) {
     // A brand-new word answered right climbs to box 2; "new" is decided here by `!prev`, not by `isDue`.
@@ -289,6 +295,51 @@ export function dueWordsInOrder(
     .map((w, i) => ({ w, i, due: dueOf(w) }))
     .sort((a, b) => a.due.localeCompare(b.due) || a.i - b.i)
     .map((x) => x.w);
+}
+
+/**
+ * Distributes excess due words across `1..spreadDays` starting tomorrow while keeping up to `keepToday`
+ * (the freshest due words) scheduled for today. Preserves boxes, answer counts, and streaks. Returns the
+ * SAME object when there is nothing to spread.
+ */
+export function spreadBacklog(
+  memory: VocabMemory,
+  words: readonly VocabWord[],
+  today: string,
+  spreadDays: number,
+  keepToday = 0,
+  now: Date = new Date(),
+): VocabMemory {
+  if (!Number.isInteger(spreadDays) || spreadDays < 1) return memory;
+  const keep = Math.max(0, Math.floor(keepToday));
+  const dueList = uniqueIds(dueWords(words, memory, today));
+  if (dueList.length <= keep) return memory;
+
+  // Keep the most recent due words for today; spread older overdue words evenly across 1..spreadDays.
+  const ordered = dueList
+    .map((w, i) => ({ w, i, due: memoryFor(memory, w)?.due ?? today }))
+    .sort((a, b) => b.due.localeCompare(a.due) || a.i - b.i);
+
+  const toSpread = ordered.slice(keep);
+  if (toSpread.length === 0) return memory;
+
+  const next: VocabMemory = { ...memory };
+  const stamp = now.toISOString();
+  let changed = false;
+  toSpread.forEach((entry, index) => {
+    const existing = memory[entry.w.id];
+    if (!existing) return;
+    const offset = (index % spreadDays) + 1;
+    const newDue = addDays(today, offset);
+    if (newDue === existing.due) return;
+    next[entry.w.id] = {
+      ...existing,
+      due: newDue,
+      lastAnswered: stamp,
+    };
+    changed = true;
+  });
+  return changed ? next : memory;
 }
 
 export type MasteryState = "starred" | "earned" | "none";

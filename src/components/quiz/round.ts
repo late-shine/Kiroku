@@ -3,6 +3,7 @@
 // (handoffs/phase-14a-quiz-check.ts; the question kinds added in 14d: handoffs/phase-14d-quiz-check.ts).
 import type { VocabWord, WordMemory } from "@/types/japanese";
 import { dueWords, memoryFor, type VocabMemory } from "@/lib/word-memory";
+import { DEFAULT_DUE_FOCUS, type DueFocus } from "@/lib/quiz-prefs";
 import { canTypeReading, isReadingCorrect, normalizeReading } from "./typed-answer";
 
 export type RoundLength = 10 | 20 | "all";
@@ -283,21 +284,62 @@ export function dueWordsOverdueFirst(
 }
 
 /**
- * A "Due today" round: the first `length` due words, most overdue first (NOT shuffled, so the longest-waiting
- * words are asked first and a 10-word round never skips an overdue word for a fresher one). Distractors come
- * from `distractors` (every word), so even a 2-word round has four options. With the default style ("progress")
- * each word is asked the way its Leitner box earns (`kindForWord`, Phase 14d); another `style` asks every word the same way.
+ * The words that are due, ordered by `focus`:
+ * - "oldest": most overdue first (oldest due date first).
+ * - "fresh": most recently due first (newest due date first).
+ * - "balanced": 2 fresh words interleaved with 1 oldest overdue word so every round starts with
+ *   momentum while steadily clearing older backlog.
+ * Words with the same due date are shuffled first.
+ */
+export function dueWordsByFocus(
+  words: readonly VocabWord[],
+  memory: VocabMemory,
+  today: string,
+  focus: DueFocus = DEFAULT_DUE_FOCUS,
+  rng: Rng = Math.random,
+): VocabWord[] {
+  const dueOf = (w: VocabWord) => memoryFor(memory, w)?.due ?? "";
+  const oldestFirst = shuffle(uniqueWords(dueWords(words, memory, today), memory), rng).sort(
+    (a, b) => dueOf(a).localeCompare(dueOf(b)),
+  );
+  if (focus === "oldest" || oldestFirst.length <= 1) return oldestFirst;
+  if (focus === "fresh") {
+    return shuffle(uniqueWords(dueWords(words, memory, today), memory), rng).sort((a, b) =>
+      dueOf(b).localeCompare(dueOf(a)),
+    );
+  }
+  const mixed: VocabWord[] = [];
+  let left = 0;
+  let right = oldestFirst.length - 1;
+  while (left <= right) {
+    for (let k = 0; k < 2 && left <= right; k++) {
+      const fresh = oldestFirst[right--];
+      if (fresh) mixed.push(fresh);
+    }
+    if (left <= right) {
+      const stale = oldestFirst[left++];
+      if (stale) mixed.push(stale);
+    }
+  }
+  return mixed;
+}
+
+/**
+ * A "Due today" round: the first `length` due words, ordered by `focus` (default "balanced").
+ * Distractors come from `distractors` (every word), so even a 2-word round has four options.
  */
 export function buildDueRound(
   words: readonly VocabWord[],
   memory: VocabMemory,
   today: string,
-  length: RoundLength,
+  length: RoundLength | number,
   distractors: readonly VocabWord[] = words,
   rng: Rng = Math.random,
   style: QuestionStyle = DEFAULT_QUESTION_STYLE,
+  focus: DueFocus = DEFAULT_DUE_FOCUS,
 ): RoundQuestion[] {
-  const ordered = dueWordsOverdueFirst(words, memory, today, rng);
+  if (length !== "all" && length <= 0) return [];
+  const ordered = dueWordsByFocus(words, memory, today, focus, rng);
   const picked = length === "all" ? ordered : ordered.slice(0, length);
   return toQuestions(picked, uniqueById(distractors), rng, (w) =>
     kindForStyle(style, w, memoryFor(memory, w)),

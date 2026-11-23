@@ -11,6 +11,7 @@ import {
   type ChangeEvent,
   type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
 import { useAccountSync } from "@/components/account/AccountSyncContext";
 import { ArrowUpRight, BookOpen, ChevronDown, Settings2, Users } from "lucide-react";
@@ -67,6 +68,8 @@ function Section({
   className = "",
   strong = false,
   danger = false,
+  highlighted = false,
+  sectionRef,
   children,
 }: {
   label: string;
@@ -74,17 +77,28 @@ function Section({
   className?: string;
   strong?: boolean;
   danger?: boolean;
+  highlighted?: boolean;
+  sectionRef?: Ref<HTMLElement>;
   children: ReactNode;
 }) {
   return (
     <section
-      className={`${strong ? "glass-panel-strong" : "glass-panel"} pane-in rounded-2xl p-5 md:p-6 ${className}`}
+      ref={sectionRef}
+      className={`${strong ? "glass-panel-strong" : "glass-panel"} pane-in scroll-mt-5 rounded-2xl p-5 transition-[border-color,box-shadow,background] duration-700 motion-reduce:transition-none md:p-6 ${className}`}
       style={
         {
           "--tilt": "0deg",
           animationDelay: delay,
           ...(danger
             ? { borderColor: "color-mix(in oklab, var(--destructive) 35%, transparent)" }
+            : {}),
+          ...(highlighted
+            ? {
+                borderColor: "color-mix(in oklab, var(--primary) 65%, transparent)",
+                boxShadow:
+                  "inset 0 1px 0 0 var(--highlight-strong), 0 0 0 3px color-mix(in oklab, var(--primary) 22%, transparent), 0 16px 36px -12px var(--shadow-deep)",
+                background: "color-mix(in oklab, var(--primary) 7%, var(--glass))",
+              }
             : {}),
         } as CSSProperties
       }
@@ -114,6 +128,7 @@ export function ProfilePage({
   onSetQuestsOn,
   quests,
   scenes,
+  focusDataRequest = 0,
 }: {
   scenes: readonly CardScene[];
   lessons: DayLesson[];
@@ -138,6 +153,8 @@ export function ProfilePage({
   onSetQuestsOn: (on: boolean) => void;
   /** Writing quests Q7/Q8: the shell's device-only quest prefs (the rank stamp and the accent colour are read from them and chosen through `update`). */
   quests: Pick<QuestPrefsApi, "prefs" | "update">;
+  /** Incremented when opened from a "Restore a backup" action so Desk & Account opens and briefly highlights YOUR DATA. */
+  focusDataRequest?: number;
 }) {
   const { account, sync } = useAccountSync();
   const friends = useFriends();
@@ -208,9 +225,16 @@ export function ProfilePage({
 
   const [previewAsFriend, setPreviewAsFriend] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
-  const [profileTab, setProfileTab] = useState<"card" | "desk">("card");
+  const [profileTab, setProfileTab] = useState<"card" | "desk">(
+    focusDataRequest > 0 ? "desk" : "card",
+  );
+  const [highlightData, setHighlightData] = useState(false);
   const sharingSection = useRef<HTMLDetailsElement>(null);
+  const dataSectionRef = useRef<HTMLElement>(null);
+  const prevUidRef = useRef(friends.uid);
   useEffect(() => {
+    if (prevUidRef.current === friends.uid) return;
+    prevUidRef.current = friends.uid;
     setPreviewAsFriend(false);
     setFriendsOpen(false);
     setProfileTab("card");
@@ -224,6 +248,28 @@ export function ProfilePage({
   useEffect(() => {
     if (account.error || sync.notice?.kind === "error") setProfileTab("desk");
   }, [account.error, sync.notice]);
+  useEffect(() => {
+    if (focusDataRequest <= 0) return;
+    setProfileTab("desk");
+    setHighlightData(true);
+    let smooth = false;
+    try {
+      smooth = window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
+    } catch {
+      smooth = false;
+    }
+    const frameId = requestAnimationFrame(() => {
+      dataSectionRef.current?.scrollIntoView({
+        behavior: smooth ? "smooth" : "auto",
+        block: "center",
+      });
+    });
+    const timerId = window.setTimeout(() => setHighlightData(false), 3200);
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.clearTimeout(timerId);
+    };
+  }, [focusDataRequest]);
   useEffect(() => {
     if (previewAsFriend && profileTab === "card") {
       void friends.loadPreviewPhoto();
@@ -790,7 +836,12 @@ export function ProfilePage({
             <Section label="鍵 · GEMINI KEY" delay="120ms" strong>
               <GeminiKeyControls />
             </Section>
-            <Section label="データ · YOUR DATA" delay="180ms">
+            <Section
+              label="データ · YOUR DATA"
+              delay="180ms"
+              sectionRef={dataSectionRef}
+              highlighted={highlightData}
+            >
               <p className="mt-3 text-xs text-muted-foreground">
                 Export saves a backup file. Restore replaces your lessons and progress with one.
               </p>

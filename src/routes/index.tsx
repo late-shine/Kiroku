@@ -53,6 +53,8 @@ import { HelpCard } from "@/components/tips/HelpCard";
 import { TipCard } from "@/components/tips/TipCard";
 import { useTips } from "@/components/tips/useTips";
 import { QuizView } from "@/components/quiz/QuizView";
+import { useQuizPrefs } from "@/components/quiz/useQuizPrefs";
+import { dailyDueRemaining } from "@/lib/quiz-prefs";
 import {
   badgeText,
   countMastered,
@@ -228,6 +230,14 @@ function JapaneseDesk() {
     setMounted(true);
   }, []);
   const [tab, setTab] = useState<MainTab>("lesson");
+  const [profileDataFocus, setProfileDataFocus] = useState(0);
+  useEffect(() => {
+    if (tab !== "profile") setProfileDataFocus(0);
+  }, [tab]);
+  const openRestoreBackup = () => {
+    setProfileDataFocus((n) => n + 1);
+    setTab("profile");
+  };
   const checkinPrefs = useCheckinPrefs();
   const [checkinId, setCheckinId] = useState<string | null>(null);
   const [checkinVisited, setCheckinVisited] = useState(false);
@@ -361,14 +371,17 @@ function JapaneseDesk() {
   useEffect(() => {
     if (lessons.length > 0) setWelcomeSkipped(false);
   }, [lessons.length]);
-  // Phase 14b: words due for review today (client-only, so the server render and first client render agree).
-  const quizDue = mounted
+  // Phase 14b + calm daily pacing: Header shows today's remaining daily goal (not 99+).
+  const quizPrefs = useQuizPrefs();
+  const rawQuizDue = mounted
     ? dueWords(
         lessons.flatMap((l) => l.vocab),
         progress.vocabMemory,
         localDay(),
       ).length
     : 0;
+  const quizDue =
+    mounted && quizPrefs.loaded ? dailyDueRemaining(rawQuizDue, quizPrefs.prefs, localDay()) : 0;
   // Writing quests Q2: the device-only Writing practice switch (read after mount, so the server render and the first
   // client render agree: no Write pill). The dot on the pill means a fresh kanji (newest 4 lessons) has no record yet.
   const quests = useQuestPrefs();
@@ -440,6 +453,7 @@ function JapaneseDesk() {
     setCycleIndex(null);
     setDay(1);
     quests.reset();
+    quizPrefs.reset();
     checkinPrefs.reset();
     setCheckinId(null);
     setCheckinVisited(false);
@@ -558,11 +572,11 @@ function JapaneseDesk() {
                     onDeleteDays={deleteDays}
                   />
                 ) : welcomeSkipped ? (
-                  <EmptyLessons onAI={openStudio} onRestore={() => setTab("profile")} />
+                  <EmptyLessons onAI={openStudio} onRestore={openRestoreBackup} />
                 ) : (
                   <WelcomePanel
                     onAI={openStudio}
-                    onRestore={() => setTab("profile")}
+                    onRestore={openRestoreBackup}
                     onSkip={() => setWelcomeSkipped(true)}
                   />
                 ))}
@@ -591,7 +605,7 @@ function JapaneseDesk() {
                     progress={progress}
                     setProgress={setProgress}
                     onAI={openStudio}
-                    onRestore={() => setTab("profile")}
+                    onRestore={openRestoreBackup}
                   />
                   <CheckinJournal
                     records={progress.checkins ?? {}}
@@ -629,6 +643,7 @@ function JapaneseDesk() {
                     questsOn={questsOn}
                     onSetQuestsOn={quests.setOn}
                     quests={quests}
+                    focusDataRequest={profileDataFocus}
                   />
                 </>
               )}

@@ -4,16 +4,35 @@
 // Phase 14d: a "Due today" round asks harder questions for words that have climbed the boxes (choose the
 // word, type the reading); the other scopes ask the plain question, as always.
 import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Sparkles, X } from "lucide-react";
 import {
   badgeText,
   dueWords,
+  gapFor,
+  isDue,
   localDay,
+  memoryFor,
   recordAnswer,
   reviewCount,
+  spreadBacklog,
   type VocabMemory,
 } from "@/lib/word-memory";
+import {
+  BACKLOG_SPREAD_THRESHOLD,
+  DAILY_GOALS,
+  DUE_FOCUSES,
+  backlogKeepCount,
+  dailyDueDone,
+  dailyDueRemaining,
+  dailyDueTarget,
+  effectiveDueRoundLength,
+  grantBonusReview,
+  isDailyGoalComplete,
+  recordDueAnswered,
+  type QuizPrefs,
+} from "@/lib/quiz-prefs";
 import { pruneLog, recordStudy } from "@/lib/study-log";
+import { useToday } from "@/hooks/use-today";
 import type { DayLesson, UserProgressState } from "@/types/japanese";
 import {
   DEFAULT_QUESTION_STYLE,
@@ -38,6 +57,8 @@ import {
   type RoundQuestion,
 } from "./round";
 import { TypedAnswer } from "./TypedAnswer";
+import { useQuizPrefs } from "./useQuizPrefs";
+import { BacklogSpreadControl } from "./BacklogSpreadControl";
 
 /** The small caption above a harder question. The plain question (recognise) has none, so it looks as it always did. */
 const KIND_CAPTIONS: Record<Exclude<QuestionKind, "recognise">, string> = {
@@ -117,6 +138,8 @@ export function QuizView({
   const [rangeTo, setRangeTo] = useState<number | null>(null);
   const [roundLength, setRoundLength] = useState<RoundLength>(DEFAULT_ROUND_LENGTH);
   const [style, setStyle] = useState<QuestionStyle>(DEFAULT_QUESTION_STYLE);
+  const { prefs, loaded: prefsLoaded, update: updateQuizPrefs } = useQuizPrefs();
+  const today = useToday() ?? localDay();
 
   const dayNumbers = useMemo(
     () => lessons.map((l) => l.dayNumber).sort((a, b) => a - b),
@@ -148,26 +171,48 @@ export function QuizView({
           : lo === hi
             ? `Day ${lo}`
             : `Days ${lo}–${hi}`;
-  const dueNow = dueWords(allVocab, memory, localDay()).length;
+  const dueNow = dueWords(allVocab, memory, today).length;
+  const dueRemaining = dailyDueRemaining(dueNow, prefs, today);
+  const targetToday = dailyDueTarget(prefs, today);
+  const doneToday = dailyDueDone(prefs, today);
+  const goalCapped = targetToday !== null;
+  const goalComplete = isDailyGoalComplete(dueNow, prefs, today);
+  const keepOnSpread = backlogKeepCount(dueNow, dueRemaining, goalCapped);
+  const canSpreadBacklog = dueNow >= BACKLOG_SPREAD_THRESHOLD && dueNow > keepOnSpread;
+  const [spreadNotice, setSpreadNotice] = useState<string | null>(null);
   const inReview = reviewCount(allVocab, memory);
-  // A NEW round. Due words are decided here, at round start: answering moves a word out of "due", and that
-  // must not shrink (or restart) the round that is already running. A due round asks the most overdue words
-  // first (Phase 14b-fix); every other scope is a random pick from its pool, as before. A word taught twice
-  // (same Japanese and reading under two ids) is asked once, and `style` is the "Question style" control.
-  const startRound = () =>
-    scope === "due"
-      ? buildDueRound(allVocab, memory, localDay(), roundLength, pool, Math.random, style)
-      : buildRound(pool, roundLength, Math.random, pool, style, memory);
 
-  // Keyed by ids (not by the array's identity) so an unrelated lessons update can't restart a round
-  // half-way through; a different scope, round length, question style or set of words does. "Due today" is keyed by the
-  // whole vocabulary, never by what is due, for the reason above.
+  // A NEW round. Due words are decided here, at round start: answering moves a word out of "due", and that
+  // must not shrink (or restart) the round that is already running.
+  const startRound = (activePrefs: QuizPrefs = prefs, activeMemory: VocabMemory = memory) => {
+    if (scope !== "due") {
+      return buildRound(pool, roundLength, Math.random, pool, style, activeMemory);
+    }
+    const activeDue = dueWords(allVocab, activeMemory, today).length;
+    const remaining = dailyDueRemaining(activeDue, activePrefs, today);
+    const capped = dailyDueTarget(activePrefs, today) !== null;
+    const dueLen = effectiveDueRoundLength(roundLength, remaining, capped);
+    return buildDueRound(
+      allVocab,
+      activeMemory,
+      today,
+      dueLen,
+      pool,
+      Math.random,
+      style,
+      activePrefs.dueFocus,
+    );
+  };
+
+  // Keyed by ids + pacing config (never `doneCount`, so answering a question never resets an active round).
   const poolKey = useMemo(() => pool.map((w) => w.id).join("|"), [pool]);
-  const configKey = `${scope}~${roundLength}~${style}~${poolKey}`;
+  const dueConfigPart =
+    scope === "due" ? `~${prefsLoaded ? 1 : 0}~${prefs.dailyGoal}~${prefs.dueFocus}` : "";
+  const configKey = `${scope}~${roundLength}~${style}${dueConfigPart}~${poolKey}`;
   const [stored, setStored] = useState<Session>(() => freshSession(configKey, startRound()));
   let session = stored;
   if (stored.key !== configKey) {
-    // Changing the scope / round length / style / words starts a fresh round (reset-during-render pattern).
+    // Changing the scope / round length / style / goal / focus / words starts a fresh round.
     session = freshSession(configKey, startRound());
     setStored(session);
   }
@@ -181,34 +226,76 @@ export function QuizView({
   const missed = missedWords(session.questions, session.answers);
 
   const right = question !== undefined && locked && isCorrect(question, session.answers);
+  const missedWordMemory =
+    question !== undefined && locked && !right ? memoryFor(memory, question.word) : undefined;
+  const missedReturnDays = gapFor(missedWordMemory?.box ?? 1);
 
   // `value` is the option that was picked, the reading that was typed, or DONT_KNOW. Every kind goes through
-  // here, so every answer updates the score, weakVocabIds and the word's review record the same way.
+  // here, so every answer updates the score, weakVocabIds, the word's review record, and today's due count.
   const pick = (value: string) => {
     if (!question || locked || session.finished) return;
     const id = question.word.id;
     const correct = answerIsCorrect(question, value);
     const now = new Date();
+    const answerDay = localDay(now);
+    const wasDue = isDue(memoryFor(memory, question.word), answerDay);
     setStored({ ...session, answers: { ...session.answers, [id]: value } });
-    // totalQuizzesTaken keeps counting answered questions, exactly as before (Phase 14a decision (a) = B).
-    // A miss adds the word to weakVocabIds; a right answer removes it.
     setProgress((p) => ({
       ...p,
       totalQuizzesTaken: p.totalQuizzesTaken + 1,
       totalCorrectAnswers: p.totalCorrectAnswers + (correct ? 1 : 0),
       weakVocabIds: updateWeakIds(p.weakVocabIds, id, correct),
-      // Phase 14b: every answer, in every scope, updates the word's review record (box + due date).
       vocabMemory: recordAnswer(p.vocabMemory, question.word, correct, now),
-      // Phase 18a: one more answer on today's local day, for the 7-day graph (older than 120 days is dropped).
-      studyLog: pruneLog(recordStudy(p.studyLog, localDay(now), correct), localDay(now)),
+      studyLog: pruneLog(recordStudy(p.studyLog, answerDay, correct), answerDay),
     }));
+    if (wasDue) {
+      updateQuizPrefs((p) => recordDueAnswered(p, answerDay, 1));
+    }
   };
   const next = () =>
     setStored(isLast ? { ...session, finished: true } : { ...session, index: session.index + 1 });
   const endEarly = () => setStored({ ...session, finished: true });
-  const newRound = () => setStored(freshSession(configKey, startRound()));
+  const newRound = () => {
+    setSpreadNotice(null);
+    setStored(freshSession(configKey, startRound()));
+  };
+  const reviewMore = (extra = 10) => {
+    setSpreadNotice(null);
+    const nextPrefs = grantBonusReview(prefs, today, extra);
+    updateQuizPrefs(() => nextPrefs);
+    const questions = buildDueRound(
+      allVocab,
+      memory,
+      today,
+      Math.min(extra, dueNow),
+      pool,
+      Math.random,
+      style,
+      nextPrefs.dueFocus,
+    );
+    setStored(freshSession(configKey, questions));
+  };
+  const handleSpreadBacklog = (days: 7 | 14) => {
+    const moved = Math.max(0, dueNow - keepOnSpread);
+    if (moved === 0) return;
+    const now = new Date();
+    const nextMemory = spreadBacklog(memory, allVocab, today, days, keepOnSpread, now);
+    setProgress((p) => ({
+      ...p,
+      vocabMemory: spreadBacklog(p.vocabMemory, allVocab, today, days, keepOnSpread, now),
+    }));
+    setSpreadNotice(
+      keepOnSpread > 0
+        ? `Spaced ${moved} overdue words across the next ${days} days — ${keepOnSpread} remain due today.`
+        : `Spaced ${moved} overdue words across the next ${days} days starting tomorrow.`,
+    );
+    if (!session.finished && Object.keys(session.answers).length === 0) {
+      setStored(freshSession(configKey, startRound(prefs, nextMemory)));
+    }
+  };
   // A missed word is retried the way it was asked (a missed typed reading is a typed reading again).
-  const retryMissed = () =>
+  const retryMissed = () => {
+    setSpreadNotice(null);
     setStored(
       freshSession(
         configKey,
@@ -216,6 +303,10 @@ export function QuizView({
         true,
       ),
     );
+  };
+
+  const duePillSuffix =
+    dueNow === 0 ? " · 0" : goalComplete ? " · Done" : ` · ${badgeText(dueRemaining)}`;
 
   const emptyMessage =
     lessons.length === 0
@@ -237,6 +328,9 @@ export function QuizView({
         ? `${scopeLabel} · ${session.retry ? "Retry · " : ""}Round complete`
         : `${scopeLabel} · ${session.retry ? "Retry · " : ""}Question ${session.index + 1} of ${total}`;
 
+  const showGoalCompleteScreen =
+    scope === "due" && goalComplete && total === 0 && !session.finished;
+
   return (
     <div className="mx-auto max-w-3xl">
       <Pane>
@@ -249,12 +343,15 @@ export function QuizView({
             {QUIZ_SCOPES.map((sc) => (
               <button
                 key={sc.id}
-                onClick={() => setScope(sc.id)}
+                onClick={() => {
+                  setScope(sc.id);
+                  if (sc.id !== "due") setSpreadNotice(null);
+                }}
                 aria-pressed={scope === sc.id}
                 className={segmentClass(scope === sc.id)}
               >
                 {sc.label}
-                {sc.id === "due" ? ` · ${badgeText(dueNow)}` : ""}
+                {sc.id === "due" ? duePillSuffix : ""}
               </button>
             ))}
           </div>
@@ -322,16 +419,76 @@ export function QuizView({
               ))}
             </div>
           </div>
+          {scope === "due" && (
+            <>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Daily goal</span>
+                <div className={segmentWrap}>
+                  {DAILY_GOALS.map((g) => (
+                    <button
+                      key={String(g.id)}
+                      type="button"
+                      onClick={() => updateQuizPrefs((p) => ({ ...p, dailyGoal: g.id }))}
+                      aria-pressed={prefs.dailyGoal === g.id}
+                      className={segmentClass(prefs.dailyGoal === g.id)}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Order</span>
+                <div className={`${segmentWrap} flex-wrap`}>
+                  {DUE_FOCUSES.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => updateQuizPrefs((p) => ({ ...p, dueFocus: f.id }))}
+                      aria-pressed={prefs.dueFocus === f.id}
+                      className={segmentClass(prefs.dueFocus === f.id)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {scope === "due" && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Only words you've added to review, most overdue first. Add words on the Vocab tab, or
-            answer them in any quiz. Right answers push a word further out; a wrong answer brings it
-            back tomorrow.
-            {style === "progress" &&
-              " The better you know a word, the harder it is asked: pick the meaning, then pick the word, then type the reading."}
-          </p>
+          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+            {dueNow > 0 && (
+              <div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-foreground/85">
+                    {goalCapped && targetToday !== null
+                      ? `Today’s goal: ${Math.min(doneToday, targetToday)} / ${targetToday} reviewed · ${dueNow} total due`
+                      : `Showing all ${dueNow} due ${dueNow === 1 ? "word" : "words"}`}
+                  </p>
+                  {canSpreadBacklog && (
+                    <BacklogSpreadControl
+                      dueNow={dueNow}
+                      keepToday={keepOnSpread}
+                      onSpread={handleSpreadBacklog}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+            {spreadNotice && (
+              <p role="status" className="text-primary">
+                {spreadNotice}
+              </p>
+            )}
+            <p>
+              Only words you've added to review. Right answers push a word further out; missed words
+              step back gently without losing all progress.
+              {style === "progress" &&
+                " The better you know a word, the harder it is asked: pick the meaning, then pick the word, then type the reading."}
+            </p>
+          </div>
         )}
         {style === "type" && (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -340,7 +497,57 @@ export function QuizView({
           </p>
         )}
 
-        {total === 0 ? (
+        {showGoalCompleteScreen ? (
+          <div className="mt-10 text-center" aria-live="polite">
+            <div className="mx-auto flex size-11 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-primary">
+              <Sparkles className="size-5" aria-hidden="true" />
+            </div>
+            <h2 className="mt-4 font-display text-2xl text-foreground">
+              Today’s review goal complete
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You reviewed {doneToday} of {targetToday} words today.
+              {dueNow > 0 &&
+                ` ${dueNow} older ${dueNow === 1 ? "word is" : "words are"} still waiting in your backlog — no rush, chip away whenever you like.`}
+            </p>
+            {canSpreadBacklog && (
+              <div className="mt-3">
+                <BacklogSpreadControl
+                  dueNow={dueNow}
+                  keepToday={keepOnSpread}
+                  onSpread={handleSpreadBacklog}
+                  centered
+                />
+              </div>
+            )}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => reviewMore(10)}
+                className="hit-area rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                Review 10 more
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpreadNotice(null);
+                  setScope("day");
+                }}
+                className="hit-area rounded-md border border-border bg-glass px-4 py-2 text-sm hover:bg-accent"
+              >
+                Practise This day
+              </button>
+              <button
+                type="button"
+                onClick={onBack}
+                className="hit-area rounded-md border border-border bg-glass px-4 py-2 text-sm hover:bg-accent"
+              >
+                Back to lessons
+              </button>
+            </div>
+          </div>
+        ) : total === 0 ? (
           <div className="mt-10">
             <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             {lessons.length === 0 && (
@@ -369,6 +576,17 @@ export function QuizView({
                     Ended early — {score.answered} of {score.total} questions answered.
                   </p>
                 )}
+                {scope === "due" && goalComplete && targetToday !== null && (
+                  <div className="mt-5 rounded-xl border border-primary/30 bg-primary/10 p-4 text-center">
+                    <p className="font-display text-sm font-semibold text-primary">
+                      Today’s review goal complete ({doneToday} / {targetToday})
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {dueNow} older {dueNow === 1 ? "word" : "words"} still waiting in your backlog
+                      — chip away whenever you like.
+                    </p>
+                  </div>
+                )}
                 {missed.length === 0 ? (
                   <p className="mt-6 text-center text-sm">
                     全問正解 — every word you answered was right.
@@ -392,13 +610,10 @@ export function QuizView({
                         </li>
                       ))}
                     </ul>
-                    {/* Every answer already wrote the word's review record (see pick()); a miss resets it to
-                        box 1, which is due after BOX_GAPS[0] = 1 day. phase-16c-speak-check.ts fails if that stops
-                        being true, and then this sentence has to change. */}
                     <p className="mt-3 text-xs text-muted-foreground">
                       {missed.length === 1
-                        ? "This word is already in your review. It comes back tomorrow."
-                        : `These ${missed.length} words are already in your review. They come back tomorrow.`}
+                        ? "This word stays in your review and returns on its stepped-down schedule."
+                        : `These ${missed.length} words stay in your review and return on their stepped-down schedule.`}
                     </p>
                   </div>
                 )}
@@ -413,16 +628,30 @@ export function QuizView({
                   Retry missed words ({missed.length})
                 </button>
               )}
-              <button
-                onClick={newRound}
-                className={
-                  missed.length > 0
-                    ? "rounded-md border border-border bg-glass px-4 py-2 text-sm hover:bg-accent"
-                    : "rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-                }
-              >
-                New round
-              </button>
+              {scope === "due" && goalComplete ? (
+                <button
+                  type="button"
+                  onClick={() => reviewMore(10)}
+                  className={
+                    missed.length > 0
+                      ? "rounded-md border border-border bg-glass px-4 py-2 text-sm hover:bg-accent"
+                      : "rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                  }
+                >
+                  Review 10 more
+                </button>
+              ) : (
+                <button
+                  onClick={newRound}
+                  className={
+                    missed.length > 0
+                      ? "rounded-md border border-border bg-glass px-4 py-2 text-sm hover:bg-accent"
+                      : "rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                  }
+                >
+                  New round
+                </button>
+              )}
               <button
                 onClick={onBack}
                 className="rounded-md border border-border bg-glass px-4 py-2 text-sm hover:bg-accent"
@@ -538,7 +767,9 @@ export function QuizView({
                     )}
                     {!right && (
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        Added to review — back tomorrow.
+                        {missedReturnDays <= 1
+                          ? "Stepped back in review — back tomorrow."
+                          : `Stepped back in review — back in ${missedReturnDays} days.`}
                       </p>
                     )}
                   </div>

@@ -27,6 +27,7 @@ export const STORAGE_KEYS = {
   atmosphere: "kiroku_atmosphere_v1", // Phase 16d — { cycle, darkness }: this device's scene cycling + reading-contrast; device-only like `voice`, never synced or backed up
   profile: "kiroku_profile_v1", // Phase 19a — { name, glyph, lastExportAt }: name + avatar choice sync (prefs); lastExportAt is this device only; never in a backup; no legacy counterpart
   quests: "kiroku_quests_v1", // Writing quests Q2 — { v, on?, draft? }: the Writing practice switch and the page being written; DEVICE-ONLY, never backed up or synced; no legacy counterpart; absent = quests off
+  quizPrefs: "kiroku_quiz_prefs_v1", // Device-only daily quiz goal, due order focus, and today's due-review counter.
   friends: "kiroku_friends_v1", // Account-scoped public-name draft; never sharing consent or lesson sync.
   friendsCache: "kiroku_friends_cache_v1", // Account-scoped private Friends snapshot, never a backup.
   friendInvite: "kiroku_friend_invite_v1", // sessionStorage only; prefill survives sign-in redirect.
